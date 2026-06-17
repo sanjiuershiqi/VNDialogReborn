@@ -1,25 +1,4 @@
-
-Installation information
-=======
-
-This template repository can be directly cloned to get you started with a new
-mod. Simply create a new repository cloned from this one, by following the
-instructions provided by [GitHub](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template).
-
-Once you have your clone, simply open the repository in the IDE of your choice. The usual recommendation for an IDE is either IntelliJ IDEA or Eclipse.
-
-If at any point you are missing libraries in your IDE, or you've run into problems you can
-run `gradlew --refresh-dependencies` to refresh the local cache. `gradlew clean` to reset everything 
-{this does not affect your code} and then start the process again.
-
-Mapping Names:
-============
-By default, the MDK is configured to use the official mapping names from Mojang for methods and fields 
-in the Minecraft codebase. These names are covered by a specific license. All modders should be aware of this
-license. For the latest license text, refer to the mapping file itself, or the reference copy here:
-https://github.com/NeoForged/NeoForm/blob/main/Mojang.md
-
-Additional Resources: 
-==========
-Community Documentation: https://docs.neoforged.net/  
-NeoForged Discord: https://discord.neoforged.net/
+VNDialogReborn/VN对话引擎重置版
+本项目是 VNDialog 的重制版，原作者 YourZi。 由于原项目长期未维护，在我制作整合包时发现NEO 1.21.1环境下部分功能已无法正常使用，因此我创建了 VNDialogReborn，让其可在NEO1.21.1环境下更好的使用
+此项目原作链接为https://github.com/YourZi/VNDialog
+具体模组使用方法参考以上链接即可 如有添加除原作功能之外的功能将会在下方写出
