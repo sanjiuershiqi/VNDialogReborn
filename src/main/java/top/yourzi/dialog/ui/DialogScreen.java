@@ -1,0 +1,579 @@
+package top.yourzi.dialog.ui;
+
+import com.mojang.blaze3d.systems.RenderSystem;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.ConfirmScreen;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.TagParser;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.util.Mth;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.CustomData;
+import org.lwjgl.glfw.GLFW;
+import top.yourzi.dialog.Dialog;
+import top.yourzi.dialog.DialogManager;
+import top.yourzi.dialog.config.ClientConfig;
+import top.yourzi.dialog.model.BackgroundImageInfo;
+import top.yourzi.dialog.model.DialogEntry;
+import top.yourzi.dialog.model.DialogOption;
+import top.yourzi.dialog.model.DialogSequence;
+import top.yourzi.dialog.model.DisplayItemInfo;
+import top.yourzi.dialog.model.PortraitAnimationType;
+import top.yourzi.dialog.model.PortraitInfo;
+import top.yourzi.dialog.model.PortraitPosition;
+import top.yourzi.dialog.network.NetworkHandler;
+import top.yourzi.dialog.util.STBBackendImage;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class DialogScreen extends Screen {
+    private static final int PORTRAIT_ANIMATION_DURATION_MS = 300;
+
+    private final DialogSequence dialogSequence;
+    private final DialogEntry dialogEntry;
+    private final String playerName;
+    private final net.minecraft.world.entity.Entity speakerEntity;
+    private final List<PortraitRenderInfo> portraits = new ArrayList<>();
+    private final List<ItemStack> displayItemStacks = new ArrayList<>();
+    private final List<Button> optionButtons = new ArrayList<>();
+    private Button viewHistoryButton;
+    private Button autoPlayButton;
+    private Button closeHistoryButton;
+    private int dialogBoxX;
+    private int dialogBoxY;
+    private int dialogBoxWidth;
+    private int dialogBoxHeight;
+    private int currentCharIndex;
+    private long lastCharTime;
+    private boolean textFullyDisplayed;
+    private boolean optionButtonsCreated;
+    private boolean showingHistory;
+    private int protectionHeartbeatTicks;
+    private int historyScrollOffset;
+    private int totalHistoryContentHeight;
+    private ResourceLocation backgroundLocation;
+
+    public DialogScreen(DialogSequence dialogSequence, DialogEntry dialogEntry, String playerName) {
+        this(dialogSequence, dialogEntry, playerName, null);
+    }
+
+    public DialogScreen(DialogSequence dialogSequence, DialogEntry dialogEntry, String playerName, net.minecraft.world.entity.Entity speakerEntity) {
+        super(dialogEntry.getSpeaker(playerName) != null ? dialogEntry.getSpeaker(playerName) : Component.empty());
+        this.dialogSequence = dialogSequence;
+        this.dialogEntry = dialogEntry;
+        this.playerName = playerName;
+        this.speakerEntity = speakerEntity;
+        collectPortraits();
+        collectDisplayItems();
+        collectBackground();
+        initializeAudio();
+    }
+
+    private void collectPortraits() {
+        if (dialogEntry.getPortraits() == null) {
+            return;
+        }
+        for (PortraitInfo portrait : dialogEntry.getPortraits()) {
+            if (portrait.getPath() == null || portrait.getPath().isEmpty()) {
+                continue;
+            }
+            ResourceLocation texture = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/portraits/" + portrait.getPath());
+            PortraitTextureSize textureSize = readPortraitTextureSize(texture);
+            portraits.add(new PortraitRenderInfo(
+                    texture,
+                    portrait.getPosition() == null ? PortraitPosition.RIGHT : portrait.getPosition(),
+                    Mth.clamp(portrait.getBrightness(), 0.0f, 1.0f),
+                    Mth.clamp(portrait.getSize(), 0.1f, 5.0f),
+                    portrait.getAnimationType() == null ? PortraitAnimationType.NONE : portrait.getAnimationType(),
+                    System.currentTimeMillis(),
+                    textureSize.width(),
+                    textureSize.height()
+            ));
+        }
+    }
+
+    private PortraitTextureSize readPortraitTextureSize(ResourceLocation texture) {
+        try (STBBackendImage image = STBBackendImage.read(texture)) {
+            return new PortraitTextureSize(image.getWidth(), image.getHeight());
+        } catch (Exception e) {
+            Dialog.LOGGER.warn("Failed to read portrait texture size for {}, falling back to default aspect ratio.", texture, e);
+            return PortraitTextureSize.FALLBACK;
+        }
+    }
+
+    private void collectDisplayItems() {
+        if (dialogEntry.getDisplayItems() == null) {
+            return;
+        }
+        for (DisplayItemInfo itemInfo : dialogEntry.getDisplayItems()) {
+            ItemStack stack = createDisplayStack(itemInfo);
+            if (!stack.isEmpty()) {
+                displayItemStacks.add(stack);
+            }
+        }
+    }
+
+    private ItemStack createDisplayStack(DisplayItemInfo itemInfo) {
+        if (itemInfo == null || itemInfo.getItemId() == null || itemInfo.getItemId().isEmpty()) {
+            return ItemStack.EMPTY;
+        }
+        try {
+            ResourceLocation itemId = ResourceLocation.parse(itemInfo.getItemId());
+            Item item = BuiltInRegistries.ITEM.get(itemId);
+            if (item == null || item == Items.AIR) {
+                Dialog.LOGGER.warn("Item not found or is AIR: {}", itemInfo.getItemId());
+                return ItemStack.EMPTY;
+            }
+
+            ItemStack stack = new ItemStack(item, Math.max(1, itemInfo.getCount()));
+            if (itemInfo.getNbt() != null && !itemInfo.getNbt().isEmpty()) {
+                CompoundTag tag = TagParser.parseTag(itemInfo.getNbt());
+                stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+            }
+            return stack;
+        } catch (Exception e) {
+            Dialog.LOGGER.error("Error creating ItemStack for display item {}: {}", itemInfo.getItemId(), e.getMessage());
+            return ItemStack.EMPTY;
+        }
+    }
+
+    private void collectBackground() {
+        BackgroundImageInfo background = dialogEntry.getBackgroundImage();
+        if (background != null && background.getPath() != null && !background.getPath().isEmpty()) {
+            backgroundLocation = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/backgrounds/" + background.getPath());
+        }
+    }
+
+    private void initializeAudio() {
+        if (dialogEntry.getAudioPath() != null && !dialogEntry.getAudioPath().isEmpty()) {
+            DialogManager.playDialogAudio(dialogEntry.getAudioPath());
+        }
+    }
+
+    @Override
+    protected void init() {
+        super.init();
+        dialogBoxWidth = Math.min(ClientConfig.DIALOG_BOX_WIDTH.get(), width - 20);
+        dialogBoxHeight = ClientConfig.DIALOG_BOX_HEIGHT.get();
+        dialogBoxX = (width - dialogBoxWidth) / 2;
+        dialogBoxY = height - dialogBoxHeight - 20;
+
+        int buttonSize = 20;
+        int padding = 5;
+        viewHistoryButton = Button.builder(Component.literal("H"), button -> toggleHistoryScreen())
+                .bounds(dialogBoxX + dialogBoxWidth - buttonSize - padding, dialogBoxY + dialogBoxHeight - buttonSize - padding, buttonSize, buttonSize)
+                .build();
+        addRenderableWidget(viewHistoryButton);
+
+        autoPlayButton = Button.builder(autoPlayLabel(), button -> toggleAutoPlay())
+                .bounds(dialogBoxX + dialogBoxWidth - (buttonSize + padding) * 2, dialogBoxY + dialogBoxHeight - buttonSize - padding, buttonSize, buttonSize)
+                .build();
+        addRenderableWidget(autoPlayButton);
+
+        closeHistoryButton = Button.builder(Component.translatable("dialog.ui.close_history"), button -> toggleHistoryScreen())
+                .bounds(width / 2 - 45, height - 30, 90, 20)
+                .build();
+
+        if (dialogEntry.hasOptions()) {
+            DialogManager.stopAutoPlay();
+            updateAutoPlayButtonText();
+        }
+
+        optionButtonsCreated = false;
+        protectionHeartbeatTicks = 0;
+        NetworkHandler.sendDialogProtectionHeartbeatToServer();
+    }
+
+    private Component autoPlayLabel() {
+        return Component.literal(DialogManager.isAutoPlaying() ? "A" : ">");
+    }
+
+    private void createOptionButtons() {
+        optionButtons.clear();
+        DialogOption[] options = dialogEntry.getOptions();
+        if (options == null || options.length == 0) {
+            return;
+        }
+
+        int buttonWidth = Math.min(240, width - 40);
+        int buttonHeight = 20;
+        int spacing = 5;
+        int startY = dialogBoxY - options.length * (buttonHeight + spacing) - 10;
+        if (!displayItemStacks.isEmpty()) {
+            startY -= 30;
+        }
+
+        for (int i = 0; i < options.length; i++) {
+            DialogOption option = options[i];
+            Button button = Button.builder(option.getText(playerName), b -> {
+                if (option.getCommand() != null && !option.getCommand().isEmpty()) {
+                    DialogManager.getInstance().executeCommands(minecraft.player, option.getCommand(), speakerEntity);
+                }
+                DialogManager.getInstance().recordChoiceForCurrentDialog(option.getText(playerName).getString());
+                DialogManager.getInstance().jumpToDialog(option.getTargetId());
+            }).bounds((width - buttonWidth) / 2, startY + i * (buttonHeight + spacing), buttonWidth, buttonHeight).build();
+            optionButtons.add(button);
+            addRenderableWidget(button);
+        }
+    }
+
+    @Override
+    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTicks) {
+        if (backgroundLocation != null) {
+            guiGraphics.blit(backgroundLocation, 0, 0, width, height, 0, 0, width, height, width, height);
+        } else {
+            renderWorldOverlay(guiGraphics);
+        }
+
+        if (showingHistory) {
+            renderHistoryScreen(guiGraphics);
+            closeHistoryButton.render(guiGraphics, mouseX, mouseY, partialTicks);
+            return;
+        }
+
+        renderPortraits(guiGraphics);
+        renderDialogBox(guiGraphics);
+
+        if (textFullyDisplayed && dialogEntry.hasOptions() && !optionButtonsCreated) {
+            createOptionButtons();
+            optionButtonsCreated = true;
+        }
+
+        super.render(guiGraphics, mouseX, mouseY, partialTicks);
+    }
+
+    private void renderWorldOverlay(GuiGraphics guiGraphics) {
+        guiGraphics.fill(0, 0, width, height, 0x66000000);
+    }
+
+    @Override
+    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTicks) {
+    }
+
+    @Override
+    protected void renderBlurredBackground(float partialTicks) {
+    }
+
+    private void renderPortraits(GuiGraphics guiGraphics) {
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        for (PortraitRenderInfo portrait : portraits) {
+            int portraitHeight = (int) (height * 0.68f * portrait.size);
+            int portraitWidth = Math.max(1, (int) (portraitHeight * portrait.aspectRatio()));
+            PortraitAnimationFrame animation = getPortraitAnimationFrame(portrait);
+            int x = switch (portrait.position) {
+                case LEFT -> 20;
+                case CENTER -> (width - portraitWidth) / 2;
+                case RIGHT -> width - portraitWidth - 20;
+            };
+            int y = height - portraitHeight;
+            RenderSystem.setShader(GameRenderer::getPositionTexShader);
+            RenderSystem.setShaderColor(portrait.brightness, portrait.brightness, portrait.brightness, animation.alpha);
+            guiGraphics.blit(portrait.texture, x + animation.xOffset, y + animation.yOffset, portraitWidth, portraitHeight, 0, 0, portraitWidth, portraitHeight, portraitWidth, portraitHeight);
+        }
+        RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+        RenderSystem.disableBlend();
+    }
+
+    private PortraitAnimationFrame getPortraitAnimationFrame(PortraitRenderInfo portrait) {
+        if (!ClientConfig.ENABLE_PORTRAIT_ANIMATIONS.get() || portrait.animationType == PortraitAnimationType.NONE) {
+            return PortraitAnimationFrame.NONE;
+        }
+
+        long elapsed = System.currentTimeMillis() - portrait.animationStartTime;
+        if (elapsed >= PORTRAIT_ANIMATION_DURATION_MS) {
+            return PortraitAnimationFrame.NONE;
+        }
+
+        float progress = Mth.clamp((float) elapsed / PORTRAIT_ANIMATION_DURATION_MS, 0.0f, 1.0f);
+        return switch (portrait.animationType) {
+            case FADE_IN -> new PortraitAnimationFrame(0, 0, progress);
+            case SLIDE_IN_FROM_BOTTOM -> new PortraitAnimationFrame(0, (int) Mth.lerp(progress, 50.0f, 0.0f), 1.0f);
+            case BOUNCE -> {
+                float yOffset = progress < 0.5f
+                        ? Mth.lerp(progress * 2.0f, 0.0f, -20.0f)
+                        : Mth.lerp((progress - 0.5f) * 2.0f, -20.0f, 0.0f);
+                yield new PortraitAnimationFrame(0, (int) yOffset, 1.0f);
+            }
+            case NONE -> PortraitAnimationFrame.NONE;
+        };
+    }
+
+    private void renderDialogBox(GuiGraphics guiGraphics) {
+        int backgroundColor = ClientConfig.DIALOG_BACKGROUND_COLOR.get();
+        int opacity = ClientConfig.DIALOG_BACKGROUND_OPACITY.get();
+        int color = (opacity << 24) | (backgroundColor & 0xFFFFFF);
+        guiGraphics.fill(dialogBoxX, dialogBoxY, dialogBoxX + dialogBoxWidth, dialogBoxY + dialogBoxHeight, color);
+
+        int padding = ClientConfig.DIALOG_BOX_PADDING.get();
+        int textX = dialogBoxX + padding;
+        int textY = dialogBoxY + padding;
+
+        Component speaker = dialogEntry.getSpeaker(playerName);
+        if (ClientConfig.SHOW_SPEAKER_NAME.get() && speaker != null && !speaker.getString().isEmpty()) {
+            guiGraphics.drawString(font, speaker, textX, textY, 0xFFFFFF);
+            textY += font.lineHeight + 5;
+        }
+
+        Component text = dialogEntry.getText(playerName);
+        String rawText = text.getString();
+        advanceText(rawText);
+        String displayedText = rawText.substring(0, Math.min(currentCharIndex, rawText.length()));
+
+        for (FormattedCharSequence line : font.split(Component.literal(displayedText), dialogBoxWidth - padding * 2)) {
+            guiGraphics.drawString(font, line, textX, textY, ClientConfig.DIALOG_TEXT_COLOR.get());
+            textY += font.lineHeight + 2;
+        }
+
+        if (!displayItemStacks.isEmpty() && textFullyDisplayed) {
+            renderItems(guiGraphics);
+        }
+
+        if (!dialogEntry.hasOptions() && textFullyDisplayed) {
+            Component indicator = Component.literal(">>");
+            int indicatorWidth = font.width(indicator);
+            int indicatorX = autoPlayButton == null
+                    ? dialogBoxX + dialogBoxWidth - indicatorWidth - padding
+                    : autoPlayButton.getX() - indicatorWidth - 8;
+            guiGraphics.drawString(font, indicator, Math.max(textX, indicatorX), dialogBoxY + dialogBoxHeight - 18, 0xFFFFFF);
+        }
+    }
+
+    private void advanceText(String rawText) {
+        int speed = ClientConfig.TEXT_ANIMATION_SPEED.get();
+        if (speed <= 0) {
+            textFullyDisplayed = true;
+            currentCharIndex = rawText.length();
+            return;
+        }
+
+        if (!textFullyDisplayed) {
+            long now = System.currentTimeMillis();
+            if (lastCharTime == 0) {
+                lastCharTime = now;
+            }
+            long interval = Math.max(1, 1000L / speed);
+            if (now - lastCharTime >= interval) {
+                currentCharIndex++;
+                lastCharTime = now;
+                if (currentCharIndex >= rawText.length()) {
+                    currentCharIndex = rawText.length();
+                    textFullyDisplayed = true;
+                }
+            }
+        }
+    }
+
+    private void renderItems(GuiGraphics guiGraphics) {
+        int itemSize = 16;
+        int itemPadding = 4;
+        int totalWidth = displayItemStacks.size() * itemSize + Math.max(0, displayItemStacks.size() - 1) * itemPadding;
+        int startX = dialogBoxX + (dialogBoxWidth - totalWidth) / 2;
+        int y = dialogBoxY - itemSize - 5;
+        for (int i = 0; i < displayItemStacks.size(); i++) {
+            int x = startX + i * (itemSize + itemPadding);
+            ItemStack stack = displayItemStacks.get(i);
+            guiGraphics.renderItem(stack, x, y);
+            guiGraphics.renderItemDecorations(font, stack, x, y);
+        }
+    }
+
+    private void renderHistoryScreen(GuiGraphics guiGraphics) {
+        guiGraphics.fill(0, 0, width, height, 0xDD000000);
+        List<DialogEntry> history = DialogManager.getInstance().getDialogHistory();
+        int top = (int) (height * 0.1);
+        int bottom = height - 40;
+        int y = top - historyScrollOffset;
+        totalHistoryContentHeight = 0;
+
+        for (DialogEntry entry : history) {
+            Component speaker = entry.getSpeaker(playerName);
+            Component text = entry.getText(playerName);
+            Component line = speaker != null && !speaker.getString().isEmpty()
+                    ? Component.literal("[").append(speaker).append("] ").append(text)
+                    : text;
+
+            for (FormattedCharSequence wrapped : font.split(line, width - 90)) {
+                if (y + font.lineHeight > top && y < bottom) {
+                    guiGraphics.drawString(font, wrapped, 50, y, 0xFFFFFF);
+                }
+                y += font.lineHeight + 2;
+                totalHistoryContentHeight += font.lineHeight + 2;
+            }
+
+            if (entry.getSelectedOptionText() != null && !entry.getSelectedOptionText().isEmpty()) {
+                Component option = Component.literal(" -> " + entry.getSelectedOptionText());
+                for (FormattedCharSequence wrapped : font.split(option, width - 100)) {
+                    if (y + font.lineHeight > top && y < bottom) {
+                        guiGraphics.drawString(font, wrapped, 60, y, 0xAAAAAA);
+                    }
+                    y += font.lineHeight + 2;
+                    totalHistoryContentHeight += font.lineHeight + 2;
+                }
+            }
+            y += 8;
+            totalHistoryContentHeight += 8;
+        }
+    }
+
+    @Override
+    public boolean isPauseScreen() {
+        return ClientConfig.IS_PAUSE_SCREEN.get();
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+            if (dialogSequence.isCloseAllowed()) {
+                onClose();
+            } else {
+                minecraft.setScreen(new ConfirmScreen(confirmed -> {
+                    if (confirmed) {
+                        onClose();
+                    } else {
+                        minecraft.setScreen(this);
+                    }
+                }, Component.translatable("dialog.ui.esc"), Component.translatable("dialog.ui.confirm_esc")));
+            }
+            return true;
+        }
+
+        if (keyCode == GLFW.GLFW_KEY_LEFT_CONTROL || keyCode == GLFW.GLFW_KEY_RIGHT_CONTROL) {
+            if (textFullyDisplayed) {
+                DialogManager.setFastForwardingNext(true);
+                DialogManager.getInstance().showNextDialog();
+            } else {
+                currentCharIndex = dialogEntry.getText(playerName).getString().length();
+                textFullyDisplayed = true;
+            }
+            return true;
+        }
+
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (showingHistory) {
+            if (closeHistoryButton.isMouseOver(mouseX, mouseY)) {
+                return closeHistoryButton.mouseClicked(mouseX, mouseY, button);
+            }
+            return true;
+        }
+
+        if (super.mouseClicked(mouseX, mouseY, button)) {
+            return true;
+        }
+
+        if (button == 0) {
+            if (!textFullyDisplayed) {
+                currentCharIndex = dialogEntry.getText(playerName).getString().length();
+                textFullyDisplayed = true;
+            } else if (!dialogEntry.hasOptions()) {
+                DialogManager.getInstance().executeCommands(minecraft.player, dialogEntry.getCommands(), speakerEntity);
+                DialogManager.getInstance().showNextDialog();
+            }
+            return true;
+        }
+
+        return false;
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (showingHistory) {
+            int historyAreaHeight = height - 40 - (int) (height * 0.1);
+            int maxScroll = Math.max(0, totalHistoryContentHeight - historyAreaHeight);
+            historyScrollOffset = Mth.clamp(historyScrollOffset + (int) (-scrollY * font.lineHeight * 2), 0, maxScroll);
+            return true;
+        }
+        if (scrollY > 0) {
+            toggleHistoryScreen();
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        protectionHeartbeatTicks++;
+        if (protectionHeartbeatTicks >= 20) {
+            protectionHeartbeatTicks = 0;
+            NetworkHandler.sendDialogProtectionHeartbeatToServer();
+        }
+        if (DialogManager.isAutoPlaying() && !dialogEntry.hasOptions() && textFullyDisplayed) {
+            if (DialogManager.isAudioFinished()) {
+                DialogManager.getInstance().showNextDialog();
+            }
+        }
+    }
+
+    @Override
+    public void onClose() {
+        DialogManager.stopAutoPlay();
+        DialogManager.stopCurrentAudio();
+        super.onClose();
+    }
+
+    private void toggleAutoPlay() {
+        DialogManager.setAutoPlaying(!DialogManager.isAutoPlaying());
+        updateAutoPlayButtonText();
+    }
+
+    private void updateAutoPlayButtonText() {
+        if (autoPlayButton != null) {
+            autoPlayButton.setMessage(autoPlayLabel());
+        }
+    }
+
+    private void toggleHistoryScreen() {
+        showingHistory = !showingHistory;
+        historyScrollOffset = 0;
+        if (showingHistory) {
+            viewHistoryButton.active = false;
+            autoPlayButton.active = false;
+            if (!children().contains(closeHistoryButton)) {
+                addRenderableWidget(closeHistoryButton);
+            }
+        } else {
+            viewHistoryButton.active = true;
+            autoPlayButton.active = true;
+            if (children().contains(closeHistoryButton)) {
+                removeWidget(closeHistoryButton);
+            }
+        }
+    }
+
+    private record PortraitRenderInfo(ResourceLocation texture, PortraitPosition position, float brightness, float size,
+                                      PortraitAnimationType animationType, long animationStartTime,
+                                      int textureWidth, int textureHeight) {
+        private float aspectRatio() {
+            return textureWidth > 0 && textureHeight > 0 ? (float) textureWidth / textureHeight : PortraitTextureSize.FALLBACK.aspectRatio();
+        }
+    }
+
+    private record PortraitTextureSize(int width, int height) {
+        private static final PortraitTextureSize FALLBACK = new PortraitTextureSize(65, 100);
+
+        private float aspectRatio() {
+            return (float) width / height;
+        }
+    }
+
+    private record PortraitAnimationFrame(int xOffset, int yOffset, float alpha) {
+        private static final PortraitAnimationFrame NONE = new PortraitAnimationFrame(0, 0, 1.0f);
+    }
+}

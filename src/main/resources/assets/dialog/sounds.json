@@ -1,0 +1,10 @@
+{
+  "hello": {
+    "sounds": [
+      {
+        "name": "dialog:hello",
+        "stream": true
+      }
+    ]
+  }
+}

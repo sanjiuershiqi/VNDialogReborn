@@ -1,0 +1,405 @@
+package top.yourzi.dialog;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonSyntaxException;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentUtils;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.packs.resources.Resource;
+import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+import top.yourzi.dialog.model.DialogEntry;
+import top.yourzi.dialog.model.DialogOption;
+import top.yourzi.dialog.model.DialogSequence;
+import top.yourzi.dialog.network.NetworkHandler;
+import top.yourzi.dialog.ui.DialogScreen;
+import top.yourzi.dialog.util.ComponentJson;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+public class DialogManager {
+    public static final Gson GSON = new GsonBuilder().create();
+    private static final DialogManager INSTANCE = new DialogManager();
+
+    private final Map<String, DialogSequence> dialogSequences = new HashMap<>();
+    private final List<DialogEntry> dialogHistory = new ArrayList<>();
+    private DialogSequence currentSequence;
+    private DialogEntry currentEntry;
+    private String currentDialogPlayerName = "";
+    private static boolean isFastForwardingNext;
+    private static boolean isAutoPlaying;
+    private static SimpleSoundInstance currentAudioInstance;
+    private static boolean audioPlaying;
+
+    private DialogManager() {
+    }
+
+    public static DialogManager getInstance() {
+        return INSTANCE;
+    }
+
+    public void loadDialogsFromServer(ResourceManager resourceManager) {
+        dialogSequences.clear();
+        resourceManager.listResources("dialogs", location -> location.getPath().endsWith(".json")).forEach((location, resource) -> {
+            if (!Dialog.MODID.equals(location.getNamespace())) {
+                return;
+            }
+            try {
+                DialogSequence sequence = parseDialogSequenceFromFile(resource);
+                if (sequence != null && sequence.getId() != null) {
+                    dialogSequences.put(sequence.getId(), sequence);
+                } else {
+                    Dialog.LOGGER.warn("Empty dialog sequence or empty ID. {}", location);
+                }
+            } catch (Exception e) {
+                Dialog.LOGGER.error("Failed to load dialog file {}: {}", location, e.getMessage(), e);
+            }
+        });
+        Dialog.LOGGER.info("Loaded {} dialog sequences.", dialogSequences.size());
+    }
+
+    private DialogSequence parseDialogSequenceFromFile(Resource resource) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(resource.open(), StandardCharsets.UTF_8))) {
+            return GSON.fromJson(reader, DialogSequence.class);
+        } catch (IOException | JsonSyntaxException e) {
+            Dialog.LOGGER.error("Failure to read or parse dialog JSON file ({}): {}", resource.sourcePackId(), e.getMessage());
+            return null;
+        }
+    }
+
+    public void clearAllDialogsOnClient() {
+        dialogSequences.clear();
+        currentSequence = null;
+        currentEntry = null;
+        clearDialogHistory();
+    }
+
+    public void receiveAllDialogsFromServer(Map<String, String> dialogDataMap) {
+        clearAllDialogsOnClient();
+        dialogDataMap.forEach((id, json) -> {
+            try {
+                DialogSequence sequence = GSON.fromJson(json, DialogSequence.class);
+                if (sequence != null && sequence.getId() != null) {
+                    dialogSequences.put(id, sequence);
+                }
+            } catch (JsonSyntaxException e) {
+                Dialog.LOGGER.error("Failed to parse dialog JSON received from server. ID: {}, error: {}", id, e.getMessage());
+            }
+        });
+    }
+
+    public Map<String, String> getAllDialogJsonsForSync() {
+        Map<String, String> dialogJsons = new HashMap<>();
+        dialogSequences.forEach((id, sequence) -> dialogJsons.put(id, GSON.toJson(sequence)));
+        return dialogJsons;
+    }
+
+    public DialogSequence getDialogSequence(String id) {
+        DialogSequence original = dialogSequences.get(id);
+        return original == null ? null : GSON.fromJson(GSON.toJson(original), DialogSequence.class);
+    }
+
+    public Map<String, DialogSequence> getAllDialogSequences() {
+        return new HashMap<>(dialogSequences);
+    }
+
+    public DialogSequence createPlayerSpecificSequence(DialogSequence originalSequence, ServerPlayer player, MinecraftServer server) {
+        if (originalSequence == null) {
+            return null;
+        }
+        DialogSequence sequence = GSON.fromJson(GSON.toJson(originalSequence), DialogSequence.class);
+        if (sequence == null || sequence.getEntries() == null) {
+            return sequence;
+        }
+
+        CommandSourceStack source = player.createCommandSourceStack()
+                .withPermission(server.getOperatorUserPermissionLevel())
+                .withSuppressedOutput();
+        List<DialogEntry> visibleEntries = new ArrayList<>();
+
+        for (DialogEntry entry : sequence.getEntries()) {
+            if (entry == null || !passesVisibility(entry.getVisibilityCommand(), source, server)) {
+                continue;
+            }
+
+            resolveEntryComponents(entry, source, player);
+            if (entry.hasOptions()) {
+                List<DialogOption> visibleOptions = new ArrayList<>();
+                for (DialogOption option : entry.getOptions()) {
+                    if (option != null && passesVisibility(option.getVisibilityCommand(), source, server)) {
+                        visibleOptions.add(option);
+                    }
+                }
+                entry.setOptions(visibleOptions.toArray(new DialogOption[0]));
+            }
+            visibleEntries.add(entry);
+        }
+
+        sequence.setEntries(visibleEntries.toArray(new DialogEntry[0]));
+        return sequence;
+    }
+
+    private boolean passesVisibility(String command, CommandSourceStack source, MinecraftServer server) {
+        if (command == null || command.isEmpty()) {
+            return true;
+        }
+        try {
+            server.getCommands().performPrefixedCommand(source, command);
+            return true;
+        } catch (Exception e) {
+            Dialog.LOGGER.warn("Error executing visibility command '{}': {}", command, e.getMessage());
+            return false;
+        }
+    }
+
+    private void resolveEntryComponents(DialogEntry entry, CommandSourceStack source, ServerPlayer player) {
+        try {
+            if (entry.getText() != null) {
+                Component resolved = ComponentUtils.updateForEntity(source, ComponentJson.fromJson(entry.getText()), player, 0);
+                entry.setText(ComponentJson.toJsonTree(resolved));
+            }
+            if (entry.getSpeaker() != null) {
+                Component resolved = ComponentUtils.updateForEntity(source, ComponentJson.fromJson(entry.getSpeaker()), player, 0);
+                entry.setSpeaker(ComponentJson.toJsonTree(resolved));
+            }
+        } catch (Exception e) {
+            Dialog.LOGGER.warn("Failed to resolve dialog component for entry '{}': {}", entry.getId(), e.getMessage());
+        }
+    }
+
+    public void receiveDialogData(String dialogId, String dialogJson) {
+        try {
+            DialogSequence sequence = GSON.fromJson(dialogJson, DialogSequence.class);
+            if (sequence != null && sequence.getId() != null) {
+                dialogSequences.put(sequence.getId(), sequence);
+                Minecraft.getInstance().execute(() -> showDialog(dialogId));
+            }
+        } catch (Exception e) {
+            Dialog.LOGGER.error("Failed to parse dialog '{}' JSON received from server", dialogId, e);
+            sendPlayerMessage(Component.translatable("dialog.manager.received_parse_failed", dialogId, e.getMessage()));
+        }
+    }
+
+    public void showDialog(String dialogId) {
+        stopAutoPlay();
+        DialogSequence sequence = getDialogSequence(dialogId);
+        if (sequence == null) {
+            NetworkHandler.sendRequestDialogToServer(dialogId);
+            sendPlayerMessage(Component.translatable("dialog.manager.requesting_from_server", dialogId));
+            return;
+        }
+        openSequence(sequence);
+    }
+
+    public void receiveAndShowPlayerSpecificDialog(String dialogId, String sequenceJson) {
+        try {
+            DialogSequence sequence = GSON.fromJson(sequenceJson, DialogSequence.class);
+            if (sequence != null) {
+                openSequence(sequence);
+            }
+        } catch (JsonSyntaxException e) {
+            Dialog.LOGGER.error("Failed to parse player-specific dialog sequence JSON for ID {}: {}", dialogId, e.getMessage());
+        }
+    }
+
+    public void receiveAndShowPlayerSpecificDialogWithEntity(String dialogId, String sequenceJson, int speakerEntityId) {
+        try {
+            DialogSequence sequence = GSON.fromJson(sequenceJson, DialogSequence.class);
+            Entity speaker = Minecraft.getInstance().level == null ? null : Minecraft.getInstance().level.getEntity(speakerEntityId);
+            if (sequence != null) {
+                openSequence(sequence, speaker);
+            }
+        } catch (JsonSyntaxException e) {
+            Dialog.LOGGER.error("Failed to parse player-specific dialog sequence JSON for ID {}: {}", dialogId, e.getMessage());
+        }
+    }
+
+    private void openSequence(DialogSequence sequence) {
+        openSequence(sequence, null);
+    }
+
+    private void openSequence(DialogSequence sequence, Entity speakerEntity) {
+        clearDialogHistory();
+        currentSequence = sequence;
+        currentEntry = sequence.getFirstEntry();
+        if (currentEntry == null) {
+            sendPlayerMessage(Component.translatable("dialog.manager.no_entries", sequence.getId()));
+            currentSequence = null;
+            return;
+        }
+        addDialogToHistory(currentEntry);
+        currentDialogPlayerName = "";
+        if (Minecraft.getInstance().player != null && Minecraft.getInstance().player.getGameProfile() != null) {
+            currentDialogPlayerName = Minecraft.getInstance().player.getGameProfile().getName();
+        }
+        Minecraft.getInstance().setScreen(new DialogScreen(currentSequence, currentEntry, currentDialogPlayerName, speakerEntity));
+    }
+
+    public void showNextDialog() {
+        if (currentSequence == null || currentEntry == null) {
+            return;
+        }
+        if (currentEntry.isEndDialog()) {
+            closeCurrentDialog();
+            return;
+        }
+        DialogEntry nextEntry = currentSequence.getNextEntry(currentEntry);
+        if (nextEntry == null) {
+            closeCurrentDialog();
+            return;
+        }
+        currentEntry = nextEntry;
+        addDialogToHistory(currentEntry);
+        stopCurrentAudio();
+        Minecraft.getInstance().setScreen(new DialogScreen(currentSequence, currentEntry, currentDialogPlayerName));
+    }
+
+    public void jumpToDialog(String targetId) {
+        if (currentSequence == null) {
+            return;
+        }
+        DialogEntry targetEntry = currentSequence.findEntryById(targetId);
+        if (targetEntry == null) {
+            sendPlayerMessage(Component.translatable("dialog.manager.target_not_found", targetId));
+            return;
+        }
+        currentEntry = targetEntry;
+        addDialogToHistory(currentEntry);
+        stopCurrentAudio();
+        Minecraft.getInstance().setScreen(new DialogScreen(currentSequence, currentEntry, currentDialogPlayerName));
+    }
+
+    private void closeCurrentDialog() {
+        Minecraft.getInstance().setScreen(null);
+        stopCurrentAudio();
+        currentSequence = null;
+        currentEntry = null;
+    }
+
+    public void executeCommands(Player player, List<String> commands) {
+        executeCommands(player, commands, null);
+    }
+
+    public void executeCommands(Player player, List<String> commands, Entity executorEntity) {
+        if (commands == null || commands.isEmpty()) {
+            return;
+        }
+        for (String command : commands) {
+            if (command != null && !command.isEmpty()) {
+                if (executorEntity == null) {
+                    NetworkHandler.sendExecuteCommandToServer(command);
+                } else {
+                    NetworkHandler.sendExecuteCommandToServerWithEntity(command, executorEntity.getId());
+                }
+            }
+        }
+    }
+
+    @Deprecated
+    public void executeCommand(Player player, String command) {
+        if (command != null && !command.isEmpty()) {
+            executeCommands(player, List.of(command));
+        }
+    }
+
+    public List<DialogEntry> getDialogHistory() {
+        return new ArrayList<>(dialogHistory);
+    }
+
+    public void recordChoiceForCurrentDialog(String optionText) {
+        if (currentEntry != null) {
+            currentEntry.setSelectedOptionText(optionText);
+            if (!dialogHistory.isEmpty()) {
+                dialogHistory.getLast().setSelectedOptionText(optionText);
+            }
+        }
+    }
+
+    private void addDialogToHistory(DialogEntry entry) {
+        if (entry != null) {
+            dialogHistory.add(entry);
+        }
+    }
+
+    private void clearDialogHistory() {
+        dialogHistory.clear();
+    }
+
+    private void sendPlayerMessage(Component message) {
+        if (Minecraft.getInstance().player != null) {
+            Minecraft.getInstance().player.sendSystemMessage(message);
+        }
+    }
+
+    public static boolean isFastForwardingNext() {
+        return isFastForwardingNext;
+    }
+
+    public static void setFastForwardingNext(boolean fastForwardingNext) {
+        isFastForwardingNext = fastForwardingNext;
+    }
+
+    public static boolean isAutoPlaying() {
+        return isAutoPlaying;
+    }
+
+    public static void setAutoPlaying(boolean autoPlaying) {
+        isAutoPlaying = autoPlaying;
+    }
+
+    public static void stopAutoPlay() {
+        isAutoPlaying = false;
+    }
+
+    public static void playDialogAudio(String audioPath) {
+        try {
+            stopCurrentAudio();
+            String soundName = audioPath.replace(".ogg", "");
+            ResourceLocation audioLocation = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, soundName);
+            currentAudioInstance = SimpleSoundInstance.forUI(SoundEvent.createVariableRangeEvent(audioLocation), 1.0f, 1.0f);
+            Minecraft.getInstance().getSoundManager().play(currentAudioInstance);
+            audioPlaying = true;
+        } catch (Exception e) {
+            Dialog.LOGGER.error("Failed to play dialog audio: {}", audioPath, e);
+        }
+    }
+
+    public static void stopCurrentAudio() {
+        if (currentAudioInstance != null && audioPlaying) {
+            Minecraft.getInstance().getSoundManager().stop(currentAudioInstance);
+            currentAudioInstance = null;
+            audioPlaying = false;
+        }
+    }
+
+    public static boolean isAudioPlaying() {
+        return audioPlaying;
+    }
+
+    public static boolean isAudioFinished() {
+        if (!audioPlaying || currentAudioInstance == null) {
+            return true;
+        }
+        if (!Minecraft.getInstance().getSoundManager().isActive(currentAudioInstance)) {
+            audioPlaying = false;
+            return true;
+        }
+        return false;
+    }
+}
