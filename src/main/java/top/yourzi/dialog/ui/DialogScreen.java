@@ -40,6 +40,8 @@ import java.util.List;
 
 public class DialogScreen extends Screen {
     private static final int PORTRAIT_ANIMATION_DURATION_MS = 300;
+    private static final int PORTRAIT_IMPACT_ANIMATION_DURATION_MS = 450;
+    private static final int PORTRAIT_SIDE_MARGIN = 20;
 
     private final DialogSequence dialogSequence;
     private final DialogEntry dialogEntry;
@@ -272,12 +274,12 @@ public class DialogScreen extends Screen {
         for (PortraitRenderInfo portrait : portraits) {
             int portraitHeight = (int) (height * 0.68f * portrait.size);
             int portraitWidth = Math.max(1, (int) (portraitHeight * portrait.aspectRatio()));
-            PortraitAnimationFrame animation = getPortraitAnimationFrame(portrait);
             int x = switch (portrait.position) {
-                case LEFT -> 20;
+                case LEFT -> PORTRAIT_SIDE_MARGIN;
                 case CENTER -> (width - portraitWidth) / 2;
-                case RIGHT -> width - portraitWidth - 20;
+                case RIGHT -> width - portraitWidth - PORTRAIT_SIDE_MARGIN;
             };
+            PortraitAnimationFrame animation = getPortraitAnimationFrame(portrait, x, portraitWidth);
             int y = height - portraitHeight;
             RenderSystem.setShader(GameRenderer::getPositionTexShader);
             RenderSystem.setShaderColor(portrait.brightness, portrait.brightness, portrait.brightness, animation.alpha);
@@ -287,17 +289,18 @@ public class DialogScreen extends Screen {
         RenderSystem.disableBlend();
     }
 
-    private PortraitAnimationFrame getPortraitAnimationFrame(PortraitRenderInfo portrait) {
+    private PortraitAnimationFrame getPortraitAnimationFrame(PortraitRenderInfo portrait, int baseX, int portraitWidth) {
         if (!ClientConfig.ENABLE_PORTRAIT_ANIMATIONS.get() || portrait.animationType == PortraitAnimationType.NONE) {
             return PortraitAnimationFrame.NONE;
         }
 
         long elapsed = System.currentTimeMillis() - portrait.animationStartTime;
-        if (elapsed >= PORTRAIT_ANIMATION_DURATION_MS) {
+        int duration = getPortraitAnimationDurationMs(portrait.animationType);
+        if (elapsed >= duration) {
             return PortraitAnimationFrame.NONE;
         }
 
-        float progress = Mth.clamp((float) elapsed / PORTRAIT_ANIMATION_DURATION_MS, 0.0f, 1.0f);
+        float progress = Mth.clamp((float) elapsed / duration, 0.0f, 1.0f);
         return switch (portrait.animationType) {
             case FADE_IN -> new PortraitAnimationFrame(0, 0, progress);
             case SLIDE_IN_FROM_BOTTOM -> new PortraitAnimationFrame(0, (int) Mth.lerp(progress, 50.0f, 0.0f), 1.0f);
@@ -307,7 +310,54 @@ public class DialogScreen extends Screen {
                         : Mth.lerp((progress - 0.5f) * 2.0f, -20.0f, 0.0f);
                 yield new PortraitAnimationFrame(0, (int) yOffset, 1.0f);
             }
+            case IMPACT -> getImpactAnimationFrame(portrait.position, baseX, portraitWidth, progress, false);
+            case IMPACT_MAX -> getImpactAnimationFrame(portrait.position, baseX, portraitWidth, progress, true);
             case NONE -> PortraitAnimationFrame.NONE;
+        };
+    }
+
+    private int getPortraitAnimationDurationMs(PortraitAnimationType animationType) {
+        return switch (animationType) {
+            case IMPACT, IMPACT_MAX -> PORTRAIT_IMPACT_ANIMATION_DURATION_MS;
+            case NONE, FADE_IN, SLIDE_IN_FROM_BOTTOM, BOUNCE -> PORTRAIT_ANIMATION_DURATION_MS;
+        };
+    }
+
+    private PortraitAnimationFrame getImpactAnimationFrame(PortraitPosition position, int baseX, int portraitWidth, float progress, boolean maxImpact) {
+        int targetXOffset = maxImpact
+                ? getImpactMaxXOffset(position, baseX, portraitWidth)
+                : getImpactXOffset(position);
+        if (targetXOffset == 0) {
+            return PortraitAnimationFrame.NONE;
+        }
+
+        float travel = Mth.sin(progress * (float) Math.PI);
+        int verticalDistance = Math.max(18, (int) (height * 0.08f));
+        int xOffset = Math.round(targetXOffset * travel);
+        int yOffset = -Math.round(verticalDistance * travel);
+        return new PortraitAnimationFrame(xOffset, yOffset, 1.0f);
+    }
+
+    private int getImpactXOffset(PortraitPosition position) {
+        int distance = Math.max(1, width / 2);
+        return switch (position) {
+            case LEFT -> distance;
+            case RIGHT -> -distance;
+            case CENTER -> 0;
+        };
+    }
+
+    private int getImpactMaxXOffset(PortraitPosition position, int baseX, int portraitWidth) {
+        int targetX = switch (position) {
+            case LEFT -> width - portraitWidth - PORTRAIT_SIDE_MARGIN;
+            case RIGHT -> PORTRAIT_SIDE_MARGIN;
+            case CENTER -> baseX;
+        };
+        int targetOffset = targetX - baseX;
+        return switch (position) {
+            case LEFT -> Math.max(0, targetOffset);
+            case RIGHT -> Math.min(0, targetOffset);
+            case CENTER -> 0;
         };
     }
 
