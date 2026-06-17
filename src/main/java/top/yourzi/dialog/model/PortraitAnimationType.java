@@ -6,5 +6,8 @@ public enum PortraitAnimationType {
     SLIDE_IN_FROM_BOTTOM,
     BOUNCE,
     IMPACT,
-    IMPACT_MAX
+    IMPACT_MAX,
+    ROTATE,
+    REVERSE,
+    FLASH
 }

@@ -93,6 +93,49 @@
       ]
     },
     {
+      "id": "impact",
+      "speaker": {"translate": "dialog.test_dialog.speaker.leaf", "color": "aqua"},
+      "text": {"translate": "dialog.test_dialog.entry.impact.text"},
+      "portraits": [
+        {"path": "leaf.png", "position": "LEFT", "brightness": 1.0, "animationType": "IMPACT"},
+        {"path": "tlipoca.png", "position": "RIGHT", "brightness": 0.5}
+      ]
+    },
+    {
+      "id": "impact_max",
+      "speaker": {"translate": "dialog.test_dialog.speaker.tlipoca", "color": "red"},
+      "text": {"translate": "dialog.test_dialog.entry.impact_max.text"},
+      "portraits": [
+        {"path": "leaf.png", "position": "LEFT", "brightness": 0.5},
+        {"path": "tlipoca.png", "position": "RIGHT", "brightness": 1.0, "animationType": "IMPACT_MAX"}
+      ]
+    },
+    {
+      "id": "rotate",
+      "speaker": {"translate": "dialog.test_dialog.speaker.tlipoca", "color": "red"},
+      "text": {"translate": "dialog.test_dialog.entry.rotate.text"},
+      "portraits": [
+        {"path": "tlipoca_1.png", "position": "CENTER", "brightness": 1.0, "animationType": "ROTATE"}
+      ]
+    },
+    {
+      "id": "reverse",
+      "speaker": {"translate": "dialog.test_dialog.speaker.tlipoca", "color": "red"},
+      "text": {"translate": "dialog.test_dialog.entry.reverse.text"},
+      "portraits": [
+        {"path": "tlipoca_2.png", "position": "CENTER", "brightness": 1.0, "animationType": "REVERSE"}
+      ]
+    },
+    {
+      "id": "flash",
+      "speaker": {"translate": "dialog.test_dialog.speaker.leaf", "color": "aqua"},
+      "text": {"translate": "dialog.test_dialog.entry.flash.text"},
+      "portraits": [
+        {"path": "leaf.png", "position": "LEFT", "brightness": 1.0, "animationType": "FLASH"},
+        {"path": "tlipoca.png", "position": "RIGHT", "brightness": 0.5}
+      ]
+    },
+    {
       "id": "8",
       "speaker": {"translate": "dialog.test_dialog.speaker.tlipoca", "color": "red"},
       "text": {"translate": "dialog.test_dialog.entry.8.text"},

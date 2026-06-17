@@ -1,5 +1,6 @@
 package top.yourzi.dialog.ui;
 
+import com.mojang.math.Axis;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -41,6 +42,8 @@ import java.util.List;
 public class DialogScreen extends Screen {
     private static final int PORTRAIT_ANIMATION_DURATION_MS = 300;
     private static final int PORTRAIT_IMPACT_ANIMATION_DURATION_MS = 450;
+    private static final int PORTRAIT_ROTATE_ANIMATION_DURATION_MS = 600;
+    private static final int PORTRAIT_FLASH_ANIMATION_DURATION_MS = 800;
     private static final int PORTRAIT_SIDE_MARGIN = 20;
 
     private final DialogSequence dialogSequence;
@@ -242,6 +245,7 @@ public class DialogScreen extends Screen {
         if (showingHistory) {
             renderHistoryScreen(guiGraphics);
             closeHistoryButton.render(guiGraphics, mouseX, mouseY, partialTicks);
+            renderFlashOverlay(guiGraphics);
             return;
         }
 
@@ -254,6 +258,7 @@ public class DialogScreen extends Screen {
         }
 
         super.render(guiGraphics, mouseX, mouseY, partialTicks);
+        renderFlashOverlay(guiGraphics);
     }
 
     private void renderWorldOverlay(GuiGraphics guiGraphics) {
@@ -280,10 +285,21 @@ public class DialogScreen extends Screen {
                 case RIGHT -> width - portraitWidth - PORTRAIT_SIDE_MARGIN;
             };
             PortraitAnimationFrame animation = getPortraitAnimationFrame(portrait, x, portraitWidth);
-            int y = height - portraitHeight;
+            int y = animation.topAligned ? 0 : height - portraitHeight;
+            int renderX = x + animation.xOffset;
+            int renderY = y + animation.yOffset;
             RenderSystem.setShader(GameRenderer::getPositionTexShader);
             RenderSystem.setShaderColor(portrait.brightness, portrait.brightness, portrait.brightness, animation.alpha);
-            guiGraphics.blit(portrait.texture, x + animation.xOffset, y + animation.yOffset, portraitWidth, portraitHeight, 0, 0, portraitWidth, portraitHeight, portraitWidth, portraitHeight);
+            if (animation.rotationDegrees != 0.0f) {
+                guiGraphics.pose().pushPose();
+                guiGraphics.pose().translate(renderX + portraitWidth / 2.0f, renderY + portraitHeight / 2.0f, 0.0f);
+                guiGraphics.pose().mulPose(Axis.ZP.rotationDegrees(animation.rotationDegrees));
+                guiGraphics.pose().translate(-(renderX + portraitWidth / 2.0f), -(renderY + portraitHeight / 2.0f), 0.0f);
+                guiGraphics.blit(portrait.texture, renderX, renderY, portraitWidth, portraitHeight, 0, 0, portraitWidth, portraitHeight, portraitWidth, portraitHeight);
+                guiGraphics.pose().popPose();
+            } else {
+                guiGraphics.blit(portrait.texture, renderX, renderY, portraitWidth, portraitHeight, 0, 0, portraitWidth, portraitHeight, portraitWidth, portraitHeight);
+            }
         }
         RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
         RenderSystem.disableBlend();
@@ -292,6 +308,10 @@ public class DialogScreen extends Screen {
     private PortraitAnimationFrame getPortraitAnimationFrame(PortraitRenderInfo portrait, int baseX, int portraitWidth) {
         if (!ClientConfig.ENABLE_PORTRAIT_ANIMATIONS.get() || portrait.animationType == PortraitAnimationType.NONE) {
             return PortraitAnimationFrame.NONE;
+        }
+
+        if (portrait.animationType == PortraitAnimationType.REVERSE) {
+            return PortraitAnimationFrame.REVERSE;
         }
 
         long elapsed = System.currentTimeMillis() - portrait.animationStartTime;
@@ -312,6 +332,9 @@ public class DialogScreen extends Screen {
             }
             case IMPACT -> getImpactAnimationFrame(portrait.position, baseX, portraitWidth, progress, false);
             case IMPACT_MAX -> getImpactAnimationFrame(portrait.position, baseX, portraitWidth, progress, true);
+            case ROTATE -> new PortraitAnimationFrame(0, 0, 1.0f, progress * 360.0f, false);
+            case REVERSE -> PortraitAnimationFrame.REVERSE;
+            case FLASH -> PortraitAnimationFrame.NONE;
             case NONE -> PortraitAnimationFrame.NONE;
         };
     }
@@ -319,7 +342,9 @@ public class DialogScreen extends Screen {
     private int getPortraitAnimationDurationMs(PortraitAnimationType animationType) {
         return switch (animationType) {
             case IMPACT, IMPACT_MAX -> PORTRAIT_IMPACT_ANIMATION_DURATION_MS;
-            case NONE, FADE_IN, SLIDE_IN_FROM_BOTTOM, BOUNCE -> PORTRAIT_ANIMATION_DURATION_MS;
+            case ROTATE -> PORTRAIT_ROTATE_ANIMATION_DURATION_MS;
+            case FLASH -> PORTRAIT_FLASH_ANIMATION_DURATION_MS;
+            case NONE, FADE_IN, SLIDE_IN_FROM_BOTTOM, BOUNCE, REVERSE -> PORTRAIT_ANIMATION_DURATION_MS;
         };
     }
 
@@ -359,6 +384,36 @@ public class DialogScreen extends Screen {
             case RIGHT -> Math.min(0, targetOffset);
             case CENTER -> 0;
         };
+    }
+
+    private void renderFlashOverlay(GuiGraphics guiGraphics) {
+        if (!ClientConfig.ENABLE_PORTRAIT_ANIMATIONS.get()) {
+            return;
+        }
+
+        float alpha = 0.0f;
+        long now = System.currentTimeMillis();
+        for (PortraitRenderInfo portrait : portraits) {
+            if (portrait.animationType != PortraitAnimationType.FLASH) {
+                continue;
+            }
+
+            long elapsed = now - portrait.animationStartTime;
+            if (elapsed < 0 || elapsed >= PORTRAIT_FLASH_ANIMATION_DURATION_MS) {
+                continue;
+            }
+
+            float progress = Mth.clamp((float) elapsed / PORTRAIT_FLASH_ANIMATION_DURATION_MS, 0.0f, 1.0f);
+            float pulse = Mth.sin(progress * (float) Math.PI * 4.0f);
+            alpha = Math.max(alpha, Math.max(0.0f, pulse));
+        }
+
+        if (alpha <= 0.0f) {
+            return;
+        }
+
+        int alphaChannel = Mth.clamp(Math.round(alpha * 210.0f), 0, 210);
+        guiGraphics.fill(0, 0, width, height, (alphaChannel << 24) | 0xFFFFFF);
     }
 
     private void renderDialogBox(GuiGraphics guiGraphics) {
@@ -623,7 +678,12 @@ public class DialogScreen extends Screen {
         }
     }
 
-    private record PortraitAnimationFrame(int xOffset, int yOffset, float alpha) {
+    private record PortraitAnimationFrame(int xOffset, int yOffset, float alpha, float rotationDegrees, boolean topAligned) {
         private static final PortraitAnimationFrame NONE = new PortraitAnimationFrame(0, 0, 1.0f);
+        private static final PortraitAnimationFrame REVERSE = new PortraitAnimationFrame(0, 0, 1.0f, 180.0f, true);
+
+        private PortraitAnimationFrame(int xOffset, int yOffset, float alpha) {
+            this(xOffset, yOffset, alpha, 0.0f, false);
+        }
     }
 }
