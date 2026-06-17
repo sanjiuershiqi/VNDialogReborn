@@ -3,3 +3,6 @@ VNDialogReborn/VN对话引擎重置版
 此项目原作链接为https://github.com/YourZi/VNDialog
 具体模组使用方法参考以上链接即可 如有添加除原作功能之外的功能将会在下方写出
 更新肘击功能，在动画里面使用IMPACT可以从旁边肘到中间如果使用IMPACT_MAX将可以肘到另一边立绘位置
+ROTATE触发后原地旋转一圈
+REVERSE触发后立绘会变为在屏幕上方倒挂着出现
+FLASH触发后屏幕闪两次白光
