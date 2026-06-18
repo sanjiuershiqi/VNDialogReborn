@@ -2,6 +2,7 @@
   "id": "test_dialog",
   "title": "Test Dialog",
   "description": "A test dialog sequence to showcase the features of the dialog system.",
+  "effect": "minecraft:night_vision",
   "start": "start",
   "entries": [
     {

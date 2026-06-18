@@ -37,7 +37,9 @@ import top.yourzi.dialog.network.NetworkHandler;
 import top.yourzi.dialog.util.STBBackendImage;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class DialogScreen extends Screen {
     private static final int PORTRAIT_ANIMATION_DURATION_MS = 300;
@@ -45,6 +47,7 @@ public class DialogScreen extends Screen {
     private static final int PORTRAIT_ROTATE_ANIMATION_DURATION_MS = 600;
     private static final int PORTRAIT_FLASH_ANIMATION_DURATION_MS = 800;
     private static final int PORTRAIT_SIDE_MARGIN = 20;
+    private static final Map<ResourceLocation, PortraitTextureSize> PORTRAIT_TEXTURE_SIZE_CACHE = new HashMap<>();
 
     private final DialogSequence dialogSequence;
     private final DialogEntry dialogEntry;
@@ -65,6 +68,7 @@ public class DialogScreen extends Screen {
     private boolean textFullyDisplayed;
     private boolean optionButtonsCreated;
     private boolean showingHistory;
+    private boolean upcomingPortraitsPrecached;
     private int protectionHeartbeatTicks;
     private int historyScrollOffset;
     private int totalHistoryContentHeight;
@@ -94,7 +98,7 @@ public class DialogScreen extends Screen {
             if (portrait.getPath() == null || portrait.getPath().isEmpty()) {
                 continue;
             }
-            ResourceLocation texture = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/portraits/" + portrait.getPath());
+            ResourceLocation texture = getPortraitTextureLocation(portrait.getPath());
             PortraitTextureSize textureSize = readPortraitTextureSize(texture);
             portraits.add(new PortraitRenderInfo(
                     texture,
@@ -109,12 +113,55 @@ public class DialogScreen extends Screen {
         }
     }
 
+    private ResourceLocation getPortraitTextureLocation(String path) {
+        return ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/portraits/" + path);
+    }
+
     private PortraitTextureSize readPortraitTextureSize(ResourceLocation texture) {
+        PortraitTextureSize cachedSize = PORTRAIT_TEXTURE_SIZE_CACHE.get(texture);
+        if (cachedSize != null) {
+            return cachedSize;
+        }
+
+        PortraitTextureSize loadedSize;
         try (STBBackendImage image = STBBackendImage.read(texture)) {
-            return new PortraitTextureSize(image.getWidth(), image.getHeight());
+            loadedSize = new PortraitTextureSize(image.getWidth(), image.getHeight());
         } catch (Exception e) {
             Dialog.LOGGER.warn("Failed to read portrait texture size for {}, falling back to default aspect ratio.", texture, e);
-            return PortraitTextureSize.FALLBACK;
+            loadedSize = PortraitTextureSize.FALLBACK;
+        }
+        PORTRAIT_TEXTURE_SIZE_CACHE.put(texture, loadedSize);
+        return loadedSize;
+    }
+
+    private void precacheUpcomingPortraitSizes() {
+        if (upcomingPortraitsPrecached) {
+            return;
+        }
+
+        upcomingPortraitsPrecached = true;
+        if (dialogEntry.hasOptions()) {
+            DialogOption[] options = dialogEntry.getOptions();
+            if (options == null) {
+                return;
+            }
+            for (DialogOption option : options) {
+                precachePortraitSizes(dialogSequence.findEntryById(option.getTargetId()));
+            }
+            return;
+        }
+
+        precachePortraitSizes(dialogSequence.getNextEntry(dialogEntry));
+    }
+
+    private void precachePortraitSizes(DialogEntry entry) {
+        if (entry == null || entry.getPortraits() == null) {
+            return;
+        }
+        for (PortraitInfo portrait : entry.getPortraits()) {
+            if (portrait.getPath() != null && !portrait.getPath().isEmpty()) {
+                readPortraitTextureSize(getPortraitTextureLocation(portrait.getPath()));
+            }
         }
     }
 
@@ -198,7 +245,7 @@ public class DialogScreen extends Screen {
 
         optionButtonsCreated = false;
         protectionHeartbeatTicks = 0;
-        NetworkHandler.sendDialogProtectionHeartbeatToServer();
+        sendDialogProtectionHeartbeat();
     }
 
     private Component autoPlayLabel() {
@@ -578,22 +625,44 @@ public class DialogScreen extends Screen {
             return true;
         }
 
+        if (button == 0 && isDialogBoxClick(mouseX, mouseY) && !isDialogControlClick(mouseX, mouseY)) {
+            return handleDialogAdvanceClick();
+        }
+
         if (super.mouseClicked(mouseX, mouseY, button)) {
             return true;
         }
 
         if (button == 0) {
-            if (!textFullyDisplayed) {
-                currentCharIndex = dialogEntry.getText(playerName).getString().length();
-                textFullyDisplayed = true;
-            } else if (!dialogEntry.hasOptions()) {
-                DialogManager.getInstance().executeCommands(minecraft.player, dialogEntry.getCommands(), speakerEntity);
-                DialogManager.getInstance().showNextDialog();
-            }
-            return true;
+            return handleDialogAdvanceClick();
         }
 
         return false;
+    }
+
+    private boolean isDialogBoxClick(double mouseX, double mouseY) {
+        return mouseX >= dialogBoxX && mouseX <= dialogBoxX + dialogBoxWidth
+                && mouseY >= dialogBoxY && mouseY <= dialogBoxY + dialogBoxHeight;
+    }
+
+    private boolean isDialogControlClick(double mouseX, double mouseY) {
+        return isButtonUnderMouse(viewHistoryButton, mouseX, mouseY)
+                || isButtonUnderMouse(autoPlayButton, mouseX, mouseY);
+    }
+
+    private boolean isButtonUnderMouse(Button button, double mouseX, double mouseY) {
+        return button != null && button.isMouseOver(mouseX, mouseY);
+    }
+
+    private boolean handleDialogAdvanceClick() {
+        if (!textFullyDisplayed) {
+            currentCharIndex = dialogEntry.getText(playerName).getString().length();
+            textFullyDisplayed = true;
+        } else if (!dialogEntry.hasOptions()) {
+            DialogManager.getInstance().executeCommands(minecraft.player, dialogEntry.getCommands(), speakerEntity);
+            DialogManager.getInstance().showNextDialog();
+        }
+        return true;
     }
 
     @Override
@@ -614,10 +683,11 @@ public class DialogScreen extends Screen {
     @Override
     public void tick() {
         super.tick();
+        precacheUpcomingPortraitSizes();
         protectionHeartbeatTicks++;
         if (protectionHeartbeatTicks >= 20) {
             protectionHeartbeatTicks = 0;
-            NetworkHandler.sendDialogProtectionHeartbeatToServer();
+            sendDialogProtectionHeartbeat();
         }
         if (DialogManager.isAutoPlaying() && !dialogEntry.hasOptions() && textFullyDisplayed) {
             if (DialogManager.isAudioFinished()) {
@@ -636,6 +706,10 @@ public class DialogScreen extends Screen {
     private void toggleAutoPlay() {
         DialogManager.setAutoPlaying(!DialogManager.isAutoPlaying());
         updateAutoPlayButtonText();
+    }
+
+    private void sendDialogProtectionHeartbeat() {
+        NetworkHandler.sendDialogProtectionHeartbeatToServer(dialogSequence.getEffect());
     }
 
     private void updateAutoPlayButtonText() {

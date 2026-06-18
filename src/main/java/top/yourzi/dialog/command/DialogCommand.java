@@ -15,6 +15,7 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import top.yourzi.dialog.Dialog;
 import top.yourzi.dialog.DialogManager;
 import top.yourzi.dialog.model.DialogSequence;
+import top.yourzi.dialog.network.DialogProtectionHeartbeatPacket;
 import top.yourzi.dialog.network.NetworkHandler;
 
 import java.util.ArrayList;
@@ -61,6 +62,7 @@ public class DialogCommand {
             return 0;
         }
 
+        DialogProtectionHeartbeatPacket.setActiveDialogEffect(targetPlayer, playerSequence.getEffect());
         NetworkHandler.sendShowDialogToPlayerWithEntity(targetPlayer, dialogId, DialogManager.GSON.toJson(playerSequence), speakerEntity);
         return 1;
     }
@@ -84,6 +86,7 @@ public class DialogCommand {
             return 0;
         }
 
+        DialogProtectionHeartbeatPacket.setActiveDialogEffect(player, playerSequence.getEffect());
         NetworkHandler.sendShowDialogToPlayer(player, dialogId, DialogManager.GSON.toJson(playerSequence));
         return 1;
     }

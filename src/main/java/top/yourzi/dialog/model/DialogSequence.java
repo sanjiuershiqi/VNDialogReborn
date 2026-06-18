@@ -9,6 +9,7 @@ public class DialogSequence {
     private String id;
     private String title;
     private String description;
+    private String effect;
     private DialogEntry[] entries;
     @SerializedName("start")
     private String startId;
@@ -37,6 +38,14 @@ public class DialogSequence {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getEffect() {
+        return effect;
+    }
+
+    public void setEffect(String effect) {
+        this.effect = effect;
     }
 
     public DialogEntry[] getEntries() {

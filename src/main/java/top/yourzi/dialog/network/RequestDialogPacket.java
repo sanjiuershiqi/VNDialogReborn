@@ -30,6 +30,7 @@ public record RequestDialogPacket(String dialogId) implements CustomPacketPayloa
 
             DialogSequence sequence = DialogManager.getInstance().getDialogSequence(packet.dialogId);
             if (sequence != null) {
+                DialogProtectionHeartbeatPacket.setActiveDialogEffect(sender, sequence.getEffect());
                 NetworkHandler.sendDialogDataToPlayer(sender, packet.dialogId, DialogManager.GSON.toJson(sequence));
             } else {
                 Dialog.LOGGER.warn("Player {} requested dialog '{}' which was not found on the server.",

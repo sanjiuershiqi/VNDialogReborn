@@ -84,9 +84,9 @@ public class NetworkHandler {
         }
     }
 
-    public static void sendDialogProtectionHeartbeatToServer() {
+    public static void sendDialogProtectionHeartbeatToServer(String effectId) {
         if (Minecraft.getInstance() != null && Minecraft.getInstance().getConnection() != null) {
-            PacketDistributor.sendToServer(DialogProtectionHeartbeatPacket.INSTANCE);
+            PacketDistributor.sendToServer(new DialogProtectionHeartbeatPacket(effectId));
         }
     }
 }

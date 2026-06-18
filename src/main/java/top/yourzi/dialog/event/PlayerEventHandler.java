@@ -10,6 +10,7 @@ import net.neoforged.neoforge.event.AddReloadListenerEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import top.yourzi.dialog.Dialog;
 import top.yourzi.dialog.DialogManager;
+import top.yourzi.dialog.network.DialogProtectionHeartbeatPacket;
 import top.yourzi.dialog.network.NetworkHandler;
 
 import java.util.HashMap;
@@ -24,6 +25,13 @@ public class PlayerEventHandler {
         if (event.getEntity() instanceof ServerPlayer player) {
             Map<String, String> allDialogJsons = DialogManager.getInstance().getAllDialogJsonsForSync();
             NetworkHandler.sendAllDialogsToPlayer(player, allDialogJsons.isEmpty() ? new HashMap<>() : allDialogJsons);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            DialogProtectionHeartbeatPacket.clearActiveDialogEffect(player);
         }
     }
 
