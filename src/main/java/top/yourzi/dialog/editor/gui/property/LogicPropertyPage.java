@@ -77,13 +77,13 @@ public class LogicPropertyPage implements PropertyPage {
             if (this.currentEntry != null) {
                 this.currentEntry.setEndDialog(checked);
             }
-        });
+        }, this.font);
         this.allowSkipCheck = new SyncedCheckbox(fieldX, y + 45, fieldWidth, 20,
                 Component.translatable("gui.vn_edit.allow_skip"), true, checked -> {
             if (this.currentEntry != null) {
                 this.currentEntry.setAllowSkip(checked);
             }
-        });
+        }, this.font);
         int audioY = y + 70;
         this.audioPathBox = new EditBox(this.font, fieldX, audioY, fieldWidth - 100, 16, Component.translatable("gui.vn_edit.audio_path"));
         this.audioPathBox.setMaxLength(999999999);
@@ -397,27 +397,28 @@ public class LogicPropertyPage implements PropertyPage {
     }
 
     /**
-     * 复选框子类，暴露安全的静默设置方法。Checkbox.onPress() 是 protected，故在此子类中调用。
+     * 复选框子类，适配 1.21.1 的 Checkbox API（构造器需 Font 和 OnValueChange，
+     * 状态查询用 selected()）。setSelectedSilent 通过反复调用 onPress 切换到目标状态。
      */
     private static class SyncedCheckbox extends Checkbox {
         private final Consumer<Boolean> onChange;
 
-        SyncedCheckbox(int x, int y, int width, int height, Component message, boolean checked, Consumer<Boolean> onChange) {
-            super(x, y, width, height, message, checked);
+        SyncedCheckbox(int x, int y, int width, int height, Component message, boolean checked, Consumer<Boolean> onChange, Font font) {
+            super(x, y, width, message, font, checked, (checkbox, value) -> {});
             this.onChange = onChange;
         }
 
         @Override
-        public void onPress() {
-            super.onPress();
+        public void onPress(net.minecraft.client.input.InputWithModifiers input) {
+            super.onPress(input);
             if (onChange != null) {
-                onChange.accept(this.isSelected());
+                onChange.accept(this.selected());
             }
         }
 
         void setSelectedSilent(boolean selected) {
-            while (this.isSelected() != selected) {
-                super.onPress();
+            while (this.selected() != selected) {
+                super.onPress(new net.minecraft.client.input.InputWithModifiers(0, 0, 0, 0, 0, 0, 0));
             }
         }
     }

@@ -24,6 +24,7 @@ import top.yourzi.dialog.editor.gui.widget.MultiLineEditBox;
 import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.editor.util.LangFileGenerator;
 import top.yourzi.dialog.model.DialogEntry;
+import top.yourzi.dialog.util.ComponentJson;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -184,7 +185,7 @@ public class TextPropertyPage implements PropertyPage {
         }
         String rawText = this.contentBox.getValue();
         MutableComponent component = this.parseFormattingCodesToComponent(rawText);
-        this.currentEntry.setText(Component.Serializer.toJson(component));
+        this.currentEntry.setText(ComponentJson.toJsonTree(component));
     }
 
     private void saveTranslationToEntry() {
@@ -261,7 +262,7 @@ public class TextPropertyPage implements PropertyPage {
             if (speakerJson.isJsonPrimitive()) {
                 speakerStr = speakerJson.getAsString();
             } else {
-                MutableComponent comp = Component.Serializer.fromJson(speakerJson);
+                Component comp = ComponentJson.fromJson(speakerJson);
                 speakerStr = comp != null ? comp.getString() : speakerJson.toString();
             }
         }
@@ -295,7 +296,7 @@ public class TextPropertyPage implements PropertyPage {
             } else if (textJson.isJsonPrimitive()) {
                 text = textJson.getAsString();
             } else {
-                MutableComponent comp = Component.Serializer.fromJson(textJson);
+                Component comp = ComponentJson.fromJson(textJson);
                 text = comp != null ? this.componentToFormattingCodes(comp) : "";
             }
             this.contentBox.setValueSilently(text);

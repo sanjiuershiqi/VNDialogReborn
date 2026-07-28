@@ -95,7 +95,6 @@ public class PropertyPanel extends AbstractWidget {
         }
     }
 
-    @Override
     public void setVisible(boolean visible) {
         this.visible = visible;
         this.ensureInitialized();
