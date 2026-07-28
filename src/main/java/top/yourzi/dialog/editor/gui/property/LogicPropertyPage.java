@@ -397,28 +397,36 @@ public class LogicPropertyPage implements PropertyPage {
     }
 
     /**
-     * 复选框子类，适配 1.21.1 的 Checkbox API（构造器需 Font 和 OnValueChange，
-     * 状态查询用 selected()）。setSelectedSilent 通过反复调用 onPress 切换到目标状态。
+     * 复选框子类，适配 1.21.1 的 Checkbox API。构造器需 Font 和 OnValueChange，
+     * 状态查询用 selected()。setSelectedSilent 通过反射设置 private selected 字段，
+     * 避免依赖 onPress 的具体签名（1.21.1 中签名发生变化）。
      */
     private static class SyncedCheckbox extends Checkbox {
         private final Consumer<Boolean> onChange;
 
         SyncedCheckbox(int x, int y, int width, int height, Component message, boolean checked, Consumer<Boolean> onChange, Font font) {
-            super(x, y, width, message, font, checked, (checkbox, value) -> {});
+            super(x, y, width, message, font, checked, (checkbox, value) -> {
+                if (onChange != null) {
+                    onChange.accept(value);
+                }
+            });
             this.onChange = onChange;
         }
 
-        @Override
-        public void onPress(net.minecraft.client.input.InputWithModifiers input) {
-            super.onPress(input);
-            if (onChange != null) {
-                onChange.accept(this.selected());
-            }
-        }
-
         void setSelectedSilent(boolean selected) {
-            while (this.selected() != selected) {
-                super.onPress(new net.minecraft.client.input.InputWithModifiers(0, 0, 0, 0, 0, 0, 0));
+            if (this.selected() == selected) {
+                return;
+            }
+            try {
+                java.lang.reflect.Field f = Checkbox.class.getDeclaredField("selected");
+                f.setAccessible(true);
+                f.setBoolean(this, selected);
+            } catch (ReflectiveOperationException e) {
+                // 反射失败时静默忽略：setSelectedSilent 仅用于 UI 状态同步，
+                // 失败不影响数据正确性，下次用户交互会重新同步。
+            }
+            if (onChange != null) {
+                onChange.accept(selected);
             }
         }
     }
