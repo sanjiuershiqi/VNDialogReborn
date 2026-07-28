@@ -14,11 +14,9 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.ComponentContents;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.TextColor;
-import net.minecraft.network.chat.contents.LiteralContents;
 import top.yourzi.dialog.Dialog;
 import top.yourzi.dialog.editor.gui.VNDialogEditorScreen;
 import top.yourzi.dialog.editor.gui.widget.FocusAwareButton;
@@ -444,8 +442,7 @@ public class TextPropertyPage implements PropertyPage {
 
     private String componentToFormattingCodes(Component comp) {
         StringBuilder sb = new StringBuilder();
-        ComponentContents componentContents = comp.getContents();
-        if (componentContents instanceof LiteralContents lit && !lit.text().isEmpty()) {
+        if (!comp.getString().isEmpty()) {
             this.appendStyledText(comp, sb);
         }
         for (Component sibling : comp.getSiblings()) {
@@ -459,12 +456,7 @@ public class TextPropertyPage implements PropertyPage {
         if (!style.isEmpty()) {
             this.appendStyle(style, sb);
         }
-        ComponentContents componentContents = comp.getContents();
-        if (componentContents instanceof LiteralContents lit) {
-            sb.append(lit.text());
-        } else {
-            sb.append(comp.getString());
-        }
+        sb.append(comp.getString());
     }
 
     private void appendStyle(Style style, StringBuilder sb) {
