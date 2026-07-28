@@ -17,6 +17,7 @@ import top.yourzi.dialog.Dialog;
 import top.yourzi.dialog.editor.gui.FileBrowserScreen;
 import top.yourzi.dialog.editor.gui.PortraitListScreen;
 import top.yourzi.dialog.editor.gui.VNDialogEditorScreen;
+import top.yourzi.dialog.editor.gui.widget.DropdownWidget;
 import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.model.BackgroundAnimationType;
 import top.yourzi.dialog.model.BackgroundImageInfo;
@@ -54,9 +55,22 @@ public class AppearancePropertyPage implements PropertyPage {
     private EditBox backgroundPathBox;
     private Button backgroundBrowseBtn;
     private Button portraitListBtn;
-    private Button backgroundRenderBtn;
-    private Button backgroundAnimBtn;
+    private DropdownWidget backgroundRenderDropdown;
+    private DropdownWidget backgroundAnimDropdown;
     private boolean visible = true;
+    private static final List<String> RENDER_ITEMS = List.of(
+            Component.translatable("gui.vn_edit.render_option.fill").getString(),
+            Component.translatable("gui.vn_edit.render_option.fit").getString(),
+            Component.translatable("gui.vn_edit.render_option.stretch").getString(),
+            Component.translatable("gui.vn_edit.render_option.tile").getString(),
+            Component.translatable("gui.vn_edit.render_option.center").getString()
+    );
+    private static final BackgroundRenderOption[] RENDER_VALUES = BackgroundRenderOption.values();
+    private static final List<String> BG_ANIM_ITEMS = List.of(
+            Component.translatable("gui.vn_edit.bg_anim.none").getString(),
+            Component.translatable("gui.vn_edit.bg_anim.fade_in").getString()
+    );
+    private static final BackgroundAnimationType[] BG_ANIM_VALUES = BackgroundAnimationType.values();
     private int x;
     private int y;
     private int width;
@@ -103,15 +117,16 @@ public class AppearancePropertyPage implements PropertyPage {
                 .bounds(fieldX + fieldWidth + 5, y + 5, 48, 16).build();
         this.portraitListBtn = Button.builder(Component.translatable("gui.vn_edit.edit_portrait_list"), btn -> this.openPortraitList())
                 .bounds(fieldX, y + 25 + 5, 100, 16).build();
-        this.backgroundRenderBtn = Button.builder(Component.translatable("gui.vn_edit.render_option.fill"), btn -> {
+        this.backgroundRenderDropdown = new DropdownWidget(this.font, fieldX, y + 25 + 25, 80, 16, new ArrayList<>(RENDER_ITEMS), selected -> {
             if (this.currentEntry == null) {
                 return;
             }
+            int idx = RENDER_ITEMS.indexOf(selected);
+            if (idx < 0 || idx >= RENDER_VALUES.length) {
+                return;
+            }
+            BackgroundRenderOption next = RENDER_VALUES[idx];
             BackgroundImageInfo info = this.currentEntry.getBackgroundImage();
-            BackgroundRenderOption current = info != null && info.getRenderOption() != null ? info.getRenderOption() : BackgroundRenderOption.FILL;
-            BackgroundRenderOption[] vals = BackgroundRenderOption.values();
-            BackgroundRenderOption next = vals[(current.ordinal() + 1) % vals.length];
-            this.backgroundRenderBtn.setMessage(this.getRenderOptionDisplay(next));
             if (info != null) {
                 info.setRenderOption(next);
             } else {
@@ -120,16 +135,17 @@ public class AppearancePropertyPage implements PropertyPage {
                     this.currentEntry.setBackgroundImage(new BackgroundImageInfo(path, next));
                 }
             }
-        }).bounds(fieldX, y + 25 + 25, 80, 16).build();
-        this.backgroundAnimBtn = Button.builder(Component.translatable("gui.vn_edit.bg_anim.none"), btn -> {
+        });
+        this.backgroundAnimDropdown = new DropdownWidget(this.font, fieldX + 85, y + 25 + 25, 80, 16, new ArrayList<>(BG_ANIM_ITEMS), selected -> {
             if (this.currentEntry == null) {
                 return;
             }
+            int idx = BG_ANIM_ITEMS.indexOf(selected);
+            if (idx < 0 || idx >= BG_ANIM_VALUES.length) {
+                return;
+            }
+            BackgroundAnimationType next = BG_ANIM_VALUES[idx];
             BackgroundImageInfo info = this.currentEntry.getBackgroundImage();
-            BackgroundAnimationType current = info != null && info.getAnimationType() != null ? info.getAnimationType() : BackgroundAnimationType.NONE;
-            BackgroundAnimationType[] vals = BackgroundAnimationType.values();
-            BackgroundAnimationType next = vals[(current.ordinal() + 1) % vals.length];
-            this.backgroundAnimBtn.setMessage(this.getBgAnimDisplay(next));
             if (info != null) {
                 info.setAnimationType(next);
             } else {
@@ -139,7 +155,7 @@ public class AppearancePropertyPage implements PropertyPage {
                     this.currentEntry.setBackgroundImage(newInfo);
                 }
             }
-        }).bounds(fieldX + 85, y + 25 + 25, 80, 16).build();
+        });
         this.backgroundPreviewX = fieldX;
         this.backgroundPreviewY = y + 25 + 50;
         this.backgroundPreviewWidth = Math.min(100, fieldWidth - 30);
@@ -250,8 +266,8 @@ public class AppearancePropertyPage implements PropertyPage {
         this.backgroundPathBox.render(graphics, mouseX, mouseY, partialTick);
         this.backgroundBrowseBtn.render(graphics, mouseX, mouseY, partialTick);
         this.portraitListBtn.render(graphics, mouseX, mouseY, partialTick);
-        this.backgroundRenderBtn.render(graphics, mouseX, mouseY, partialTick);
-        this.backgroundAnimBtn.render(graphics, mouseX, mouseY, partialTick);
+        this.backgroundRenderDropdown.render(graphics, mouseX, mouseY, partialTick);
+        this.backgroundAnimDropdown.render(graphics, mouseX, mouseY, partialTick);
         if (this.backgroundTexture != null) {
             RenderSystem.setShaderTexture(0, this.backgroundTexture);
             graphics.blit(this.backgroundTexture, this.backgroundPreviewX, this.backgroundPreviewY, 0.0f, 0.0f,
@@ -266,7 +282,7 @@ public class AppearancePropertyPage implements PropertyPage {
 
     @Override
     public List<? extends GuiEventListener> children() {
-        return List.of(this.backgroundPathBox, this.backgroundBrowseBtn, this.portraitListBtn, this.backgroundRenderBtn, this.backgroundAnimBtn);
+        return List.of(this.backgroundPathBox, this.backgroundBrowseBtn, this.portraitListBtn, this.backgroundRenderDropdown, this.backgroundAnimDropdown);
     }
 
     @Override
@@ -280,8 +296,8 @@ public class AppearancePropertyPage implements PropertyPage {
         this.currentEntry = null;
         this.backgroundTexture = null;
         this.backgroundPathBox.setValue("");
-        this.backgroundRenderBtn.setMessage(this.getRenderOptionDisplay(BackgroundRenderOption.FILL));
-        this.backgroundAnimBtn.setMessage(this.getBgAnimDisplay(BackgroundAnimationType.NONE));
+        this.backgroundRenderDropdown.setSelected(this.getRenderOptionDisplay(BackgroundRenderOption.FILL).getString());
+        this.backgroundAnimDropdown.setSelected(this.getBgAnimDisplay(BackgroundAnimationType.NONE).getString());
     }
 
     @Override
@@ -312,9 +328,9 @@ public class AppearancePropertyPage implements PropertyPage {
             }
         });
         BackgroundRenderOption option = bgInfo != null && bgInfo.getRenderOption() != null ? bgInfo.getRenderOption() : BackgroundRenderOption.FILL;
-        this.backgroundRenderBtn.setMessage(this.getRenderOptionDisplay(option));
+        this.backgroundRenderDropdown.setSelected(this.getRenderOptionDisplay(option).getString());
         BackgroundAnimationType anim = bgInfo != null && bgInfo.getAnimationType() != null ? bgInfo.getAnimationType() : BackgroundAnimationType.NONE;
-        this.backgroundAnimBtn.setMessage(this.getBgAnimDisplay(anim));
+        this.backgroundAnimDropdown.setSelected(this.getBgAnimDisplay(anim).getString());
         this.loadBackgroundPreview(bgPath);
     }
 
@@ -324,8 +340,8 @@ public class AppearancePropertyPage implements PropertyPage {
         this.backgroundPathBox.setVisible(visible);
         this.backgroundBrowseBtn.visible = visible;
         this.portraitListBtn.visible = visible;
-        this.backgroundRenderBtn.visible = visible;
-        this.backgroundAnimBtn.visible = visible;
+        this.backgroundRenderDropdown.visible = visible;
+        this.backgroundAnimDropdown.visible = visible;
     }
 
     @Override

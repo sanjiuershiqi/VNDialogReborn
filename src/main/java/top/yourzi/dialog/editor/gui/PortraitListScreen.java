@@ -11,6 +11,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import top.yourzi.dialog.Dialog;
+import top.yourzi.dialog.editor.gui.widget.DropdownWidget;
 import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.model.PortraitAnimationType;
 import top.yourzi.dialog.model.PortraitInfo;
@@ -45,11 +46,29 @@ public class PortraitListScreen extends Screen {
     private String previewPath = null;
     private int previewW;
     private int previewH;
-    private Button posBtn;
-    private Button animBtn;
+    private DropdownWidget posDropdown;
+    private DropdownWidget animDropdown;
     private Button delBtn;
     private Button upBtn;
     private Button downBtn;
+    private static final List<String> POS_ITEMS = List.of(
+            Component.translatable("gui.vn_edit.position.left").getString(),
+            Component.translatable("gui.vn_edit.position.right").getString(),
+            Component.translatable("gui.vn_edit.position.center").getString()
+    );
+    private static final PortraitPosition[] POS_VALUES = PortraitPosition.values();
+    private static final List<String> ANIM_ITEMS = List.of(
+            Component.translatable("gui.vn_edit.animation.none").getString(),
+            Component.translatable("gui.vn_edit.animation.fade_in").getString(),
+            Component.translatable("gui.vn_edit.animation.slide_in_from_bottom").getString(),
+            Component.translatable("gui.vn_edit.animation.bounce").getString(),
+            Component.translatable("gui.vn_edit.animation.impact").getString(),
+            Component.translatable("gui.vn_edit.animation.impact_max").getString(),
+            Component.translatable("gui.vn_edit.animation.rotate").getString(),
+            Component.translatable("gui.vn_edit.animation.reverse").getString(),
+            Component.translatable("gui.vn_edit.animation.flash").getString()
+    );
+    private static final PortraitAnimationType[] ANIM_VALUES = PortraitAnimationType.values();
 
     public PortraitListScreen(List<PortraitInfo> portraits, Consumer<List<PortraitInfo>> onSave, Screen parent) {
         super(Component.translatable("gui.vn_edit.portrait_list.title"));
@@ -67,20 +86,24 @@ public class PortraitListScreen extends Screen {
                 .bounds(this.width / 2 - 105, this.height - 25, 100, 20).build());
         this.addRenderableWidget(Button.builder(Component.translatable("gui.vn_edit.cancel"), b -> this.onClose())
                 .bounds(this.width / 2 + 5, this.height - 25, 100, 20).build());
-        this.posBtn = this.addRenderableWidget(Button.builder(Component.empty(), b -> {
+        this.posDropdown = this.addRenderableWidget(new DropdownWidget(this.font, 0, 0, 100, 16, new ArrayList<>(POS_ITEMS), selected -> {
             PortraitInfo info = this.getSelected();
             if (info != null) {
-                PortraitPosition[] vals = PortraitPosition.values();
-                info.setPosition(vals[(info.getPosition().ordinal() + 1) % vals.length]);
+                int idx = POS_ITEMS.indexOf(selected);
+                if (idx >= 0 && idx < POS_VALUES.length) {
+                    info.setPosition(POS_VALUES[idx]);
+                }
             }
-        }).bounds(0, 0, 100, 16).build());
-        this.animBtn = this.addRenderableWidget(Button.builder(Component.empty(), b -> {
+        }));
+        this.animDropdown = this.addRenderableWidget(new DropdownWidget(this.font, 0, 0, 100, 16, new ArrayList<>(ANIM_ITEMS), selected -> {
             PortraitInfo info = this.getSelected();
             if (info != null) {
-                PortraitAnimationType[] vals = PortraitAnimationType.values();
-                info.setAnimationType(vals[(info.getAnimationType().ordinal() + 1) % vals.length]);
+                int idx = ANIM_ITEMS.indexOf(selected);
+                if (idx >= 0 && idx < ANIM_VALUES.length) {
+                    info.setAnimationType(ANIM_VALUES[idx]);
+                }
             }
-        }).bounds(0, 0, 100, 16).build());
+        }));
         this.delBtn = this.addRenderableWidget(Button.builder(Component.translatable("gui.vn_edit.delete"), b -> {
             if (this.selectedIndex >= 0 && this.selectedIndex < this.portraits.size()) {
                 this.portraits.remove(this.selectedIndex);
@@ -147,8 +170,8 @@ public class PortraitListScreen extends Screen {
     private void updateDynamicButtons() {
         PortraitInfo info = this.getSelected();
         boolean visible = info != null;
-        this.posBtn.visible = visible;
-        this.animBtn.visible = visible;
+        this.posDropdown.visible = visible;
+        this.animDropdown.visible = visible;
         this.delBtn.visible = visible;
         this.upBtn.visible = visible && this.selectedIndex > 0;
         this.downBtn.visible = visible && this.selectedIndex < this.portraits.size() - 1;
@@ -156,12 +179,12 @@ public class PortraitListScreen extends Screen {
             int line1Y = 40;
             int line2Y = 65;
             int line3Y = 90;
-            this.posBtn.setX(200);
-            this.posBtn.setY(line1Y);
-            this.posBtn.setMessage(this.getPositionDisplay(info.getPosition()));
-            this.animBtn.setX(200);
-            this.animBtn.setY(line2Y);
-            this.animBtn.setMessage(this.getAnimationDisplay(info.getAnimationType()));
+            this.posDropdown.setX(200);
+            this.posDropdown.setY(line1Y);
+            this.posDropdown.setSelected(this.getPositionDisplay(info.getPosition()).getString());
+            this.animDropdown.setX(200);
+            this.animDropdown.setY(line2Y);
+            this.animDropdown.setSelected(this.getAnimationDisplay(info.getAnimationType()).getString());
             this.delBtn.setX(145);
             this.delBtn.setY(line3Y);
             this.upBtn.setX(260);
@@ -331,6 +354,11 @@ public class PortraitListScreen extends Screen {
             case REVERSE -> Component.translatable("gui.vn_edit.animation.reverse");
             case FLASH -> Component.translatable("gui.vn_edit.animation.flash");
         };
+    }
+
+    @Override
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        graphics.fill(0, 0, this.width, this.height, 0xFF1A1A1A);
     }
 
     @Override

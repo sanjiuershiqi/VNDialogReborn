@@ -122,6 +122,11 @@ public class FileBrowserScreen extends Screen {
         Minecraft.getInstance().setScreen(new FileBrowserScreen(directory, extensions, onFileSelected, parent));
     }
 
+    @Override
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        graphics.fill(0, 0, this.width, this.height, 0xFF1A1A1A);
+    }
+
     private static class FileEntry {
         final String name;
         final File file;

@@ -232,6 +232,15 @@ public class PropertyPanel extends AbstractWidget {
         if (!this.visible) {
             return false;
         }
+        // 先让子控件（如展开的下拉框）处理滚动
+        if (this.activeTabIndex >= 0) {
+            double adjustedY = mouseY + this.scrollOffset;
+            for (GuiEventListener child : this.tabs.get(this.activeTabIndex).page.children()) {
+                if (child.mouseScrolled(mouseX, adjustedY, scrollX, scrollY)) {
+                    return true;
+                }
+            }
+        }
         // 仅当鼠标悬停在面板内容区时才处理滚动，避免抢夺对话树组件的滚动
         if (!this.isMouseOver(mouseX, mouseY)) {
             return false;

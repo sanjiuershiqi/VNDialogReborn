@@ -664,6 +664,11 @@ public class VNDialogEditorScreen extends Screen {
         return false;
     }
 
+    @Override
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        graphics.fill(0, 0, this.width, this.height, 0xFF1A1A1A);
+    }
+
     /**
      * 标签页按钮：支持单击切换、双击重命名、右键关闭。
      */
