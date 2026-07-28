@@ -37,8 +37,8 @@ public class LogicPropertyPage implements PropertyPage {
 
     private final Font font;
     private Button nextNodeBtn;
-    private SyncedCheckbox endDialogCheck;
-    private SyncedCheckbox allowSkipCheck;
+    private Checkbox endDialogCheck;
+    private Checkbox allowSkipCheck;
     private Button addCommandBtn;
     private Button addOptionBtn;
     private EditBox audioPathBox;
@@ -72,18 +72,26 @@ public class LogicPropertyPage implements PropertyPage {
         int fieldWidth = width - LABEL_WIDTH - 15;
         this.nextNodeBtn = Button.builder(Component.literal("None"), btn -> this.openNodePicker())
                 .bounds(fieldX, y + 5, fieldWidth - 50, 16).build();
-        this.endDialogCheck = new SyncedCheckbox(fieldX, y + 25, fieldWidth, 20,
-                Component.translatable("gui.vn_edit.end_dialog"), false, checked -> {
-            if (this.currentEntry != null) {
-                this.currentEntry.setEndDialog(checked);
-            }
-        }, this.font);
-        this.allowSkipCheck = new SyncedCheckbox(fieldX, y + 45, fieldWidth, 20,
-                Component.translatable("gui.vn_edit.allow_skip"), true, checked -> {
-            if (this.currentEntry != null) {
-                this.currentEntry.setAllowSkip(checked);
-            }
-        }, this.font);
+        this.endDialogCheck = Checkbox.builder(Component.translatable("gui.vn_edit.end_dialog"), this.font)
+                .pos(fieldX, y + 25)
+                .maxWidth(fieldWidth)
+                .selected(false)
+                .onValueChange((checkbox, value) -> {
+                    if (this.currentEntry != null) {
+                        this.currentEntry.setEndDialog(value);
+                    }
+                })
+                .build();
+        this.allowSkipCheck = Checkbox.builder(Component.translatable("gui.vn_edit.allow_skip"), this.font)
+                .pos(fieldX, y + 45)
+                .maxWidth(fieldWidth)
+                .selected(true)
+                .onValueChange((checkbox, value) -> {
+                    if (this.currentEntry != null) {
+                        this.currentEntry.setAllowSkip(value);
+                    }
+                })
+                .build();
         int audioY = y + 70;
         this.audioPathBox = new EditBox(this.font, fieldX, audioY, fieldWidth - 100, 16, Component.translatable("gui.vn_edit.audio_path"));
         this.audioPathBox.setMaxLength(999999999);
@@ -120,8 +128,8 @@ public class LogicPropertyPage implements PropertyPage {
     public void unbind() {
         this.currentEntry = null;
         this.nextNodeBtn.setMessage(Component.literal("None"));
-        this.endDialogCheck.setSelectedSilent(false);
-        this.allowSkipCheck.setSelectedSilent(true);
+        setCheckboxSelectedSilent(this.endDialogCheck, false);
+        setCheckboxSelectedSilent(this.allowSkipCheck, true);
         this.audioPathBox.setValue("");
         this.clearCommandWidgets();
         this.clearOptionWidgets();
@@ -135,8 +143,8 @@ public class LogicPropertyPage implements PropertyPage {
         }
         String nextId = this.currentEntry.getNextId();
         this.nextNodeBtn.setMessage(Component.literal(nextId != null && !nextId.isEmpty() ? nextId : "None"));
-        this.endDialogCheck.setSelectedSilent(this.currentEntry.isEndDialog());
-        this.allowSkipCheck.setSelectedSilent(this.currentEntry.isSkipAllowed());
+        setCheckboxSelectedSilent(this.endDialogCheck, this.currentEntry.isEndDialog());
+        setCheckboxSelectedSilent(this.allowSkipCheck, this.currentEntry.isSkipAllowed());
         this.audioPathBox.setResponder(null);
         this.audioPathBox.setValue(this.currentEntry.getAudioPath() != null ? this.currentEntry.getAudioPath() : "");
         this.audioPathBox.setResponder(s -> {
@@ -397,37 +405,20 @@ public class LogicPropertyPage implements PropertyPage {
     }
 
     /**
-     * 复选框子类，适配 1.21.1 的 Checkbox API。构造器需 Font 和 OnValueChange，
-     * 状态查询用 selected()。setSelectedSilent 通过反射设置 private selected 字段，
-     * 避免依赖 onPress 的具体签名（1.21.1 中签名发生变化）。
+     * 静默设置 Checkbox 的选中状态，不触发 OnValueChange 回调。
+     * 1.21.1 的 Checkbox 构造器非 public，无法继承；selected 字段为 private，
+     * 故通过反射设置。反射失败时静默忽略（仅影响 UI 显示，不影响数据）。
      */
-    private static class SyncedCheckbox extends Checkbox {
-        private final Consumer<Boolean> onChange;
-
-        SyncedCheckbox(int x, int y, int width, int height, Component message, boolean checked, Consumer<Boolean> onChange, Font font) {
-            super(x, y, width, message, font, checked, (checkbox, value) -> {
-                if (onChange != null) {
-                    onChange.accept(value);
-                }
-            });
-            this.onChange = onChange;
+    private static void setCheckboxSelectedSilent(Checkbox checkbox, boolean selected) {
+        if (checkbox == null || checkbox.selected() == selected) {
+            return;
         }
-
-        void setSelectedSilent(boolean selected) {
-            if (this.selected() == selected) {
-                return;
-            }
-            try {
-                java.lang.reflect.Field f = Checkbox.class.getDeclaredField("selected");
-                f.setAccessible(true);
-                f.setBoolean(this, selected);
-            } catch (ReflectiveOperationException e) {
-                // 反射失败时静默忽略：setSelectedSilent 仅用于 UI 状态同步，
-                // 失败不影响数据正确性，下次用户交互会重新同步。
-            }
-            if (onChange != null) {
-                onChange.accept(selected);
-            }
+        try {
+            java.lang.reflect.Field f = Checkbox.class.getDeclaredField("selected");
+            f.setAccessible(true);
+            f.setBoolean(checkbox, selected);
+        } catch (ReflectiveOperationException e) {
+            // 反射失败时静默忽略
         }
     }
 }

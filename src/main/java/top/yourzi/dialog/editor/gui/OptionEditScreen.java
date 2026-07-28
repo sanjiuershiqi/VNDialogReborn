@@ -58,9 +58,11 @@ public class OptionEditScreen extends Screen {
         this.addRenderableWidget(this.targetNodeBtn);
         boolean isAlwaysVisible = this.option.getVisibilityCommand() == null || this.option.getVisibilityCommand().isEmpty();
         y += inputHeight + 20;
-        this.alwaysVisibleCheck = new Checkbox(fieldX, y + 10, fieldWidth,
-                Component.translatable("gui.vn_edit.always_visible"), this.font, isAlwaysVisible,
-                (checkbox, value) -> {});
+        this.alwaysVisibleCheck = Checkbox.builder(Component.translatable("gui.vn_edit.always_visible"), this.font)
+                .pos(fieldX, y + 10)
+                .maxWidth(fieldWidth)
+                .selected(isAlwaysVisible)
+                .build();
         this.addRenderableWidget(this.alwaysVisibleCheck);
         y += 30;
         Button addCommandBtn = Button.builder(Component.translatable("gui.vn_edit.add_command"), btn -> this.addCommand(""))
