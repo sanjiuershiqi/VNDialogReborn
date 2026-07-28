@@ -74,6 +74,8 @@ public class VNDialogEditorScreen extends Screen {
     @Override
     protected void init() {
         super.init();
+        // 与原模组一致：构建前先清理旧控件，防止 GUI 缩放变化时控件残留/重复
+        this.clearWidgets();
         this.buildWidgets();
         if (!this.isInitialized) {
             if (this.activeSequenceIndex < 0) {
@@ -588,18 +590,24 @@ public class VNDialogEditorScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics, mouseX, mouseY, partialTick);
-        graphics.fill(0, 20, this.width, 38, -1439485133);
+        int clipRight = this.width - TAB_AREA_RIGHT_MARGIN;
+        // tab bar 半透明背景只覆盖标签页滚动区域，避免叠加在右侧 +/箭头按钮上导致其显示模糊
+        graphics.fill(0, 20, clipRight, 38, -1439485133);
+        // 右侧按钮区(+/左右箭头)使用不透明背景，确保按钮清晰
+        graphics.fill(clipRight, 20, this.width, 38, 0xFF6F0033);
         graphics.fill(0, this.height - STATUS_HEIGHT, this.width, this.height, -872415232);
         graphics.drawString(this.font, this.statusText, 4, this.height - STATUS_HEIGHT + 2, 0xCCCCCC);
-        int clipRight = this.width - TAB_AREA_RIGHT_MARGIN;
         graphics.enableScissor(TAB_AREA_LEFT, 20, clipRight, 38);
-        for (TabButton btn : this.tabButtons) {
-            if (btn.index == this.activeSequenceIndex) {
-                graphics.fill(btn.getX(), btn.getY(), btn.getX() + btn.getWidth(), btn.getY() + btn.getHeight(), -11184811);
+        try {
+            for (TabButton btn : this.tabButtons) {
+                if (btn.index == this.activeSequenceIndex) {
+                    graphics.fill(btn.getX(), btn.getY(), btn.getX() + btn.getWidth(), btn.getY() + btn.getHeight(), -11184811);
+                }
+                btn.render(graphics, mouseX, mouseY, partialTick);
             }
-            btn.render(graphics, mouseX, mouseY, partialTick);
+        } finally {
+            graphics.disableScissor();
         }
-        graphics.disableScissor();
         super.render(graphics, mouseX, mouseY, partialTick);
     }
 

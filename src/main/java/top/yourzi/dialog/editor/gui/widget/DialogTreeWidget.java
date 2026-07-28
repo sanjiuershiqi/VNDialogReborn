@@ -189,6 +189,7 @@ public class DialogTreeWidget extends AbstractWidget {
     protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), -1442840576);
         graphics.enableScissor(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight());
+        try {
         int maxScroll = Math.max(0, this.visibleNodes.size() * ROW_HEIGHT - this.getHeight());
         if (this.scrollOffset > maxScroll) {
             this.scrollOffset = maxScroll;
@@ -233,7 +234,9 @@ public class DialogTreeWidget extends AbstractWidget {
             graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), 0x33000000);
             graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, scrollBarY, this.getX() + this.getWidth(), scrollBarY + scrollBarHeight, -5592406);
         }
-        graphics.disableScissor();
+        } finally {
+            graphics.disableScissor();
+        }
     }
 
     @Override
