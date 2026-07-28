@@ -26,6 +26,7 @@ public class NetworkHandler {
         registrar.playToServer(ExecuteServerCommandPacket.TYPE, ExecuteServerCommandPacket.STREAM_CODEC, ExecuteServerCommandPacket::handle);
         registrar.playToClient(ShowDialogWithEntityPacket.TYPE, ShowDialogWithEntityPacket.STREAM_CODEC, ShowDialogWithEntityPacket::handle);
         registrar.playToServer(DialogProtectionHeartbeatPacket.TYPE, DialogProtectionHeartbeatPacket.STREAM_CODEC, DialogProtectionHeartbeatPacket::handle);
+        registrar.playToClient(OpenEditorPacket.TYPE, OpenEditorPacket.STREAM_CODEC, OpenEditorPacket::handle);
     }
 
     public static void sendShowDialogToPlayer(ServerPlayer player, String dialogId, String dialogJson) {
@@ -82,6 +83,10 @@ public class NetworkHandler {
         } else {
             Dialog.LOGGER.warn("Cannot send ExecuteServerCommandPacket with entity: not on client or no connection.");
         }
+    }
+
+    public static void sendOpenEditorToPlayer(ServerPlayer player) {
+        PacketDistributor.sendToPlayer(player, OpenEditorPacket.INSTANCE);
     }
 
     public static void sendDialogProtectionHeartbeatToServer(String effectId) {

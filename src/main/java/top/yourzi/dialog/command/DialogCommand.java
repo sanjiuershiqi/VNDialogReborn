@@ -45,6 +45,7 @@ public class DialogCommand {
                                         .executes(context -> showDialog(context, StringArgumentType.getString(context, "id")))))
                         .then(Commands.literal("reload").executes(DialogCommand::reloadDialogs))
                         .then(Commands.literal("list").executes(DialogCommand::listDialogs))
+                        .then(Commands.literal("editor").executes(DialogCommand::openEditor))
         );
     }
 
@@ -119,6 +120,17 @@ public class DialogCommand {
                 source.sendSuccess(() -> Component.literal("- " + dialogIds.get(index) + " (" + dialogNames.get(index) + ")"), false);
             }
         }
+        return 1;
+    }
+
+    private static int openEditor(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        if (!(source.getEntity() instanceof ServerPlayer player)) {
+            source.sendFailure(Component.translatable("dialog.command.show.player_only"));
+            return 0;
+        }
+        NetworkHandler.sendOpenEditorToPlayer(player);
+        source.sendSuccess(() -> Component.translatable("dialog.command.editor.opening"), true);
         return 1;
     }
 }
