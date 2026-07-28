@@ -25,6 +25,8 @@ import org.lwjgl.glfw.GLFW;
 import top.yourzi.dialog.Dialog;
 import top.yourzi.dialog.DialogManager;
 import top.yourzi.dialog.config.ClientConfig;
+import top.yourzi.dialog.editor.util.EditorConfig;
+import top.yourzi.dialog.editor.util.FileSystemTextureLoader;
 import top.yourzi.dialog.model.BackgroundImageInfo;
 import top.yourzi.dialog.model.DialogEntry;
 import top.yourzi.dialog.model.DialogOption;
@@ -40,6 +42,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.nio.file.Path;
 
 public class DialogScreen extends Screen {
     private static final int PORTRAIT_ANIMATION_DURATION_MS = 300;
@@ -56,6 +59,7 @@ public class DialogScreen extends Screen {
     private final List<PortraitRenderInfo> portraits = new ArrayList<>();
     private final List<ItemStack> displayItemStacks = new ArrayList<>();
     private final List<Button> optionButtons = new ArrayList<>();
+    private final List<ResourceLocation> dynamicTextures = new ArrayList<>();
     private Button viewHistoryButton;
     private Button autoPlayButton;
     private Button closeHistoryButton;
@@ -99,7 +103,16 @@ public class DialogScreen extends Screen {
                 continue;
             }
             ResourceLocation texture = getPortraitTextureLocation(portrait.getPath());
-            PortraitTextureSize textureSize = readPortraitTextureSize(texture);
+            PortraitTextureSize textureSize;
+            // 先检查资源包是否有该纹理，如果没有则从编辑器配置目录加载
+            FileSystemTextureLoader.LoadedTexture fsTex = tryLoadFromFileSystem(
+                    portrait.getPath(), EditorConfig.PORTRAITS_DIR, "portraits");
+            if (fsTex != null) {
+                texture = fsTex.location();
+                textureSize = new PortraitTextureSize(fsTex.width(), fsTex.height());
+            } else {
+                textureSize = readPortraitTextureSize(texture);
+            }
             portraits.add(new PortraitRenderInfo(
                     texture,
                     portrait.getPosition() == null ? PortraitPosition.RIGHT : portrait.getPosition(),
@@ -111,6 +124,26 @@ public class DialogScreen extends Screen {
                     textureSize.height()
             ));
         }
+    }
+
+    /**
+     * 尝试从编辑器配置目录加载纹理。如果资源包中已有该纹理则返回 null（使用资源包版本）。
+     * 替代原 visual_mod_edit_vndialog 的 MixinDialogScreenPortraitDisplayData/BackgroundImageDisplayData 功能。
+     */
+    private FileSystemTextureLoader.LoadedTexture tryLoadFromFileSystem(String path, Path fsDir, String prefix) {
+        ResourceLocation packLocation = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/" + prefix + "/" + path);
+        if (Minecraft.getInstance().getResourceManager().getResource(packLocation).isPresent()) {
+            return null;
+        }
+        java.io.File fsFile = fsDir.resolve(path).toFile();
+        if (!fsFile.exists()) {
+            return null;
+        }
+        FileSystemTextureLoader.LoadedTexture loaded = FileSystemTextureLoader.loadAndRegister(fsFile, Dialog.MODID, "textures/" + prefix);
+        if (loaded != null) {
+            dynamicTextures.add(loaded.location());
+        }
+        return loaded;
     }
 
     private ResourceLocation getPortraitTextureLocation(String path) {
@@ -204,7 +237,10 @@ public class DialogScreen extends Screen {
     private void collectBackground() {
         BackgroundImageInfo background = dialogEntry.getBackgroundImage();
         if (background != null && background.getPath() != null && !background.getPath().isEmpty()) {
-            backgroundLocation = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/backgrounds/" + background.getPath());
+            FileSystemTextureLoader.LoadedTexture fsTex = tryLoadFromFileSystem(
+                    background.getPath(), EditorConfig.BACKGROUNDS_DIR, "backgrounds");
+            backgroundLocation = fsTex != null ? fsTex.location()
+                    : ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/backgrounds/" + background.getPath());
         }
     }
 
@@ -700,6 +736,10 @@ public class DialogScreen extends Screen {
     public void onClose() {
         DialogManager.stopAutoPlay();
         DialogManager.stopCurrentAudio();
+        for (ResourceLocation tex : dynamicTextures) {
+            Minecraft.getInstance().getTextureManager().release(tex);
+        }
+        dynamicTextures.clear();
         super.onClose();
     }
 

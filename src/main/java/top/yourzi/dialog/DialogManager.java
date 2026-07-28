@@ -26,7 +26,11 @@ import top.yourzi.dialog.util.ComponentJson;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.Reader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -72,6 +76,37 @@ public class DialogManager {
             }
         });
         Dialog.LOGGER.info("Loaded {} dialog sequences.", dialogSequences.size());
+        loadDialogsFromConfigDir();
+    }
+
+    /**
+     * 从编辑器配置目录加载对话 JSON。替代原 visual_mod_edit_vndialog 的 MixinDialogManager 功能。
+     * 编辑器保存的对话文件存放在 config/vndialog_editor/dialog_json/ 目录。
+     */
+    private void loadDialogsFromConfigDir() {
+        Path configDir = top.yourzi.dialog.editor.util.EditorConfig.DIALOG_JSON_DIR;
+        if (!Files.isDirectory(configDir)) {
+            return;
+        }
+        int count = 0;
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(configDir, "*.json")) {
+            for (Path file : stream) {
+                try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+                    DialogSequence sequence = GSON.fromJson(reader, DialogSequence.class);
+                    if (sequence != null && sequence.getId() != null) {
+                        dialogSequences.put(sequence.getId(), sequence);
+                        count++;
+                    }
+                } catch (Exception e) {
+                    Dialog.LOGGER.error("Failed to load dialog from config dir {}: {}", file, e.getMessage());
+                }
+            }
+        } catch (IOException e) {
+            Dialog.LOGGER.error("Failed to scan config dialog dir", e);
+        }
+        if (count > 0) {
+            Dialog.LOGGER.info("Loaded {} dialog sequences from editor config dir.", count);
+        }
     }
 
     private DialogSequence parseDialogSequenceFromFile(Resource resource) {
@@ -370,6 +405,14 @@ public class DialogManager {
     public static void playDialogAudio(String audioPath) {
         try {
             stopCurrentAudio();
+            // 优先检查编辑器配置目录中的音频文件（替代原 MixinDialogManagerAudio 功能）
+            Path fsAudio = top.yourzi.dialog.editor.util.EditorConfig.SOUNDS_DIR.resolve(audioPath);
+            if (Files.exists(fsAudio)) {
+                top.yourzi.dialog.editor.util.AudioPreviewPlayer.play(fsAudio.toFile());
+                audioPlaying = true;
+                return;
+            }
+            // 回退到资源包音频
             String soundName = audioPath.replace(".ogg", "");
             ResourceLocation audioLocation = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, soundName);
             currentAudioInstance = SimpleSoundInstance.forUI(SoundEvent.createVariableRangeEvent(audioLocation), 1.0f, 1.0f);
@@ -381,11 +424,12 @@ public class DialogManager {
     }
 
     public static void stopCurrentAudio() {
+        top.yourzi.dialog.editor.util.AudioPreviewPlayer.stop();
         if (currentAudioInstance != null && audioPlaying) {
             Minecraft.getInstance().getSoundManager().stop(currentAudioInstance);
             currentAudioInstance = null;
-            audioPlaying = false;
         }
+        audioPlaying = false;
     }
 
     public static boolean isAudioPlaying() {
@@ -393,10 +437,18 @@ public class DialogManager {
     }
 
     public static boolean isAudioFinished() {
-        if (!audioPlaying || currentAudioInstance == null) {
+        if (!audioPlaying) {
             return true;
         }
-        if (!Minecraft.getInstance().getSoundManager().isActive(currentAudioInstance)) {
+        if (currentAudioInstance != null) {
+            if (!Minecraft.getInstance().getSoundManager().isActive(currentAudioInstance)) {
+                audioPlaying = false;
+                return true;
+            }
+            return false;
+        }
+        // AudioPreviewPlayer 播放的音频
+        if (!top.yourzi.dialog.editor.util.AudioPreviewPlayer.isRunning()) {
             audioPlaying = false;
             return true;
         }

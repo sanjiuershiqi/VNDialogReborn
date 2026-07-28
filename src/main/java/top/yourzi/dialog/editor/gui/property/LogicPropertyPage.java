@@ -14,6 +14,7 @@ import net.minecraft.network.chat.Component;
 import top.yourzi.dialog.editor.gui.FileBrowserScreen;
 import top.yourzi.dialog.editor.gui.NodePickerScreen;
 import top.yourzi.dialog.editor.gui.OptionEditScreen;
+import top.yourzi.dialog.Dialog;
 import top.yourzi.dialog.editor.gui.VNDialogEditorScreen;
 import top.yourzi.dialog.editor.util.AudioPreviewPlayer;
 import top.yourzi.dialog.editor.util.EditorConfig;
@@ -418,7 +419,7 @@ public class LogicPropertyPage implements PropertyPage {
             f.setAccessible(true);
             f.setBoolean(checkbox, selected);
         } catch (ReflectiveOperationException e) {
-            // 反射失败时静默忽略
+            Dialog.LOGGER.warn("Failed to silently set checkbox state via reflection", e);
         }
     }
 }

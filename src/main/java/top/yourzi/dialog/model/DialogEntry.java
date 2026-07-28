@@ -200,6 +200,14 @@ public class DialogEntry {
         if (targetElement.isJsonObject()) {
             JsonObject jsonObjectCopy = targetElement.getAsJsonObject().deepCopy();
             performDeepPlaceholderReplace(jsonObjectCopy, fromString, replacement);
+            // 如果是翻译组件，先尝试从编辑器配置目录的语言缓存获取翻译
+            if (jsonObjectCopy.has("translate")) {
+                String key = jsonObjectCopy.get("translate").getAsString();
+                String translated = top.yourzi.dialog.editor.util.ConfigLanguageCache.get(key);
+                if (translated != null) {
+                    return Component.literal(translated.replace(fromString, replacement));
+                }
+            }
             try {
                 return replaceTextInComponent(ComponentJson.fromJson(jsonObjectCopy), fromString, replacement);
             } catch (JsonSyntaxException e) {

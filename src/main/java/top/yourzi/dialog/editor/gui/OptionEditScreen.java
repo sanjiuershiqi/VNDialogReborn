@@ -43,6 +43,8 @@ public class OptionEditScreen extends Screen {
     @Override
     protected void init() {
         super.init();
+        this.commandBoxes.clear();
+        this.commandDeleteButtons.clear();
         int fieldWidth = 200;
         int fieldX = (this.width - fieldWidth) / 2;
         int y = 25;

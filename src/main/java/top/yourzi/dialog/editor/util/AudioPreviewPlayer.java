@@ -1,5 +1,7 @@
 package top.yourzi.dialog.editor.util;
 
+import top.yourzi.dialog.Dialog;
+
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
@@ -30,22 +32,17 @@ public class AudioPreviewPlayer {
                         currentClip.start();
                     }
                 } else if (name.endsWith(".wav")) {
-                    AudioInputStream audioInput = AudioSystem.getAudioInputStream(file);
-                    AudioFormat baseFormat = audioInput.getFormat();
-                    AudioFormat decodedFormat = new AudioFormat(
-                            AudioFormat.Encoding.PCM_SIGNED,
-                            baseFormat.getSampleRate(), 16,
-                            baseFormat.getChannels(),
-                            baseFormat.getChannels() * 2,
-                            baseFormat.getSampleRate(), false);
-                    AudioInputStream decodedInput = AudioSystem.getAudioInputStream(decodedFormat, audioInput);
-                    DataLine.Info info = new DataLine.Info(Clip.class, decodedFormat);
-                    currentClip = (Clip) AudioSystem.getLine(info);
-                    currentClip.open(decodedInput);
-                    currentClip.start();
+                    try (AudioInputStream audioInput = AudioSystem.getAudioInputStream(file);
+                         AudioInputStream decodedInput = AudioSystem.getAudioInputStream(decodedFormat(audioInput.getFormat()), audioInput)) {
+                        AudioFormat decodedFormat = decodedInput.getFormat();
+                        DataLine.Info info = new DataLine.Info(Clip.class, decodedFormat);
+                        currentClip = (Clip) AudioSystem.getLine(info);
+                        currentClip.open(decodedInput);
+                        currentClip.start();
+                    }
                 }
             } catch (Exception e) {
-                e.printStackTrace();
+                Dialog.LOGGER.error("Failed to play audio: {}", file, e);
             }
         }
     }
@@ -66,5 +63,14 @@ public class AudioPreviewPlayer {
         synchronized (LOCK) {
             return currentClip != null && currentClip.isRunning();
         }
+    }
+
+    private static AudioFormat decodedFormat(AudioFormat baseFormat) {
+        return new AudioFormat(
+                AudioFormat.Encoding.PCM_SIGNED,
+                baseFormat.getSampleRate(), 16,
+                baseFormat.getChannels(),
+                baseFormat.getChannels() * 2,
+                baseFormat.getSampleRate(), false);
     }
 }

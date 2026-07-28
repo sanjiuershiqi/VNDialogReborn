@@ -142,18 +142,18 @@ public class TextPropertyPage implements PropertyPage {
         if (this.currentMode == MODE_PLAIN) {
             this.currentMode = MODE_TRANSLATION;
             this.modeSwitchBtn.setMessage(Component.translatable("gui.vn_edit.mode_translation"));
-            this.speakerBox.setEditable(false);
+            this.speakerBox.setFocused(false);
             this.contentBox.setFocused(false);
-            this.translationZhCnBox.setEditable(false);
-            this.translationEnUsBox.setEditable(false);
-            this.translationKeyBox.setEditable(true);
+            this.translationZhCnBox.setFocused(false);
+            this.translationEnUsBox.setFocused(false);
+            this.translationKeyBox.setFocused(true);
         } else {
             this.currentMode = MODE_PLAIN;
             this.modeSwitchBtn.setMessage(Component.translatable("gui.vn_edit.mode_plain"));
-            this.speakerBox.setEditable(true);
-            this.translationKeyBox.setEditable(false);
-            this.translationZhCnBox.setEditable(false);
-            this.translationEnUsBox.setEditable(false);
+            this.speakerBox.setFocused(true);
+            this.translationKeyBox.setFocused(false);
+            this.translationZhCnBox.setFocused(false);
+            this.translationEnUsBox.setFocused(false);
         }
         if (this.modeSwitchBtn != null) {
             this.modeSwitchBtn.setFocused(false);
