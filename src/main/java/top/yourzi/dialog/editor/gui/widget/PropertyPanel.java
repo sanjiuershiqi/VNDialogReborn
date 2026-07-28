@@ -7,6 +7,7 @@ import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
 import top.yourzi.dialog.editor.gui.property.AppearancePropertyPage;
 import top.yourzi.dialog.editor.gui.property.LogicPropertyPage;
 import top.yourzi.dialog.editor.gui.property.PropertyPage;
@@ -19,15 +20,19 @@ import java.util.List;
 
 /**
  * 属性面板：包含文本/外观/逻辑三个标签页。融合自 visual_mod_edit_vndialog。
+ * 在原实现基础上增加垂直滚动，防止内容超出可视区域时被裁剪（如文本页颜色/格式按钮）。
  */
 public class PropertyPanel extends AbstractWidget {
     private static final int TAB_HEIGHT = 15;
     private static final int TAB_WIDTH = 50;
+    private static final int SCROLLBAR_WIDTH = 4;
     private final List<Tab> tabs = new ArrayList<>();
     private int activeTabIndex = 0;
     private boolean initialized = false;
     private final Font font;
     private OnTabChangeListener onTabChangeListener;
+    // 内容垂直滚动偏移，用于在页面内容超出可视高度时滚动查看
+    private int scrollOffset = 0;
 
     public PropertyPanel(int x, int y, int width, int height, Font font) {
         super(x, y, width, height, Component.empty());
@@ -56,6 +61,7 @@ public class PropertyPanel extends AbstractWidget {
         for (int i = 0; i < this.tabs.size(); i++) {
             this.tabs.get(i).page.setVisible(i == this.activeTabIndex);
         }
+        this.scrollOffset = 0;
     }
 
     public void unbind() {
@@ -63,6 +69,7 @@ public class PropertyPanel extends AbstractWidget {
         for (Tab tab : this.tabs) {
             tab.page.unbind();
         }
+        this.scrollOffset = 0;
     }
 
     public void setSequence(DialogSequence sequence) {
@@ -82,6 +89,35 @@ public class PropertyPanel extends AbstractWidget {
         }
     }
 
+    private int getPageTop() {
+        return this.getY() + TAB_HEIGHT + 2;
+    }
+
+    private int getPageHeight() {
+        return this.getHeight() - TAB_HEIGHT - 4;
+    }
+
+    private int getActiveContentHeight() {
+        if (this.activeTabIndex < 0 || this.activeTabIndex >= this.tabs.size()) {
+            return 0;
+        }
+        return this.tabs.get(this.activeTabIndex).page().getContentHeight();
+    }
+
+    private int getMaxScroll() {
+        return Math.max(0, this.getActiveContentHeight() - this.getPageHeight());
+    }
+
+    private void clampScroll() {
+        int max = this.getMaxScroll();
+        if (this.scrollOffset > max) {
+            this.scrollOffset = max;
+        }
+        if (this.scrollOffset < 0) {
+            this.scrollOffset = 0;
+        }
+    }
+
     public void setActiveTab(int index) {
         this.ensureInitialized();
         if (index >= 0 && index < this.tabs.size()) {
@@ -89,6 +125,8 @@ public class PropertyPanel extends AbstractWidget {
             for (int i = 0; i < this.tabs.size(); i++) {
                 this.tabs.get(i).page.setVisible(i == index);
             }
+            // 切换标签页时重置滚动，避免上一个页面的偏移影响新页面
+            this.scrollOffset = 0;
             if (this.onTabChangeListener != null) {
                 this.onTabChangeListener.onTabChanged(index);
             }
@@ -125,7 +163,28 @@ public class PropertyPanel extends AbstractWidget {
             tabX += TAB_WIDTH + 1;
         }
         if (this.activeTabIndex >= 0 && this.activeTabIndex < this.tabs.size()) {
-            this.tabs.get(this.activeTabIndex).page.render(graphics, mouseX, mouseY, partialTick);
+            this.clampScroll();
+            int pageTop = this.getPageTop();
+            int pageH = this.getPageHeight();
+            int contentH = this.getActiveContentHeight();
+            // 用 scissor 裁剪页面内容区域，滚动时不会溢出到标签栏上
+            graphics.enableScissor(this.getX(), pageTop, this.getX() + this.getWidth(), pageTop + pageH);
+            try {
+                graphics.pose().pushPose();
+                graphics.pose().translate(0, -this.scrollOffset, 0);
+                // 滚动后鼠标逻辑坐标需要相应补偿，保证悬停/点击对齐
+                this.tabs.get(this.activeTabIndex).page.render(graphics, mouseX, mouseY + this.scrollOffset, partialTick);
+                graphics.pose().popPose();
+            } finally {
+                graphics.disableScissor();
+            }
+            // 滚动条
+            if (contentH > pageH) {
+                int scrollBarHeight = Math.max(10, pageH * pageH / contentH);
+                int scrollBarY = pageTop + (int) ((float) this.scrollOffset / (float) (contentH - pageH) * (float) (pageH - scrollBarHeight));
+                graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, pageTop, this.getX() + this.getWidth(), pageTop + pageH, 0x33000000);
+                graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, scrollBarY, this.getX() + this.getWidth(), scrollBarY + scrollBarHeight, -5592406);
+            }
         }
     }
 
@@ -146,8 +205,10 @@ public class PropertyPanel extends AbstractWidget {
         }
         if (this.activeTabIndex >= 0) {
             List<? extends GuiEventListener> children = this.tabs.get(this.activeTabIndex).page.children();
+            // 页面内容已滚动，鼠标坐标需加上滚动偏移才能命中实际控件
+            double adjustedY = mouseY + this.scrollOffset;
             for (GuiEventListener child : children) {
-                if (!child.mouseClicked(mouseX, mouseY, button)) {
+                if (!child.mouseClicked(mouseX, adjustedY, button)) {
                     continue;
                 }
                 for (GuiEventListener other : children) {
@@ -164,6 +225,23 @@ public class PropertyPanel extends AbstractWidget {
             }
         }
         return false;
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (!this.visible) {
+            return false;
+        }
+        // 仅当鼠标悬停在面板内容区时才处理滚动，避免抢夺对话树组件的滚动
+        if (!this.isMouseOver(mouseX, mouseY)) {
+            return false;
+        }
+        int max = this.getMaxScroll();
+        if (max <= 0) {
+            return false;
+        }
+        this.scrollOffset = Mth.clamp(this.scrollOffset - (int) scrollY * 16, 0, max);
+        return true;
     }
 
     @Override

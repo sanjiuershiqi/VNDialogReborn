@@ -591,19 +591,18 @@ public class VNDialogEditorScreen extends Screen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics, mouseX, mouseY, partialTick);
         int clipRight = this.width - TAB_AREA_RIGHT_MARGIN;
-        // tab bar 半透明背景只覆盖标签页滚动区域，避免叠加在右侧 +/箭头按钮上导致其显示模糊
-        graphics.fill(0, 20, clipRight, 38, -1439485133);
-        // 右侧按钮区(+/左右箭头)使用不透明背景，确保按钮清晰
-        graphics.fill(clipRight, 20, this.width, 38, 0xFF6F0033);
+        // 标签栏（切换分组）背景使用不透明深色，避免半透明叠加导致按钮文字模糊看不清
+        graphics.fill(0, 20, this.width, 38, 0xFF2B2B2B);
         graphics.fill(0, this.height - STATUS_HEIGHT, this.width, this.height, -872415232);
         graphics.drawString(this.font, this.statusText, 4, this.height - STATUS_HEIGHT + 2, 0xCCCCCC);
         graphics.enableScissor(TAB_AREA_LEFT, 20, clipRight, 38);
         try {
             for (TabButton btn : this.tabButtons) {
-                if (btn.index == this.activeSequenceIndex) {
-                    graphics.fill(btn.getX(), btn.getY(), btn.getX() + btn.getWidth(), btn.getY() + btn.getHeight(), -11184811);
-                }
                 btn.render(graphics, mouseX, mouseY, partialTick);
+                // 激活标签的高亮绘制在按钮之后，作为底部亮线，确保不被按钮自身背景遮挡
+                if (btn.index == this.activeSequenceIndex) {
+                    graphics.fill(btn.getX(), btn.getY() + btn.getHeight() - 2, btn.getX() + btn.getWidth(), btn.getY() + btn.getHeight(), 0xFFFFFFFF);
+                }
             }
         } finally {
             graphics.disableScissor();
