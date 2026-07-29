@@ -20,6 +20,7 @@ import top.yourzi.dialog.editor.gui.BuiltInTextureBrowserScreen;
 import top.yourzi.dialog.editor.gui.VNDialogEditorScreen;
 import top.yourzi.dialog.editor.gui.widget.DropdownWidget;
 import top.yourzi.dialog.editor.util.EditorConfig;
+import top.yourzi.dialog.editor.util.EditorTheme;
 import top.yourzi.dialog.model.BackgroundAnimationType;
 import top.yourzi.dialog.model.BackgroundImageInfo;
 import top.yourzi.dialog.model.BackgroundRenderOption;
@@ -39,7 +40,7 @@ import java.util.Map;
  * 融合自 visual_mod_edit_vndialog，并适配 VNDialogReborn 新增的背景动画类型。
  */
 public class AppearancePropertyPage implements PropertyPage {
-    private static final int LABEL_WIDTH = 60;
+    private static final int LABEL_WIDTH = EditorTheme.LABEL_WIDTH;
     private static final int MAX_CACHE_SIZE = 30;
     private static final Map<String, ResourceLocation> textureCache = new LinkedHashMap<String, ResourceLocation>() {
         @Override
@@ -82,7 +83,7 @@ public class AppearancePropertyPage implements PropertyPage {
     private int backgroundPreviewX;
     private int backgroundPreviewY;
     private int backgroundPreviewWidth = 100;
-    private int backgroundPreviewHeight = 56;
+    private int backgroundPreviewHeight = 64;
     private DialogEntry currentEntry = null;
 
     public AppearancePropertyPage(Font font) {
@@ -97,7 +98,7 @@ public class AppearancePropertyPage implements PropertyPage {
         this.height = height;
         int fieldX = x + LABEL_WIDTH + 5;
         int fieldWidth = width - LABEL_WIDTH - 10 - 60;
-        this.backgroundPathBox = new EditBox(this.font, fieldX, y + 5, fieldWidth, 16, Component.translatable("gui.vn_edit.background_path"));
+        this.backgroundPathBox = new EditBox(this.font, fieldX, y + 20, fieldWidth, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.background_path"));
         this.backgroundPathBox.setMaxLength(999999999);
         this.backgroundPathBox.setResponder(s -> {
             String clean = s.toLowerCase(Locale.ROOT);
@@ -117,14 +118,14 @@ public class AppearancePropertyPage implements PropertyPage {
             }
         });
         this.backgroundBrowseBtn = Button.builder(Component.translatable("gui.vn_edit.browse"), btn -> this.onBackgroundBrowse())
-                .bounds(fieldX + fieldWidth + 5, y + 5, 48, 16).build();
+                .bounds(fieldX + fieldWidth + 5, y + 20, 48, EditorTheme.FIELD_HEIGHT).build();
         this.backgroundBuiltInBtn = Button.builder(Component.translatable("gui.vn_edit.builtin_bg"), btn -> this.onBackgroundBuiltIn())
-                .bounds(fieldX + fieldWidth + 5 + 48 + 2, y + 5, 40, 16).build();
+                .bounds(fieldX + fieldWidth + 55, y + 20, 40, EditorTheme.FIELD_HEIGHT).build();
         this.backgroundFolderBtn = Button.builder(Component.literal("\uD83D\uDCC2"), btn -> EditorConfig.openFolder(EditorConfig.BACKGROUNDS_DIR))
-                .bounds(fieldX + fieldWidth + 5 + 48 + 2 + 40 + 2, y + 5, 20, 16).build();
+                .bounds(fieldX + fieldWidth + 97, y + 20, 20, EditorTheme.FIELD_HEIGHT).build();
         this.portraitListBtn = Button.builder(Component.translatable("gui.vn_edit.edit_portrait_list"), btn -> this.openPortraitList())
-                .bounds(fieldX, y + 25 + 5, 100, 16).build();
-        this.backgroundRenderDropdown = new DropdownWidget(this.font, fieldX, y + 25 + 25, 80, 16, new ArrayList<>(RENDER_ITEMS), selected -> {
+                .bounds(fieldX, y + 60, 110, EditorTheme.FIELD_HEIGHT).build();
+        this.backgroundRenderDropdown = new DropdownWidget(this.font, fieldX, y + 100, 90, EditorTheme.FIELD_HEIGHT, new ArrayList<>(RENDER_ITEMS), selected -> {
             if (this.currentEntry == null) {
                 return;
             }
@@ -143,7 +144,7 @@ public class AppearancePropertyPage implements PropertyPage {
                 }
             }
         });
-        this.backgroundAnimDropdown = new DropdownWidget(this.font, fieldX + 85, y + 25 + 25, 80, 16, new ArrayList<>(BG_ANIM_ITEMS), selected -> {
+        this.backgroundAnimDropdown = new DropdownWidget(this.font, fieldX + 95, y + 100, 90, EditorTheme.FIELD_HEIGHT, new ArrayList<>(BG_ANIM_ITEMS), selected -> {
             if (this.currentEntry == null) {
                 return;
             }
@@ -164,9 +165,9 @@ public class AppearancePropertyPage implements PropertyPage {
             }
         });
         this.backgroundPreviewX = fieldX;
-        this.backgroundPreviewY = y + 25 + 50;
+        this.backgroundPreviewY = y + 122;
         this.backgroundPreviewWidth = Math.min(100, fieldWidth - 30);
-        this.backgroundPreviewHeight = 56;
+        this.backgroundPreviewHeight = 64;
     }
 
     private Component getRenderOptionDisplay(BackgroundRenderOption option) {
@@ -286,9 +287,12 @@ public class AppearancePropertyPage implements PropertyPage {
         if (!this.visible) {
             return;
         }
-        graphics.drawString(this.font, Component.translatable("gui.vn_edit.background_path"), this.x + 5, this.y + 9, 0xCCCCCC);
-        graphics.drawString(this.font, Component.translatable("gui.vn_edit.portraits"), this.x + 5, this.y + 25 + 9, 0xCCCCCC);
-        graphics.drawString(this.font, Component.translatable("gui.vn_edit.render_option"), this.x + 5, this.y + 25 + 29, 0xCCCCCC);
+        EditorTheme.drawSectionHeader(graphics, this.font, this.x, this.y + 2, this.width, Component.translatable("gui.vn_edit.section.background"));
+        graphics.drawString(this.font, Component.translatable("gui.vn_edit.background_path"), this.x + 5, this.y + 24, EditorTheme.TEXT_SECONDARY);
+        EditorTheme.drawSectionHeader(graphics, this.font, this.x, this.y + 42, this.width, Component.translatable("gui.vn_edit.section.portraits"));
+        graphics.drawString(this.font, Component.translatable("gui.vn_edit.portraits"), this.x + 5, this.y + 64, EditorTheme.TEXT_SECONDARY);
+        EditorTheme.drawSectionHeader(graphics, this.font, this.x, this.y + 82, this.width, Component.translatable("gui.vn_edit.section.render"));
+        graphics.drawString(this.font, Component.translatable("gui.vn_edit.render_option"), this.x + 5, this.y + 104, EditorTheme.TEXT_SECONDARY);
         this.backgroundPathBox.render(graphics, mouseX, mouseY, partialTick);
         this.backgroundBrowseBtn.render(graphics, mouseX, mouseY, partialTick);
         this.backgroundBuiltInBtn.render(graphics, mouseX, mouseY, partialTick);
@@ -304,7 +308,7 @@ public class AppearancePropertyPage implements PropertyPage {
             graphics.fill(this.backgroundPreviewX, this.backgroundPreviewY,
                     this.backgroundPreviewX + this.backgroundPreviewWidth, this.backgroundPreviewY + this.backgroundPreviewHeight, -11184811);
             graphics.drawCenteredString(this.font, Component.translatable("gui.vn_edit.no_background"),
-                    this.backgroundPreviewX + this.backgroundPreviewWidth / 2, this.backgroundPreviewY + 20, 0xCCCCCC);
+                    this.backgroundPreviewX + this.backgroundPreviewWidth / 2, this.backgroundPreviewY + 20, EditorTheme.TEXT_SECONDARY);
         }
     }
 
@@ -381,6 +385,6 @@ public class AppearancePropertyPage implements PropertyPage {
 
     @Override
     public int getContentHeight() {
-        return 160;
+        return 200;
     }
 }

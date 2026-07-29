@@ -12,6 +12,7 @@ import top.yourzi.dialog.editor.gui.property.AppearancePropertyPage;
 import top.yourzi.dialog.editor.gui.property.LogicPropertyPage;
 import top.yourzi.dialog.editor.gui.property.PropertyPage;
 import top.yourzi.dialog.editor.gui.property.TextPropertyPage;
+import top.yourzi.dialog.editor.util.EditorTheme;
 import top.yourzi.dialog.model.DialogEntry;
 import top.yourzi.dialog.model.DialogSequence;
 
@@ -23,9 +24,9 @@ import java.util.List;
  * 在原实现基础上增加垂直滚动，防止内容超出可视区域时被裁剪（如文本页颜色/格式按钮）。
  */
 public class PropertyPanel extends AbstractWidget {
-    private static final int TAB_HEIGHT = 15;
-    private static final int TAB_WIDTH = 50;
-    private static final int SCROLLBAR_WIDTH = 4;
+    private static final int TAB_HEIGHT = EditorTheme.PROP_TAB_H;
+    private static final int TAB_WIDTH = EditorTheme.PROP_TAB_W;
+    private static final int SCROLLBAR_WIDTH = EditorTheme.SCROLLBAR_W;
     private final List<Tab> tabs = new ArrayList<>();
     private int activeTabIndex = 0;
     private boolean initialized = false;
@@ -80,21 +81,21 @@ public class PropertyPanel extends AbstractWidget {
     }
 
     private void initializePages() {
-        int pageX = this.getX() + 2;
-        int pageY = this.getY() + TAB_HEIGHT + 2;
-        int pageWidth = this.getWidth() - 4;
-        int pageHeight = this.getHeight() - TAB_HEIGHT - 4;
+        int pageX = this.getX() + 4;
+        int pageY = this.getY() + TAB_HEIGHT + 3;
+        int pageWidth = this.getWidth() - 8;
+        int pageHeight = this.getHeight() - TAB_HEIGHT - 6;
         for (Tab tab : this.tabs) {
             tab.page.init(pageX, pageY, pageWidth, pageHeight);
         }
     }
 
     private int getPageTop() {
-        return this.getY() + TAB_HEIGHT + 2;
+        return this.getY() + TAB_HEIGHT + 3;
     }
 
     private int getPageHeight() {
-        return this.getHeight() - TAB_HEIGHT - 4;
+        return this.getHeight() - TAB_HEIGHT - 6;
     }
 
     private int getActiveContentHeight() {
@@ -147,19 +148,19 @@ public class PropertyPanel extends AbstractWidget {
             return;
         }
         this.ensureInitialized();
-        graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), -869059789);
+        graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), EditorTheme.BG_SURFACE);
         int tabX = this.getX();
         int tabY = this.getY();
         for (int i = 0; i < this.tabs.size(); i++) {
             Tab tab = this.tabs.get(i);
-            int color = i == this.activeTabIndex ? -1 : -5592406;
-            int bgColor = i == this.activeTabIndex ? -581610155 : -1439485133;
+            int color = i == this.activeTabIndex ? EditorTheme.TEXT_PRIMARY : EditorTheme.TEXT_SECONDARY;
+            int bgColor = i == this.activeTabIndex ? EditorTheme.BG_SURFACE : EditorTheme.BG_ELEVATED;
             graphics.fill(tabX, tabY, tabX + TAB_WIDTH, tabY + TAB_HEIGHT, bgColor);
-            graphics.drawCenteredString(this.font, tab.title, tabX + TAB_WIDTH / 2, tabY + 2, color);
+            graphics.drawCenteredString(this.font, tab.title, tabX + TAB_WIDTH / 2, tabY + 4, color);
             if (i == this.activeTabIndex) {
-                graphics.fill(tabX, tabY + TAB_HEIGHT - 1, tabX + TAB_WIDTH, tabY + TAB_HEIGHT, -256);
+                graphics.fill(tabX, tabY + TAB_HEIGHT - 2, tabX + TAB_WIDTH, tabY + TAB_HEIGHT, EditorTheme.ACCENT);
             }
-            graphics.fill(tabX + TAB_WIDTH, tabY, tabX + TAB_WIDTH + 1, tabY + TAB_HEIGHT, -10066330);
+            graphics.fill(tabX + TAB_WIDTH, tabY, tabX + TAB_WIDTH + 1, tabY + TAB_HEIGHT, EditorTheme.BORDER);
             tabX += TAB_WIDTH + 1;
         }
         if (this.activeTabIndex >= 0 && this.activeTabIndex < this.tabs.size()) {
@@ -183,7 +184,7 @@ public class PropertyPanel extends AbstractWidget {
                 int scrollBarHeight = Math.max(10, pageH * pageH / contentH);
                 int scrollBarY = pageTop + (int) ((float) this.scrollOffset / (float) (contentH - pageH) * (float) (pageH - scrollBarHeight));
                 graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, pageTop, this.getX() + this.getWidth(), pageTop + pageH, 0x33000000);
-                graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, scrollBarY, this.getX() + this.getWidth(), scrollBarY + scrollBarHeight, -5592406);
+                graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, scrollBarY, this.getX() + this.getWidth(), scrollBarY + scrollBarHeight, EditorTheme.TEXT_MUTED);
             }
             // 在 scissor 之外渲染展开的下拉弹出列表，确保不被裁剪或遮挡
             List<DropdownWidget> dropdowns = this.tabs.get(this.activeTabIndex).page.getDropdowns();
@@ -273,7 +274,7 @@ public class PropertyPanel extends AbstractWidget {
         if (max <= 0) {
             return false;
         }
-        this.scrollOffset = Mth.clamp(this.scrollOffset - (int) scrollY * 16, 0, max);
+        this.scrollOffset = Mth.clamp(this.scrollOffset - (int) scrollY * EditorTheme.FIELD_HEIGHT, 0, max);
         return true;
     }
 

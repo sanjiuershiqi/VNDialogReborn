@@ -18,6 +18,7 @@ import top.yourzi.dialog.Dialog;
 import top.yourzi.dialog.editor.gui.VNDialogEditorScreen;
 import top.yourzi.dialog.editor.util.AudioPreviewPlayer;
 import top.yourzi.dialog.editor.util.EditorConfig;
+import top.yourzi.dialog.editor.util.EditorTheme;
 import top.yourzi.dialog.model.DialogEntry;
 import top.yourzi.dialog.model.DialogOption;
 import top.yourzi.dialog.model.DialogSequence;
@@ -33,9 +34,9 @@ import java.util.function.Consumer;
  * 逻辑属性页：下一节点、结束/跳过、音频、命令、选项。融合自 visual_mod_edit_vndialog。
  */
 public class LogicPropertyPage implements PropertyPage {
-    private static final int LABEL_WIDTH = 60;
-    private static final int OPTION_ROW_HEIGHT = 16;
-    private static final int COMMAND_ROW_HEIGHT = 16;
+    private static final int LABEL_WIDTH = EditorTheme.LABEL_WIDTH;
+    private static final int OPTION_ROW_HEIGHT = EditorTheme.FIELD_HEIGHT;
+    private static final int COMMAND_ROW_HEIGHT = EditorTheme.FIELD_HEIGHT;
 
     private final Font font;
     private Button nextNodeBtn;
@@ -81,9 +82,9 @@ public class LogicPropertyPage implements PropertyPage {
         int fieldX = x + LABEL_WIDTH + 5;
         int fieldWidth = width - LABEL_WIDTH - 15;
         this.nextNodeBtn = Button.builder(Component.literal("None"), btn -> this.openNodePicker())
-                .bounds(fieldX, y + 5, fieldWidth - 50, 16).build();
+                .bounds(fieldX, y + 20, fieldWidth - 50, EditorTheme.FIELD_HEIGHT).build();
         this.endDialogCheck = Checkbox.builder(Component.translatable("gui.vn_edit.end_dialog"), this.font)
-                .pos(fieldX, y + 25)
+                .pos(fieldX, y + 42)
                 .maxWidth(fieldWidth)
                 .selected(false)
                 .onValueChange((checkbox, value) -> {
@@ -93,7 +94,7 @@ public class LogicPropertyPage implements PropertyPage {
                 })
                 .build();
         this.allowSkipCheck = Checkbox.builder(Component.translatable("gui.vn_edit.allow_skip"), this.font)
-                .pos(fieldX, y + 45)
+                .pos(fieldX, y + 64)
                 .maxWidth(fieldWidth)
                 .selected(true)
                 .onValueChange((checkbox, value) -> {
@@ -102,8 +103,8 @@ public class LogicPropertyPage implements PropertyPage {
                     }
                 })
                 .build();
-        int audioY = y + 70;
-        this.audioPathBox = new EditBox(this.font, fieldX, audioY, fieldWidth - 125, 16, Component.translatable("gui.vn_edit.audio_path"));
+        int audioY = y + 104;
+        this.audioPathBox = new EditBox(this.font, fieldX, audioY, fieldWidth - 125, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.audio_path"));
         this.audioPathBox.setMaxLength(999999999);
         this.audioPathBox.setResponder(s -> {
             if (this.currentEntry != null) {
@@ -111,36 +112,36 @@ public class LogicPropertyPage implements PropertyPage {
             }
         });
         this.audioBrowseBtn = Button.builder(Component.translatable("gui.vn_edit.browse"), btn -> this.onAudioBrowse())
-                .bounds(fieldX + fieldWidth - 120, audioY, 40, 16).build();
+                .bounds(fieldX + fieldWidth - 120, audioY, 40, EditorTheme.FIELD_HEIGHT).build();
         this.audioPlayBtn = Button.builder(Component.translatable("gui.vn_edit.play"), btn -> {
             File audioFile;
             String pathStr = this.audioPathBox.getValue();
             if (!pathStr.isEmpty() && (audioFile = EditorConfig.SOUNDS_DIR.resolve(pathStr).toFile()).exists()) {
                 AudioPreviewPlayer.play(audioFile);
             }
-        }).bounds(fieldX + fieldWidth - 75, audioY, 40, 16).build();
+        }).bounds(fieldX + fieldWidth - 75, audioY, 40, EditorTheme.FIELD_HEIGHT).build();
         this.audioFolderBtn = Button.builder(Component.literal("\uD83D\uDCC2"), btn -> EditorConfig.openFolder(EditorConfig.SOUNDS_DIR))
-                .bounds(fieldX + fieldWidth - 30, audioY, 25, 16).build();
-        int visY = audioY + 22;
-        this.visibilityCommandBox = new EditBox(this.font, fieldX, visY, fieldWidth, 16, Component.translatable("gui.vn_edit.visibility_command"));
+                .bounds(fieldX + fieldWidth - 30, audioY, 25, EditorTheme.FIELD_HEIGHT).build();
+        int visY = y + 146;
+        this.visibilityCommandBox = new EditBox(this.font, fieldX, visY, fieldWidth, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.visibility_command"));
         this.visibilityCommandBox.setMaxLength(999999999);
         this.visibilityCommandBox.setResponder(s -> {
             if (this.currentEntry != null) {
                 this.currentEntry.setVisibilityCommand(s.isEmpty() ? null : s);
             }
         });
-        int commandHeaderY = visY + 22;
+        int commandHeaderY = y + 186;
         this.addCommandBtn = Button.builder(Component.translatable("gui.vn_edit.add_command"), btn -> this.onAddCommand())
-                .bounds(fieldX, commandHeaderY, 60, 16).build();
-        this.commandListStartY = commandHeaderY + 16 + 4;
-        int itemHeaderY = commandHeaderY + 30;
+                .bounds(fieldX, commandHeaderY, 60, EditorTheme.FIELD_HEIGHT).build();
+        this.commandListStartY = y + 206;
+        int itemHeaderY = this.commandListStartY + EditorTheme.SECTION_GAP;
         this.addItemBtn = Button.builder(Component.translatable("gui.vn_edit.add_item"), btn -> this.onAddItem())
-                .bounds(fieldX, itemHeaderY, 60, 16).build();
-        this.displayItemsStartY = itemHeaderY + 16 + 4;
-        int optionHeaderY = itemHeaderY + 30;
+                .bounds(fieldX, itemHeaderY, 60, EditorTheme.FIELD_HEIGHT).build();
+        this.displayItemsStartY = itemHeaderY + 22;
+        int optionHeaderY = this.displayItemsStartY + EditorTheme.SECTION_GAP;
         this.addOptionBtn = Button.builder(Component.translatable("gui.vn_edit.add_option"), btn -> this.onAddOption())
-                .bounds(fieldX, optionHeaderY, 60, 16).build();
-        this.optionListStartY = optionHeaderY + 20;
+                .bounds(fieldX, optionHeaderY, 60, EditorTheme.FIELD_HEIGHT).build();
+        this.optionListStartY = optionHeaderY + 22;
     }
 
     @Override
@@ -200,14 +201,14 @@ public class LogicPropertyPage implements PropertyPage {
         this.addCommandBtn.setY(this.commandListStartY - 20);
 
         // Items section starts after commands
-        int itemHeaderY = this.commandListStartY + cmdCount * COMMAND_ROW_HEIGHT + 8;
+        int itemHeaderY = this.commandListStartY + cmdCount * COMMAND_ROW_HEIGHT + EditorTheme.SECTION_GAP;
         this.addItemBtn.setY(itemHeaderY);
-        this.displayItemsStartY = itemHeaderY + 20;
+        this.displayItemsStartY = itemHeaderY + 22;
 
         // Options section starts after items
-        int optionHeaderY = this.displayItemsStartY + itemCount * COMMAND_ROW_HEIGHT + 8;
+        int optionHeaderY = this.displayItemsStartY + itemCount * COMMAND_ROW_HEIGHT + EditorTheme.SECTION_GAP;
         this.addOptionBtn.setY(optionHeaderY);
-        this.optionListStartY = optionHeaderY + 20;
+        this.optionListStartY = optionHeaderY + 22;
 
         // Rebuild all dynamic widgets at new positions
         this.rebuildCommandWidgets();
@@ -268,16 +269,18 @@ public class LogicPropertyPage implements PropertyPage {
             return;
         }
         List<String> cmds = this.getCommandsList();
+        int fieldX = this.x + LABEL_WIDTH + 5;
+        int fieldWidth = this.width - LABEL_WIDTH - 15;
         for (int i = 0; i < cmds.size(); i++) {
             int idx = i;
             int rowY = this.commandListStartY + i * COMMAND_ROW_HEIGHT;
-            EditBox box = new EditBox(this.font, this.x + LABEL_WIDTH + 5, rowY, this.width - LABEL_WIDTH - 50, 16, Component.translatable("gui.vn_edit.command"));
+            EditBox box = new EditBox(this.font, fieldX, rowY, fieldWidth - 35, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.command"));
             box.setMaxLength(999999999);
             box.setValue(cmds.get(i));
             box.setResponder(s -> this.updateCommand(idx, s));
             this.commandEdits.add(box);
             Button delBtn = Button.builder(Component.literal("X"), btn -> this.deleteCommand(idx))
-                    .bounds(this.x + LABEL_WIDTH + 5 + this.width - LABEL_WIDTH - 45, rowY, 20, 16).build();
+                    .bounds(fieldX + fieldWidth - 30, rowY, 20, EditorTheme.FIELD_HEIGHT).build();
             this.commandDeleteBtns.add(delBtn);
         }
     }
@@ -395,27 +398,28 @@ public class LogicPropertyPage implements PropertyPage {
         }
         List<DisplayItemInfo> items = this.getItemsList();
         int fieldX = this.x + LABEL_WIDTH + 5;
+        int fieldWidth = this.width - LABEL_WIDTH - 15;
         for (int i = 0; i < items.size(); i++) {
             int idx = i;
             DisplayItemInfo item = items.get(i);
             int rowY = this.displayItemsStartY + i * COMMAND_ROW_HEIGHT;
-            EditBox idBox = new EditBox(this.font, fieldX, rowY, this.width - LABEL_WIDTH - 145, 16, Component.translatable("gui.vn_edit.item_id"));
+            EditBox idBox = new EditBox(this.font, fieldX, rowY, fieldWidth - 130, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.item_id"));
             idBox.setMaxLength(999999999);
             idBox.setValue(item.getItemId() != null ? item.getItemId() : "");
             idBox.setResponder(s -> this.updateItem(idx, "id", s));
             this.itemIdEdits.add(idBox);
-            EditBox countBox = new EditBox(this.font, fieldX + this.width - LABEL_WIDTH - 140, rowY, 30, 16, Component.translatable("gui.vn_edit.count"));
+            EditBox countBox = new EditBox(this.font, fieldX + fieldWidth - 125, rowY, 30, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.count"));
             countBox.setMaxLength(5);
             countBox.setValue(String.valueOf(item.getCount()));
             countBox.setResponder(s -> this.updateItem(idx, "count", s));
             this.itemCountEdits.add(countBox);
-            EditBox nbtBox = new EditBox(this.font, fieldX + this.width - LABEL_WIDTH - 105, rowY, 80, 16, Component.translatable("gui.vn_edit.nbt"));
+            EditBox nbtBox = new EditBox(this.font, fieldX + fieldWidth - 90, rowY, 80, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.nbt"));
             nbtBox.setMaxLength(999999999);
             nbtBox.setValue(item.getNbt() != null ? item.getNbt() : "");
             nbtBox.setResponder(s -> this.updateItem(idx, "nbt", s));
             this.itemNbtEdits.add(nbtBox);
             Button delBtn = Button.builder(Component.literal("X"), btn -> this.deleteItem(idx))
-                    .bounds(fieldX + this.width - LABEL_WIDTH - 20, rowY, 16, 16).build();
+                    .bounds(fieldX + fieldWidth - 5, rowY, 16, EditorTheme.FIELD_HEIGHT).build();
             this.itemDeleteBtns.add(delBtn);
         }
     }
@@ -426,16 +430,18 @@ public class LogicPropertyPage implements PropertyPage {
             return;
         }
         List<DialogOption> options = this.getOptionsList();
+        int fieldX = this.x + LABEL_WIDTH + 5;
+        int fieldWidth = this.width - LABEL_WIDTH - 15;
         for (int i = 0; i < options.size(); i++) {
             DialogOption opt = options.get(i);
             int btnY = this.optionListStartY + i * OPTION_ROW_HEIGHT;
-            int editX = this.x + LABEL_WIDTH + 5 + 220;
-            int deleteX = editX + 52;
+            int editX = fieldX + fieldWidth - 90;
+            int deleteX = editX + 56;
             Button editBtn = Button.builder(Component.translatable("gui.vn_edit.edit"), btn -> this.openOptionEditor(opt))
-                    .bounds(editX, btnY, 50, 16).build();
+                    .bounds(editX, btnY, 50, EditorTheme.FIELD_HEIGHT).build();
             this.editOptionButtons.add(editBtn);
             Button deleteBtn = Button.builder(Component.translatable("gui.vn_edit.delete"), btn -> this.deleteOption(opt))
-                    .bounds(deleteX, btnY, 30, 16).build();
+                    .bounds(deleteX, btnY, 30, EditorTheme.FIELD_HEIGHT).build();
             this.deleteOptionButtons.add(deleteBtn);
         }
     }
@@ -486,9 +492,15 @@ public class LogicPropertyPage implements PropertyPage {
         if (!this.visible) {
             return;
         }
-        graphics.drawString(this.font, Component.translatable("gui.vn_edit.next_id"), this.x + 5, this.y + 9, 0xCCCCCC);
-        graphics.drawString(this.font, Component.translatable("gui.vn_edit.audio_path"), this.x + 5, this.y + 74, 0xCCCCCC);
-        graphics.drawString(this.font, Component.translatable("gui.vn_edit.visibility_command"), this.x + 5, this.y + 96, 0xCCCCCC);
+        EditorTheme.drawSectionHeader(graphics, this.font, this.x, this.y + 2, this.width, Component.translatable("gui.vn_edit.section.flow"));
+        EditorTheme.drawSectionHeader(graphics, this.font, this.x, this.y + 86, this.width, Component.translatable("gui.vn_edit.section.audio"));
+        EditorTheme.drawSectionHeader(graphics, this.font, this.x, this.y + 128, this.width, Component.translatable("gui.vn_edit.section.visibility"));
+        EditorTheme.drawSectionHeader(graphics, this.font, this.x, this.commandListStartY - 16, this.width, Component.translatable("gui.vn_edit.section.commands"));
+        EditorTheme.drawSectionHeader(graphics, this.font, this.x, this.displayItemsStartY - 16, this.width, Component.translatable("gui.vn_edit.section.items"));
+        EditorTheme.drawSectionHeader(graphics, this.font, this.x, this.optionListStartY - 16, this.width, Component.translatable("gui.vn_edit.section.options"));
+        graphics.drawString(this.font, Component.translatable("gui.vn_edit.next_id"), this.x + 5, this.y + 24, EditorTheme.TEXT_SECONDARY);
+        graphics.drawString(this.font, Component.translatable("gui.vn_edit.audio_path"), this.x + 5, this.y + 108, EditorTheme.TEXT_SECONDARY);
+        graphics.drawString(this.font, Component.translatable("gui.vn_edit.visibility_command"), this.x + 5, this.y + 150, EditorTheme.TEXT_SECONDARY);
         this.nextNodeBtn.render(graphics, mouseX, mouseY, partialTick);
         this.endDialogCheck.render(graphics, mouseX, mouseY, partialTick);
         this.allowSkipCheck.render(graphics, mouseX, mouseY, partialTick);
@@ -506,8 +518,6 @@ public class LogicPropertyPage implements PropertyPage {
         for (Button btn : this.commandDeleteBtns) {
             btn.render(graphics, mouseX, mouseY, partialTick);
         }
-        graphics.drawString(this.font, Component.translatable("gui.vn_edit.commands"), this.x + 5, this.commandListStartY - 12, 0xCCCCCC);
-        graphics.drawString(this.font, Component.translatable("gui.vn_edit.display_items"), this.x + 5, this.displayItemsStartY - 12, 0xCCCCCC);
         for (EditBox box : this.itemIdEdits) {
             box.render(graphics, mouseX, mouseY, partialTick);
         }
@@ -520,14 +530,13 @@ public class LogicPropertyPage implements PropertyPage {
         for (Button btn : this.itemDeleteBtns) {
             btn.render(graphics, mouseX, mouseY, partialTick);
         }
-        graphics.drawString(this.font, Component.translatable("gui.vn_edit.options"), this.x + 5, this.optionListStartY - 12, 0xCCCCCC);
         DialogOption[] opts;
         if (this.currentEntry != null && (opts = this.currentEntry.getOptions()) != null) {
             for (int i = 0; i < opts.length; i++) {
                 DialogOption opt = opts[i];
                 int yPos = this.optionListStartY + i * OPTION_ROW_HEIGHT;
                 String summary = (opt.getText("") != null ? opt.getText("").getString() : "?") + " \u2192 " + (opt.getTargetId() != null ? opt.getTargetId() : "?");
-                graphics.drawString(this.font, summary, this.x + LABEL_WIDTH + 5, yPos, 0xFFFFFF);
+                graphics.drawString(this.font, summary, this.x + LABEL_WIDTH + 5, yPos, EditorTheme.TEXT_PRIMARY);
             }
         }
         for (Button btn : this.editOptionButtons) {
@@ -583,8 +592,8 @@ public class LogicPropertyPage implements PropertyPage {
         int cmdCount = this.currentEntry != null ? this.getCommandsList().size() : 0;
         int itemCount = this.currentEntry != null ? this.getItemsList().size() : 0;
         int optCount = this.currentEntry != null ? (this.currentEntry.getOptions() != null ? this.currentEntry.getOptions().length : 0) : 0;
-        // Static section (114) + commands + items + options + padding
-        return 114 + cmdCount * COMMAND_ROW_HEIGHT + 8 + 20 + itemCount * COMMAND_ROW_HEIGHT + 8 + 20 + optCount * OPTION_ROW_HEIGHT + 20;
+        // Static section (206) + commands + items + options + padding
+        return 206 + cmdCount * EditorTheme.FIELD_HEIGHT + EditorTheme.SECTION_GAP + 22 + itemCount * EditorTheme.FIELD_HEIGHT + EditorTheme.SECTION_GAP + 22 + optCount * EditorTheme.FIELD_HEIGHT + 20;
     }
 
     /**

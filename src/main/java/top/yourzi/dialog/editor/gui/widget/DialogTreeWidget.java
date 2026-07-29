@@ -11,6 +11,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import top.yourzi.dialog.Dialog;
 import top.yourzi.dialog.editor.gui.RenameDialogScreen;
+import top.yourzi.dialog.editor.util.EditorTheme;
 import top.yourzi.dialog.model.DialogEntry;
 import top.yourzi.dialog.model.DialogOption;
 import top.yourzi.dialog.model.DialogSequence;
@@ -27,9 +28,9 @@ import java.util.function.Consumer;
  * 对话树组件，按 next/options 引用关系构建层级树。融合自 visual_mod_edit_vndialog。
  */
 public class DialogTreeWidget extends AbstractWidget {
-    private static final int ROW_HEIGHT = 12;
-    private static final int INDENT_WIDTH = 10;
-    private static final int SCROLLBAR_WIDTH = 4;
+    private static final int ROW_HEIGHT = EditorTheme.TREE_ROW_H;
+    private static final int INDENT_WIDTH = EditorTheme.TREE_INDENT;
+    private static final int SCROLLBAR_WIDTH = EditorTheme.SCROLLBAR_W;
     private final Font font;
     private DialogSequence sequence;
     private final List<TreeNode> visibleNodes = new ArrayList<>();
@@ -187,7 +188,7 @@ public class DialogTreeWidget extends AbstractWidget {
 
     @Override
     protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), -1442840576);
+        graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), EditorTheme.BG_SURFACE);
         graphics.enableScissor(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight());
         try {
         int maxScroll = Math.max(0, this.visibleNodes.size() * ROW_HEIGHT - this.getHeight());
@@ -208,31 +209,31 @@ public class DialogTreeWidget extends AbstractWidget {
             boolean hovered = mouseX >= this.getX() && mouseX <= this.getX() + this.getWidth()
                     && mouseY >= rowY && mouseY <= rowY + ROW_HEIGHT;
             if (hovered) {
-                graphics.fill(this.getX(), rowY, this.getX() + this.getWidth(), rowY + ROW_HEIGHT, 0x44FFFFFF);
+                graphics.fill(this.getX(), rowY, this.getX() + this.getWidth(), rowY + ROW_HEIGHT, EditorTheme.BG_HOVER);
             }
             if (i == this.selectedIndex) {
-                graphics.fill(this.getX(), rowY, this.getX() + this.getWidth(), rowY + ROW_HEIGHT, 0x66FFFFFF);
+                graphics.fill(this.getX(), rowY, this.getX() + this.getWidth(), rowY + ROW_HEIGHT, EditorTheme.BG_SELECTED);
             }
-            int textColor = -3355444;
+            int textColor = EditorTheme.TEXT_SECONDARY;
             String arrow = !node.children.isEmpty() ? (node.expanded ? "\u25bc " : "\u25b6 ") : "  ";
             String icon = this.getTypeIcon(node.entry);
             int refs = this.refCounts.getOrDefault(node.entry.getId(), 0);
             String refMarker = refs > 1 ? "*" : "";
             String idText = arrow + (node.isOrphan ? "\u26a0 " : "") + icon + " " + node.entry.getId() + refMarker;
-            graphics.drawString(this.font, idText, this.getX() + 4 + indent, rowY + 1, textColor);
+            graphics.drawString(this.font, idText, this.getX() + 4 + indent, rowY + 2, textColor);
             String connectionInfo = this.getConnectionInfo(node.entry);
             if (connectionInfo.isEmpty()) {
                 continue;
             }
             int infoWidth = this.font.width(connectionInfo);
             int infoX = this.getX() + this.getWidth() - infoWidth - 6;
-            graphics.drawString(this.font, connectionInfo, infoX, rowY + 1, -5592406);
+            graphics.drawString(this.font, connectionInfo, infoX, rowY + 2, EditorTheme.TEXT_MUTED);
         }
         if (this.visibleNodes.size() * ROW_HEIGHT > this.getHeight()) {
             int scrollBarHeight = Math.max(10, this.getHeight() * this.getHeight() / (this.visibleNodes.size() * ROW_HEIGHT));
             int scrollBarY = this.getY() + (int) ((float) this.scrollOffset / (float) (this.visibleNodes.size() * ROW_HEIGHT - this.getHeight()) * (float) (this.getHeight() - scrollBarHeight));
             graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), 0x33000000);
-            graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, scrollBarY, this.getX() + this.getWidth(), scrollBarY + scrollBarHeight, -5592406);
+            graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, scrollBarY, this.getX() + this.getWidth(), scrollBarY + scrollBarHeight, EditorTheme.TEXT_MUTED);
         }
         } finally {
             graphics.disableScissor();

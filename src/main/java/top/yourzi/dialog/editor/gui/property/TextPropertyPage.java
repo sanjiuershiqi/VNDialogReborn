@@ -21,6 +21,7 @@ import top.yourzi.dialog.editor.gui.VNDialogEditorScreen;
 import top.yourzi.dialog.editor.gui.widget.FocusAwareButton;
 import top.yourzi.dialog.editor.gui.widget.MultiLineEditBox;
 import top.yourzi.dialog.editor.util.EditorConfig;
+import top.yourzi.dialog.editor.util.EditorTheme;
 import top.yourzi.dialog.editor.util.LangFileGenerator;
 import top.yourzi.dialog.model.DialogEntry;
 import top.yourzi.dialog.util.ComponentJson;
@@ -35,7 +36,7 @@ import java.util.Map;
  * 文本属性页：说话者、正文、格式化代码、翻译模式。融合自 visual_mod_edit_vndialog。
  */
 public class TextPropertyPage implements PropertyPage {
-    private static final int LABEL_WIDTH = 60;
+    private static final int LABEL_WIDTH = EditorTheme.LABEL_WIDTH;
     private static final int FIELD_SPACING = 25;
     private static final int MODE_PLAIN = 0;
     private static final int MODE_TRANSLATION = 1;
@@ -86,7 +87,7 @@ public class TextPropertyPage implements PropertyPage {
         this.height = height;
         int fieldX = x + LABEL_WIDTH + 5;
         int fieldWidth = width - LABEL_WIDTH - 10;
-        this.speakerBox = new EditBox(this.font, fieldX, y + 5, fieldWidth, 16, Component.translatable("gui.vn_edit.speaker"));
+        this.speakerBox = new EditBox(this.font, fieldX, y + 20, fieldWidth, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.speaker"));
         this.speakerBox.setMaxLength(999999999);
         this.speakerBox.setEditable(true);
         this.speakerBox.setResponder(s -> {
@@ -95,25 +96,22 @@ public class TextPropertyPage implements PropertyPage {
                 this.currentEntry.setSpeaker(ComponentJson.toJsonTree(component));
             }
         });
-        this.contentBox = new MultiLineEditBox(this.font, fieldX, y + 25, fieldWidth, 80);
+        this.contentBox = new MultiLineEditBox(this.font, fieldX, y + 60, fieldWidth, 100);
         this.contentBox.setResponder(s -> this.saveTextToEntry());
-        this.modeSwitchBtn = new FocusAwareButton(fieldX, y + 25 + 85, 60, 16, Component.translatable("gui.vn_edit.mode_plain"), b -> this.toggleMode());
-        int transY = y + 25 + 85 + 18;
-        this.translationKeyBox = new EditBox(this.font, fieldX, transY, fieldWidth, 16, Component.translatable("gui.vn_edit.translation_key"));
+        this.modeSwitchBtn = new FocusAwareButton(fieldX, y + 164, 60, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.mode_plain"), b -> this.toggleMode());
+        this.translationKeyBox = new EditBox(this.font, fieldX, y + 204, fieldWidth, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.translation_key"));
         this.translationKeyBox.setMaxLength(999999999);
         this.translationKeyBox.setResponder(s -> this.saveTranslationToEntry());
-        int transY2 = transY + 20;
-        this.translationZhCnBox = new EditBox(this.font, fieldX, transY2, fieldWidth, 16, Component.translatable("gui.vn_edit.translation_zh_cn"));
+        this.translationZhCnBox = new EditBox(this.font, fieldX, y + 226, fieldWidth, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.translation_zh_cn"));
         this.translationZhCnBox.setMaxLength(999999999);
         this.translationZhCnBox.setResponder(s -> this.saveTranslationToEntry());
-        int transY3 = transY2 + 20;
-        this.translationEnUsBox = new EditBox(this.font, fieldX, transY3, fieldWidth, 16, Component.translatable("gui.vn_edit.translation_en_us"));
+        this.translationEnUsBox = new EditBox(this.font, fieldX, y + 248, fieldWidth, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.translation_en_us"));
         this.translationEnUsBox.setMaxLength(999999999);
         this.translationEnUsBox.setResponder(s -> this.saveTranslationToEntry());
-        this.generateLangBtn = new FocusAwareButton(fieldX, transY3 + 22, 80, 16, Component.translatable("gui.vn_edit.generate_lang"), b -> this.generateLangFiles());
-        int barY = transY3 + 42;
-        int btnSize = 16;
-        int gap = 2;
+        this.generateLangBtn = new FocusAwareButton(fieldX, y + 270, 80, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.generate_lang"), b -> this.generateLangFiles());
+        int barY = y + 310;
+        int btnSize = EditorTheme.COLOR_BTN_SZ;
+        int gap = EditorTheme.COLOR_BTN_GAP;
         int bx = fieldX;
         int colorsPerRow = 8;
         int colorCount = 0;
@@ -132,19 +130,20 @@ public class TextPropertyPage implements PropertyPage {
         if (colorCount % colorsPerRow != 0) {
             barY += btnSize + gap;
         }
+        int formatY = y + 354;
         bx = fieldX;
-        this.boldBtn = this.makeBtn("B", Style.EMPTY.withBold(true), 'l', bx, barY);
-        this.italicBtn = this.makeBtn("I", Style.EMPTY.withItalic(true), 'o', bx += btnSize + gap, barY);
-        this.underlineBtn = this.makeBtn("U", Style.EMPTY.withUnderlined(true), 'n', bx += btnSize + gap, barY);
-        this.strikethroughBtn = this.makeBtn("S", Style.EMPTY.withStrikethrough(true), 'm', bx += btnSize + gap, barY);
-        this.obfuscatedBtn = this.makeBtn("O", Style.EMPTY.withObfuscated(true), 'k', bx += btnSize + gap, barY);
-        this.resetBtn = this.makeBtn("R", Style.EMPTY.withColor(0xAAAAAA), 'r', bx += btnSize + gap, barY);
-        bx = fieldX;
-        this.clearBtn = new FocusAwareButton(bx, barY += btnSize + 4, 80, 16, Component.translatable("gui.vn_edit.clear_format"), b -> this.clearFormatting());
-        this.hexColorBox = new EditBox(this.font, bx + 90, barY, 50, 16, Component.translatable("gui.vn_edit.hex_color"));
+        this.boldBtn = this.makeBtn("B", Style.EMPTY.withBold(true), 'l', bx, formatY);
+        this.italicBtn = this.makeBtn("I", Style.EMPTY.withItalic(true), 'o', bx += btnSize + gap, formatY);
+        this.underlineBtn = this.makeBtn("U", Style.EMPTY.withUnderlined(true), 'n', bx += btnSize + gap, formatY);
+        this.strikethroughBtn = this.makeBtn("S", Style.EMPTY.withStrikethrough(true), 'm', bx += btnSize + gap, formatY);
+        this.obfuscatedBtn = this.makeBtn("O", Style.EMPTY.withObfuscated(true), 'k', bx += btnSize + gap, formatY);
+        this.resetBtn = this.makeBtn("R", Style.EMPTY.withColor(0xAAAAAA), 'r', bx += btnSize + gap, formatY);
+        this.clearBtn = new FocusAwareButton(bx + btnSize + gap, formatY, 80, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.clear_format"), b -> this.clearFormatting());
+        int hexY = y + 376;
+        this.hexColorBox = new EditBox(this.font, fieldX, hexY, 50, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.hex_color"));
         this.hexColorBox.setMaxLength(7);
         this.hexColorBox.setValue("#");
-        this.applyHexBtn = new FocusAwareButton(bx + 90 + 52, barY, 30, 16, Component.translatable("gui.vn_edit.apply"), b -> {
+        this.applyHexBtn = new FocusAwareButton(fieldX + 52, hexY, 30, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.apply"), b -> {
             String hex = this.hexColorBox.getValue().trim();
             if (hex.startsWith("#") && hex.length() == 7) {
                 this.contentBox.insertAtCursor("\u00a7x");
@@ -344,14 +343,24 @@ public class TextPropertyPage implements PropertyPage {
         if (!this.visible) {
             return;
         }
-        g.drawString(this.font, Component.translatable("gui.vn_edit.speaker"), this.x + 5, this.y + 9, 0xCCCCCC);
+        EditorTheme.drawSectionHeader(g, this.font, this.x, this.y + 2, this.width, Component.translatable("gui.vn_edit.section.speaker"));
         if (this.currentMode == MODE_PLAIN) {
-            g.drawString(this.font, Component.translatable("gui.vn_edit.text"), this.x + 5, this.y + 25 + 5, 0xCCCCCC);
+            EditorTheme.drawSectionHeader(g, this.font, this.x, this.y + 42, this.width, Component.translatable("gui.vn_edit.section.content"));
         }
         if (this.currentMode == MODE_TRANSLATION) {
-            g.drawString(this.font, Component.translatable("gui.vn_edit.translation_key"), this.x + 5, this.translationKeyBox.getY() + 1, 0xCCCCCC);
-            g.drawString(this.font, Component.translatable("gui.vn_edit.translation_zh_cn"), this.x + 5, this.translationZhCnBox.getY() + 1, 0xCCCCCC);
-            g.drawString(this.font, Component.translatable("gui.vn_edit.translation_en_us"), this.x + 5, this.translationEnUsBox.getY() + 1, 0xCCCCCC);
+            EditorTheme.drawSectionHeader(g, this.font, this.x, this.y + 186, this.width, Component.translatable("gui.vn_edit.section.translation"));
+        }
+        if (this.currentMode == MODE_PLAIN) {
+            EditorTheme.drawSectionHeader(g, this.font, this.x, this.y + 302, this.width, Component.translatable("gui.vn_edit.section.format"));
+        }
+        g.drawString(this.font, Component.translatable("gui.vn_edit.speaker"), this.x + 5, this.y + 24, EditorTheme.TEXT_SECONDARY);
+        if (this.currentMode == MODE_PLAIN) {
+            g.drawString(this.font, Component.translatable("gui.vn_edit.text"), this.x + 5, this.y + 64, EditorTheme.TEXT_SECONDARY);
+        }
+        if (this.currentMode == MODE_TRANSLATION) {
+            g.drawString(this.font, Component.translatable("gui.vn_edit.translation_key"), this.x + 5, this.translationKeyBox.getY() + 4, EditorTheme.TEXT_SECONDARY);
+            g.drawString(this.font, Component.translatable("gui.vn_edit.translation_zh_cn"), this.x + 5, this.translationZhCnBox.getY() + 4, EditorTheme.TEXT_SECONDARY);
+            g.drawString(this.font, Component.translatable("gui.vn_edit.translation_en_us"), this.x + 5, this.translationEnUsBox.getY() + 4, EditorTheme.TEXT_SECONDARY);
         }
         this.speakerBox.render(g, mx, my, pt);
         this.contentBox.render(g, mx, my, pt);
@@ -369,7 +378,7 @@ public class TextPropertyPage implements PropertyPage {
         this.resetBtn.render(g, mx, my, pt);
         this.clearBtn.render(g, mx, my, pt);
         if (this.currentMode == MODE_PLAIN) {
-            g.drawString(this.font, Component.translatable("gui.vn_edit.hex_color"), this.x + 5, this.clearBtn.getY() + 1, 0xCCCCCC);
+            g.drawString(this.font, Component.translatable("gui.vn_edit.hex_color"), this.x + 5, this.hexColorBox.getY() + 4, EditorTheme.TEXT_SECONDARY);
         }
         this.hexColorBox.render(g, mx, my, pt);
         this.applyHexBtn.render(g, mx, my, pt);
@@ -409,11 +418,11 @@ public class TextPropertyPage implements PropertyPage {
 
     @Override
     public int getContentHeight() {
-        return 345;
+        return 400;
     }
 
     private Button makeBtn(String text, Style style, char code, int x, int y) {
-        return new FocusAwareButton(x, y, 16, 16, Component.literal(text).withStyle(style), b -> this.contentBox.insertAtCursor("\u00a7" + code));
+        return new FocusAwareButton(x, y, EditorTheme.COLOR_BTN_SZ, EditorTheme.COLOR_BTN_SZ, Component.literal(text).withStyle(style), b -> this.contentBox.insertAtCursor("\u00a7" + code));
     }
 
     private void clearFormatting() {

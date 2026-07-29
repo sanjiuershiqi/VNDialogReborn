@@ -17,6 +17,7 @@ import top.yourzi.dialog.editor.gui.property.AppearancePropertyPage;
 import top.yourzi.dialog.editor.gui.widget.DialogTreeWidget;
 import top.yourzi.dialog.editor.gui.widget.PropertyPanel;
 import top.yourzi.dialog.editor.util.EditorConfig;
+import top.yourzi.dialog.editor.util.EditorTheme;
 import top.yourzi.dialog.model.DialogEntry;
 import top.yourzi.dialog.model.DialogOption;
 import top.yourzi.dialog.model.DialogSequence;
@@ -35,10 +36,10 @@ import java.util.function.Consumer;
  * 该屏幕集成了对话树、属性面板、标签页管理、文件保存/读取/测试/导入等功能。
  */
 public class VNDialogEditorScreen extends Screen {
-    private static final int TOOLBAR_HEIGHT = 20;
-    private static final int TAB_BAR_HEIGHT = 18;
-    private static final int STATUS_HEIGHT = 12;
-    private static final int TREE_WIDTH = 150;
+    private static final int TOOLBAR_HEIGHT = EditorTheme.TOOLBAR_H;
+    private static final int TAB_BAR_HEIGHT = EditorTheme.TAB_BAR_H;
+    private static final int STATUS_HEIGHT = EditorTheme.STATUS_H;
+    private static final int TREE_WIDTH = EditorTheme.TREE_WIDTH;
     private static final int TAB_AREA_LEFT = 2;
     private static final int TAB_AREA_RIGHT_MARGIN = 56;
     private static final int MAX_TAB_WIDTH = 100;
@@ -106,21 +107,21 @@ public class VNDialogEditorScreen extends Screen {
 
     private void buildWidgets() {
         int btnY = 2;
-        int btnWidth = 48;
-        int btnHeight = 16;
+        int btnWidth = EditorTheme.BTN_WIDTH;
+        int btnHeight = 20;
         int btnX = 2;
         Button newBtn = Button.builder(Component.translatable("gui.vn_edit.new"), b -> this.onNew())
                 .bounds(btnX, btnY, btnWidth, btnHeight).build();
         Button saveBtn = Button.builder(Component.translatable("gui.vn_edit.save"), b -> this.onSave())
-                .bounds(btnX += btnWidth + 2, btnY, btnWidth, btnHeight).build();
+                .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight).build();
         Button loadBtn = Button.builder(Component.translatable("gui.vn_edit.load"), b -> this.onLoad())
-                .bounds(btnX += btnWidth + 2, btnY, btnWidth, btnHeight).build();
+                .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight).build();
         Button testBtn = Button.builder(Component.translatable("gui.vn_edit.test"), b -> this.onTest())
-                .bounds(btnX += btnWidth + 2, btnY, btnWidth, btnHeight).build();
+                .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight).build();
         Button importBtn = Button.builder(Component.translatable("gui.vn_edit.import"), b -> this.onImport())
-                .bounds(btnX += btnWidth + 2, btnY, btnWidth, btnHeight).build();
+                .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight).build();
         Button propsBtn = Button.builder(Component.translatable("gui.vn_edit.sequence_props"), b -> this.onSequenceProps())
-                .bounds(btnX += btnWidth + 2, btnY, btnWidth, btnHeight).build();
+                .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight).build();
         this.addRenderableWidget(newBtn);
         this.addRenderableWidget(saveBtn);
         this.addRenderableWidget(loadBtn);
@@ -128,19 +129,19 @@ public class VNDialogEditorScreen extends Screen {
         this.addRenderableWidget(importBtn);
         this.addRenderableWidget(propsBtn);
         this.tabLeftArrow = Button.builder(Component.literal("\u25c0"), b -> this.scrollTabs(-80))
-                .bounds(0, 0, 12, 16).build();
+                .bounds(0, 0, 14, 18).build();
         this.tabRightArrow = Button.builder(Component.literal("\u25b6"), b -> this.scrollTabs(80))
-                .bounds(0, 0, 12, 16).build();
+                .bounds(0, 0, 14, 18).build();
         this.addTabBtn = Button.builder(Component.literal("+"), b -> this.onNew())
-                .bounds(0, 0, 16, 16).build();
+                .bounds(0, 0, 18, 18).build();
         this.addRenderableWidget(this.tabLeftArrow);
         this.addRenderableWidget(this.tabRightArrow);
         this.addRenderableWidget(this.addTabBtn);
-        int treeY = 38;
+        int treeY = TOOLBAR_HEIGHT + TAB_BAR_HEIGHT;
         Button addNodeBtn = Button.builder(Component.translatable("gui.vn_edit.add_node"), b -> this.onAddNode())
-                .bounds(0, treeY, TREE_WIDTH, 16).build();
+                .bounds(0, treeY, TREE_WIDTH, EditorTheme.BTN_HEIGHT).build();
         this.addRenderableWidget(addNodeBtn);
-        int treeContentY = treeY + 16;
+        int treeContentY = treeY + EditorTheme.BTN_HEIGHT;
         int contentHeight = this.height - treeContentY - STATUS_HEIGHT;
         this.treeWidget = new DialogTreeWidget(0, treeContentY, TREE_WIDTH, contentHeight, this.font);
         this.treeWidget.setCallbacks(this::onEntrySelected, this::onEntryDelete, this::onEntryAddChild);
@@ -172,7 +173,7 @@ public class VNDialogEditorScreen extends Screen {
     private void rebuildTabButtons() {
         this.tabButtons.clear();
         int tabX = TAB_AREA_LEFT - this.tabScrollOffset;
-        int tabY = 21;
+        int tabY = TOOLBAR_HEIGHT + 3;
         for (int i = 0; i < this.openSequences.size(); i++) {
             DialogSequence seq = this.openSequences.get(i);
             String title = seq.getId() != null ? seq.getId() : "untitled";
@@ -183,7 +184,7 @@ public class VNDialogEditorScreen extends Screen {
                 displayTitle = this.font.plainSubstrByWidth(title, 90) + "...";
             }
             int index = i;
-            TabButton tabBtn = new TabButton(tabX, tabY, width, 16, Component.literal(displayTitle),
+            TabButton tabBtn = new TabButton(tabX, tabY, width, 18, Component.literal(displayTitle),
                     b -> this.switchToSequence(index), index, this::onCloseTab, this::onRenameTab);
             this.tabButtons.add(tabBtn);
             tabX += width + 2;
@@ -191,10 +192,10 @@ public class VNDialogEditorScreen extends Screen {
         int addBtnX = this.width - TAB_AREA_RIGHT_MARGIN + 20;
         this.addTabBtn.setX(addBtnX);
         this.addTabBtn.setY(tabY);
-        int arrowY = 2;
-        this.tabLeftArrow.setX(addBtnX - 14);
+        int arrowY = tabY;
+        this.tabLeftArrow.setX(addBtnX - 16);
         this.tabLeftArrow.setY(arrowY);
-        this.tabRightArrow.setX(addBtnX + 18);
+        this.tabRightArrow.setX(addBtnX + 20);
         this.tabRightArrow.setY(arrowY);
         int totalWidth = this.getTotalTabsWidth();
         int visibleWidth = this.getVisibleTabWidth();
@@ -604,17 +605,19 @@ public class VNDialogEditorScreen extends Screen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics, mouseX, mouseY, partialTick);
         int clipRight = this.width - TAB_AREA_RIGHT_MARGIN;
-        // 标签栏（切换分组）背景使用不透明深色，避免半透明叠加导致按钮文字模糊看不清
-        graphics.fill(0, 20, this.width, 38, 0xFF2B2B2B);
-        graphics.fill(0, this.height - STATUS_HEIGHT, this.width, this.height, -872415232);
-        graphics.drawString(this.font, this.statusText, 4, this.height - STATUS_HEIGHT + 2, 0xCCCCCC);
-        graphics.enableScissor(TAB_AREA_LEFT, 20, clipRight, 38);
+        int tabBarTop = TOOLBAR_HEIGHT;
+        int tabBarBottom = TOOLBAR_HEIGHT + TAB_BAR_HEIGHT;
+        // 标签栏背景使用不透明深色
+        graphics.fill(0, tabBarTop, this.width, tabBarBottom, EditorTheme.BG_ELEVATED);
+        graphics.fill(0, this.height - STATUS_HEIGHT, this.width, this.height, EditorTheme.BG_SURFACE);
+        graphics.drawString(this.font, this.statusText, 4, this.height - STATUS_HEIGHT + 2, EditorTheme.TEXT_SECONDARY);
+        graphics.enableScissor(TAB_AREA_LEFT, tabBarTop, clipRight, tabBarBottom);
         try {
             for (TabButton btn : this.tabButtons) {
                 btn.render(graphics, mouseX, mouseY, partialTick);
-                // 激活标签的高亮绘制在按钮之后，作为底部亮线，确保不被按钮自身背景遮挡
+                // 激活标签的 ACCENT 色底部亮线
                 if (btn.index == this.activeSequenceIndex) {
-                    graphics.fill(btn.getX(), btn.getY() + btn.getHeight() - 2, btn.getX() + btn.getWidth(), btn.getY() + btn.getHeight(), 0xFFFFFFFF);
+                    graphics.fill(btn.getX(), btn.getY() + btn.getHeight() - 2, btn.getX() + btn.getWidth(), btn.getY() + btn.getHeight(), EditorTheme.ACCENT);
                 }
             }
         } finally {
@@ -679,7 +682,7 @@ public class VNDialogEditorScreen extends Screen {
 
     @Override
     public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, this.width, this.height, 0xFF1A1A1A);
+        graphics.fill(0, 0, this.width, this.height, EditorTheme.BG_DEEPEST);
     }
 
     /**
