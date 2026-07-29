@@ -4,7 +4,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
-import com.google.gson.JsonSyntaxException;
 import com.google.gson.annotations.SerializedName;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -76,7 +75,8 @@ public class DialogOption {
             performDeepPlaceholderReplace(jsonObjectCopy, fromString, replacement);
             try {
                 return replaceTextInComponent(ComponentJson.fromJson(jsonObjectCopy), fromString, replacement);
-            } catch (JsonSyntaxException e) {
+            } catch (Exception e) {
+                // ComponentJson.fromJson 已容错，此 catch 为额外防御层
                 return replaceTextInComponent(ComponentJson.fromJson(targetElement), fromString, replacement);
             }
         }
@@ -96,7 +96,7 @@ public class DialogOption {
 
         try {
             return replaceTextInComponent(ComponentJson.fromJson(targetElement), fromString, replacement);
-        } catch (JsonSyntaxException e) {
+        } catch (Exception e) {
             return Component.empty();
         }
     }
