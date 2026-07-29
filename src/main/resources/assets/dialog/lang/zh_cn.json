@@ -178,5 +178,8 @@
   "gui.vn_edit.add_item": "添加物品",
   "gui.vn_edit.item_id": "物品ID",
   "gui.vn_edit.count": "数量",
-  "gui.vn_edit.nbt": "NBT"
+  "gui.vn_edit.nbt": "NBT",
+  "gui.vn_edit.hex_color": "十六进制颜色",
+  "gui.vn_edit.apply": "应用",
+  "gui.vn_edit.commands": "命令"
 }

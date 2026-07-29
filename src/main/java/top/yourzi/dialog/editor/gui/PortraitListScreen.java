@@ -54,6 +54,7 @@ public class PortraitListScreen extends Screen {
     private Button delBtn;
     private Button upBtn;
     private Button downBtn;
+    private Button folderBtn;
     private static final List<String> POS_ITEMS = List.of(
             Component.translatable("gui.vn_edit.position.left").getString(),
             Component.translatable("gui.vn_edit.position.right").getString(),
@@ -152,6 +153,8 @@ public class PortraitListScreen extends Screen {
                 this.selectedIndex++;
             }
         }).bounds(0, 0, 20, 16).build());
+        this.folderBtn = this.addRenderableWidget(Button.builder(Component.literal("\uD83D\uDCC2"), b -> EditorConfig.openFolder(EditorConfig.PORTRAITS_DIR))
+                .bounds(this.width - 30, 25, 25, 16).build());
         this.updateDynamicButtons();
     }
 
@@ -192,6 +195,9 @@ public class PortraitListScreen extends Screen {
         this.renderPreview(g);
         this.updateDynamicButtons();
         super.render(g, mx, my, pt);
+        // 在所有控件之后渲染展开的下拉弹出列表，确保不被遮挡
+        this.posDropdown.renderPopup(g, mx, my, pt);
+        this.animDropdown.renderPopup(g, mx, my, pt);
     }
 
     private void updateDynamicButtons() {
@@ -325,13 +331,28 @@ public class PortraitListScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mx, double my, int btn) {
-        if (super.mouseClicked(mx, my, btn)) {
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        // 如果下拉框已展开，优先处理
+        if (this.posDropdown.isExpanded()) {
+            if (this.posDropdown.mouseClicked(mouseX, mouseY, button)) {
+                return true;
+            }
+            this.posDropdown.close();
+            return true;
+        }
+        if (this.animDropdown.isExpanded()) {
+            if (this.animDropdown.mouseClicked(mouseX, mouseY, button)) {
+                return true;
+            }
+            this.animDropdown.close();
+            return true;
+        }
+        if (super.mouseClicked(mouseX, mouseY, button)) {
             return true;
         }
         int contentH = this.height - HEADER - FOOTER;
-        if (isMouseInRect(mx, my, 10, HEADER, LEFT_W, contentH)) {
-            int idx = ((int) my - HEADER + this.scrollOffset) / ROW_H;
+        if (isMouseInRect(mouseX, mouseY, 10, HEADER, LEFT_W, contentH)) {
+            int idx = ((int) mouseY - HEADER + this.scrollOffset) / ROW_H;
             if (idx >= 0 && idx < this.portraits.size()) {
                 this.selectedIndex = idx;
                 this.updatePreview();

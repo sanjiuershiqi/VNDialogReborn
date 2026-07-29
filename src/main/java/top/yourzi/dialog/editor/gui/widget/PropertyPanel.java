@@ -185,12 +185,37 @@ public class PropertyPanel extends AbstractWidget {
                 graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, pageTop, this.getX() + this.getWidth(), pageTop + pageH, 0x33000000);
                 graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, scrollBarY, this.getX() + this.getWidth(), scrollBarY + scrollBarHeight, -5592406);
             }
+            // 在 scissor 之外渲染展开的下拉弹出列表，确保不被裁剪或遮挡
+            List<DropdownWidget> dropdowns = this.tabs.get(this.activeTabIndex).page.getDropdowns();
+            if (!dropdowns.isEmpty()) {
+                graphics.pose().pushPose();
+                graphics.pose().translate(0, -this.scrollOffset, 0);
+                for (DropdownWidget dd : dropdowns) {
+                    dd.renderPopup(graphics, mouseX, mouseY + this.scrollOffset, partialTick);
+                }
+                graphics.pose().popPose();
+            }
         }
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         this.ensureInitialized();
+        // 如果有下拉框已展开，优先处理它的点击（包括点击外部关闭）
+        if (this.activeTabIndex >= 0 && this.activeTabIndex < this.tabs.size()) {
+            List<DropdownWidget> dropdowns = this.tabs.get(this.activeTabIndex).page.getDropdowns();
+            double adjustedY = mouseY + this.scrollOffset;
+            for (DropdownWidget dd : dropdowns) {
+                if (dd.isExpanded()) {
+                    if (dd.mouseClicked(mouseX, adjustedY, button)) {
+                        return true;
+                    }
+                    // 点击在下拉框外部，关闭并消费事件防止误触其他控件
+                    dd.close();
+                    return true;
+                }
+            }
+        }
         int tabX = this.getX();
         int tabY = this.getY();
         for (int i = 0; i < this.tabs.size(); i++) {
@@ -206,7 +231,6 @@ public class PropertyPanel extends AbstractWidget {
         if (this.activeTabIndex >= 0) {
             List<? extends GuiEventListener> children = this.tabs.get(this.activeTabIndex).page.children();
             // 页面内容已滚动，鼠标坐标需加上滚动偏移才能命中实际控件
-            double adjustedY = mouseY + this.scrollOffset;
             for (GuiEventListener child : children) {
                 if (!child.mouseClicked(mouseX, adjustedY, button)) {
                     continue;

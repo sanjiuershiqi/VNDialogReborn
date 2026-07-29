@@ -54,6 +54,7 @@ public class AppearancePropertyPage implements PropertyPage {
     private final Font font;
     private EditBox backgroundPathBox;
     private Button backgroundBrowseBtn;
+    private Button backgroundFolderBtn;
     private Button portraitListBtn;
     private DropdownWidget backgroundRenderDropdown;
     private DropdownWidget backgroundAnimDropdown;
@@ -115,6 +116,8 @@ public class AppearancePropertyPage implements PropertyPage {
         });
         this.backgroundBrowseBtn = Button.builder(Component.translatable("gui.vn_edit.browse"), btn -> this.onBackgroundBrowse())
                 .bounds(fieldX + fieldWidth + 5, y + 5, 48, 16).build();
+        this.backgroundFolderBtn = Button.builder(Component.literal("\uD83D\uDCC2"), btn -> EditorConfig.openFolder(EditorConfig.BACKGROUNDS_DIR))
+                .bounds(fieldX + fieldWidth + 5 + 48 + 2, y + 5, 20, 16).build();
         this.portraitListBtn = Button.builder(Component.translatable("gui.vn_edit.edit_portrait_list"), btn -> this.openPortraitList())
                 .bounds(fieldX, y + 25 + 5, 100, 16).build();
         this.backgroundRenderDropdown = new DropdownWidget(this.font, fieldX, y + 25 + 25, 80, 16, new ArrayList<>(RENDER_ITEMS), selected -> {
@@ -265,6 +268,7 @@ public class AppearancePropertyPage implements PropertyPage {
         graphics.drawString(this.font, Component.translatable("gui.vn_edit.render_option"), this.x + 5, this.y + 25 + 29, 0xCCCCCC);
         this.backgroundPathBox.render(graphics, mouseX, mouseY, partialTick);
         this.backgroundBrowseBtn.render(graphics, mouseX, mouseY, partialTick);
+        this.backgroundFolderBtn.render(graphics, mouseX, mouseY, partialTick);
         this.portraitListBtn.render(graphics, mouseX, mouseY, partialTick);
         this.backgroundRenderDropdown.render(graphics, mouseX, mouseY, partialTick);
         this.backgroundAnimDropdown.render(graphics, mouseX, mouseY, partialTick);
@@ -282,7 +286,7 @@ public class AppearancePropertyPage implements PropertyPage {
 
     @Override
     public List<? extends GuiEventListener> children() {
-        return List.of(this.backgroundPathBox, this.backgroundBrowseBtn, this.portraitListBtn, this.backgroundRenderDropdown, this.backgroundAnimDropdown);
+        return List.of(this.backgroundPathBox, this.backgroundBrowseBtn, this.backgroundFolderBtn, this.portraitListBtn, this.backgroundRenderDropdown, this.backgroundAnimDropdown);
     }
 
     @Override
@@ -339,9 +343,15 @@ public class AppearancePropertyPage implements PropertyPage {
         this.visible = visible;
         this.backgroundPathBox.setVisible(visible);
         this.backgroundBrowseBtn.visible = visible;
+        this.backgroundFolderBtn.visible = visible;
         this.portraitListBtn.visible = visible;
         this.backgroundRenderDropdown.visible = visible;
         this.backgroundAnimDropdown.visible = visible;
+    }
+
+    @Override
+    public List<DropdownWidget> getDropdowns() {
+        return List.of(this.backgroundRenderDropdown, this.backgroundAnimDropdown);
     }
 
     @Override

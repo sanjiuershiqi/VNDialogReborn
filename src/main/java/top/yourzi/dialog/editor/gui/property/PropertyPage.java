@@ -2,6 +2,7 @@ package top.yourzi.dialog.editor.gui.property;
 
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.events.GuiEventListener;
+import top.yourzi.dialog.editor.gui.widget.DropdownWidget;
 import top.yourzi.dialog.model.DialogEntry;
 import top.yourzi.dialog.model.DialogSequence;
 
@@ -29,4 +30,11 @@ public interface PropertyPage {
     }
 
     int getContentHeight();
+
+    /**
+     * 返回页面中的所有下拉控件，供父容器在 scissor 之外渲染弹出列表。
+     */
+    default List<DropdownWidget> getDropdowns() {
+        return List.of();
+    }
 }

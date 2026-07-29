@@ -3,6 +3,7 @@ package top.yourzi.dialog.editor.util;
 import net.neoforged.fml.loading.FMLPaths;
 import top.yourzi.dialog.Dialog;
 
+import java.awt.Desktop;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -27,6 +28,32 @@ public class EditorConfig {
             Files.createDirectories(LANG_DIR);
         } catch (IOException e) {
             Dialog.LOGGER.error("Failed to create editor config directories", e);
+        }
+    }
+
+    /**
+     * 用系统文件管理器打开指定文件夹。
+     */
+    public static void openFolder(Path folder) {
+        try {
+            if (!Files.exists(folder)) {
+                Files.createDirectories(folder);
+            }
+            if (Desktop.isDesktopSupported()) {
+                Desktop.getDesktop().open(folder.toFile());
+            } else {
+                String path = folder.toAbsolutePath().toString();
+                String os = System.getProperty("os.name").toLowerCase();
+                if (os.contains("win")) {
+                    Runtime.getRuntime().exec(new String[]{"explorer", path});
+                } else if (os.contains("mac")) {
+                    Runtime.getRuntime().exec(new String[]{"open", path});
+                } else {
+                    Runtime.getRuntime().exec(new String[]{"xdg-open", path});
+                }
+            }
+        } catch (Exception e) {
+            Dialog.LOGGER.error("Failed to open folder: {}", folder, e);
         }
     }
 }

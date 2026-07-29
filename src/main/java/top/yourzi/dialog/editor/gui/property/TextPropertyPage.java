@@ -61,8 +61,11 @@ public class TextPropertyPage implements PropertyPage {
     private Button italicBtn;
     private Button underlineBtn;
     private Button strikethroughBtn;
+    private Button obfuscatedBtn;
     private Button resetBtn;
     private Button clearBtn;
+    private EditBox hexColorBox;
+    private Button applyHexBtn;
     private final List<Button> colorButtons = new ArrayList<>();
     private int currentMode = MODE_PLAIN;
     public Button modeSwitchBtn;
@@ -133,9 +136,22 @@ public class TextPropertyPage implements PropertyPage {
         this.italicBtn = this.makeBtn("I", Style.EMPTY.withItalic(true), 'o', bx += btnSize + gap, barY);
         this.underlineBtn = this.makeBtn("U", Style.EMPTY.withUnderlined(true), 'n', bx += btnSize + gap, barY);
         this.strikethroughBtn = this.makeBtn("S", Style.EMPTY.withStrikethrough(true), 'm', bx += btnSize + gap, barY);
+        this.obfuscatedBtn = this.makeBtn("O", Style.EMPTY.withObfuscated(true), 'k', bx += btnSize + gap, barY);
         this.resetBtn = this.makeBtn("R", Style.EMPTY.withColor(0xAAAAAA), 'r', bx += btnSize + gap, barY);
         bx = fieldX;
         this.clearBtn = new FocusAwareButton(bx, barY += btnSize + 4, 80, 16, Component.translatable("gui.vn_edit.clear_format"), b -> this.clearFormatting());
+        this.hexColorBox = new EditBox(this.font, bx + 90, barY, 50, 16, Component.translatable("gui.vn_edit.hex_color"));
+        this.hexColorBox.setMaxLength(7);
+        this.hexColorBox.setValue("#");
+        this.applyHexBtn = new FocusAwareButton(bx + 90 + 52, barY, 30, 16, Component.translatable("gui.vn_edit.apply"), b -> {
+            String hex = this.hexColorBox.getValue().trim();
+            if (hex.startsWith("#") && hex.length() == 7) {
+                this.contentBox.insertAtCursor("\u00a7x");
+                for (int i = 1; i < hex.length(); i++) {
+                    this.contentBox.insertAtCursor("\u00a7" + hex.charAt(i));
+                }
+            }
+        });
     }
 
     private void toggleMode() {
@@ -169,8 +185,11 @@ public class TextPropertyPage implements PropertyPage {
         this.italicBtn.visible = isPlain;
         this.underlineBtn.visible = isPlain;
         this.strikethroughBtn.visible = isPlain;
+        this.obfuscatedBtn.visible = isPlain;
         this.resetBtn.visible = isPlain;
         this.clearBtn.visible = isPlain;
+        this.hexColorBox.setVisible(isPlain);
+        this.applyHexBtn.visible = isPlain;
         this.colorButtons.forEach(b -> b.visible = isPlain);
         boolean isTranslation = this.currentMode == MODE_TRANSLATION;
         this.translationKeyBox.setVisible(isTranslation);
@@ -244,6 +263,7 @@ public class TextPropertyPage implements PropertyPage {
         this.translationKeyBox.setValue("");
         this.translationZhCnBox.setValue("");
         this.translationEnUsBox.setValue("");
+        this.hexColorBox.setValue("#");
         this.currentMode = MODE_PLAIN;
         this.modeSwitchBtn.setMessage(Component.translatable("gui.vn_edit.mode_plain"));
         this.updateVisibility();
@@ -330,8 +350,14 @@ public class TextPropertyPage implements PropertyPage {
         this.italicBtn.render(g, mx, my, pt);
         this.underlineBtn.render(g, mx, my, pt);
         this.strikethroughBtn.render(g, mx, my, pt);
+        this.obfuscatedBtn.render(g, mx, my, pt);
         this.resetBtn.render(g, mx, my, pt);
         this.clearBtn.render(g, mx, my, pt);
+        if (this.currentMode == MODE_PLAIN) {
+            g.drawString(this.font, Component.translatable("gui.vn_edit.hex_color"), this.x + 5, this.clearBtn.getY() + 1, 0xCCCCCC);
+        }
+        this.hexColorBox.render(g, mx, my, pt);
+        this.applyHexBtn.render(g, mx, my, pt);
     }
 
     @Override
@@ -349,8 +375,11 @@ public class TextPropertyPage implements PropertyPage {
         list.add(this.italicBtn);
         list.add(this.underlineBtn);
         list.add(this.strikethroughBtn);
+        list.add(this.obfuscatedBtn);
         list.add(this.resetBtn);
         list.add(this.clearBtn);
+        list.add(this.hexColorBox);
+        list.add(this.applyHexBtn);
         return list;
     }
 
@@ -365,7 +394,7 @@ public class TextPropertyPage implements PropertyPage {
 
     @Override
     public int getContentHeight() {
-        return 320;
+        return 345;
     }
 
     private Button makeBtn(String text, Style style, char code, int x, int y) {

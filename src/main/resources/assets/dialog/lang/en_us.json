@@ -178,5 +178,8 @@
   "gui.vn_edit.add_item": "Add Item",
   "gui.vn_edit.item_id": "Item ID",
   "gui.vn_edit.count": "Count",
-  "gui.vn_edit.nbt": "NBT"
+  "gui.vn_edit.nbt": "NBT",
+  "gui.vn_edit.hex_color": "Hex Color",
+  "gui.vn_edit.apply": "Apply",
+  "gui.vn_edit.commands": "Commands"
 }
