@@ -4,7 +4,6 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.renderer.GameRenderer;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -436,16 +435,12 @@ public class PortraitListScreen extends Screen {
             int baseY = y + h - portraitH;
             int renderX = baseX + (int) (info.getOffsetX() * w);
             int renderY = baseY + (int) (info.getOffsetY() * h);
-            // 用归一化 UV 采样整张纹理并缩放绘制
-            // 显式设置 shader / color / blend，对齐 DialogScreen 的立绘渲染方式，避免 fill 等绘制残留状态导致 blit 不可见
-            RenderSystem.enableBlend();
-            RenderSystem.defaultBlendFunc();
-            RenderSystem.setShader(GameRenderer::getPositionTexShader);
-            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+            // 与原版编辑器模组 (sal_fish.vn_edit) PortraitListScreen.renderPreview 完全一致的渲染方式：
+            // 仅手动绑定纹理，不设置任何其它 RenderSystem 状态（setShader/setShaderColor/enableBlend
+            // 会与 GuiGraphics 托管批处理管线冲突，导致 blit 不可见——即"能拖动但没图片"）。
+            // 8 参数 float 版 blit：UV (0,0)~(1,1) 采样整张纹理，缩放绘制到 portraitW x portraitH。
             RenderSystem.setShaderTexture(0, this.previewTex);
-            g.blit(this.previewTex, renderX, renderY, portraitW, portraitH, 0, 0, portraitW, portraitH, portraitW, portraitH);
-            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
-            RenderSystem.disableBlend();
+            g.blit(this.previewTex, renderX, renderY, 0.0f, 0.0f, portraitW, portraitH, portraitW, portraitH);
             // 拖动提示
             if (this.draggingPortrait) {
                 g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.drag_hint"), x + w / 2, y + 4, EditorTheme.ACCENT);
