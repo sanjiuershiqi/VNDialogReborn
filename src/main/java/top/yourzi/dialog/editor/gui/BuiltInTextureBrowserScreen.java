@@ -49,8 +49,10 @@ public class BuiltInTextureBrowserScreen extends Screen {
 
     private void scanTextures() {
         this.textureNames.clear();
+        // listResources 不接受尾部斜杠，去掉后传入
+        String listPath = this.texturePrefix.endsWith("/") ? this.texturePrefix.substring(0, this.texturePrefix.length() - 1) : this.texturePrefix;
         Map<ResourceLocation, Resource> resources = Minecraft.getInstance().getResourceManager()
-                .listResources(this.texturePrefix, loc -> loc.getPath().endsWith(".png"));
+                .listResources(listPath, loc -> loc.getPath().endsWith(".png"));
         for (ResourceLocation loc : resources.keySet()) {
             String path = loc.getPath();
             String relative = path.substring(this.texturePrefix.length());
