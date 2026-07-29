@@ -46,11 +46,13 @@ public class AppearancePropertyPage implements PropertyPage {
         protected boolean removeEldestEntry(Map.Entry<String, ResourceLocation> eldest) {
             if (this.size() > MAX_CACHE_SIZE) {
                 Minecraft.getInstance().getTextureManager().release(eldest.getValue());
+                sizeCache.remove(eldest.getKey());
                 return true;
             }
             return false;
         }
     };
+    private static final Map<String, int[]> sizeCache = new LinkedHashMap<>();
 
     private final Font font;
     private EditBox backgroundPathBox;
@@ -313,6 +315,11 @@ public class AppearancePropertyPage implements PropertyPage {
     private ResourceLocation loadTexture(File file, String cacheKey) {
         String safeKey = cacheKey.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9/._-]", "_");
         if (textureCache.containsKey(safeKey)) {
+            int[] size = sizeCache.get(safeKey);
+            if (size != null) {
+                this.backgroundTexWidth = size[0];
+                this.backgroundTexHeight = size[1];
+            }
             return textureCache.get(safeKey);
         }
         if (!file.exists()) {
@@ -339,6 +346,7 @@ public class AppearancePropertyPage implements PropertyPage {
             ResourceLocation rl = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "editor_preview/" + safeKey);
             Minecraft.getInstance().getTextureManager().register(rl, dynamicTexture);
             textureCache.put(safeKey, rl);
+            sizeCache.put(safeKey, new int[]{this.backgroundTexWidth, this.backgroundTexHeight});
             return rl;
         } catch (Exception e) {
             Dialog.LOGGER.error("Failed to load preview texture: {}", file, e);
@@ -351,6 +359,7 @@ public class AppearancePropertyPage implements PropertyPage {
             Minecraft.getInstance().getTextureManager().release(rl);
         }
         textureCache.clear();
+        sizeCache.clear();
     }
 
     @Override
