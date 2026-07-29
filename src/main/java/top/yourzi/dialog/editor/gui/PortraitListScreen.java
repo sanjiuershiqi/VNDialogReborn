@@ -23,11 +23,9 @@ import top.yourzi.dialog.model.PortraitPosition;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
 import java.util.function.Consumer;
 
 /**
@@ -41,6 +39,22 @@ public class PortraitListScreen extends Screen {
     private static final int ROW_H = 12;
     private static final int STAGE_X = 330;
     private static final int STAGE_SIDE_MARGIN = 8;
+
+    private static final int MAX_PREVIEW_CACHE_SIZE = 30;
+    // 预览纹理静态缓存：与 AppearancePropertyPage.loadTexture 完全一致的机制，
+    // 复用已加载的纹理，避免每次选择都重建 DynamicTexture。
+    private static final java.util.Map<String, ResourceLocation> previewTextureCache = new java.util.LinkedHashMap<String, ResourceLocation>() {
+        @Override
+        protected boolean removeEldestEntry(java.util.Map.Entry<String, ResourceLocation> eldest) {
+            if (this.size() > MAX_PREVIEW_CACHE_SIZE) {
+                Minecraft.getInstance().getTextureManager().release(eldest.getValue());
+                previewSizeCache.remove(eldest.getKey());
+                return true;
+            }
+            return false;
+        }
+    };
+    private static final java.util.Map<String, int[]> previewSizeCache = new java.util.LinkedHashMap<>();
 
     private final List<PortraitInfo> portraits;
     private final Consumer<List<PortraitInfo>> onSave;
@@ -233,14 +247,21 @@ public class PortraitListScreen extends Screen {
     }
 
     private void releasePreviewTexture() {
-        if (this.previewTex != null) {
-            // 不释放内置纹理（由资源管理器管理），仅释放编辑器动态注册的预览纹理
-            if (!this.previewTex.getPath().startsWith("textures/portraits/")) {
-                Minecraft.getInstance().getTextureManager().release(this.previewTex);
-            }
-            this.previewTex = null;
-            this.previewPath = null;
+        // 预览纹理由静态缓存管理（与 AppearancePropertyPage 一致），切换选中项时不释放，
+        // 交由缓存 LRU 淘汰时统一 release。
+        this.previewTex = null;
+        this.previewPath = null;
+    }
+
+    /**
+     * 释放所有静态缓存的预览纹理。编辑器关闭时调用。
+     */
+    public static void releaseAllPreviewTextures() {
+        for (ResourceLocation rl : previewTextureCache.values()) {
+            Minecraft.getInstance().getTextureManager().release(rl);
         }
+        previewTextureCache.clear();
+        previewSizeCache.clear();
     }
 
     @Override
@@ -414,14 +435,17 @@ public class PortraitListScreen extends Screen {
         g.fill(x, y, x + 1, y + h, EditorTheme.BG_ELEVATED);
         g.fill(x + w - 1, y, x + w, y + h, EditorTheme.BG_ELEVATED);
         PortraitInfo info = this.getSelected();
-        if (this.previewTex != null && info != null && this.previewW > 0 && this.previewH > 0) {
+        if (this.previewTex != null && info != null) {
             // 模拟实际对话场景：立绘高度 = 舞台高度 * 0.68 * size，底部对齐
             float size = Mth.clamp(info.getSize(), 0.1f, 5.0f);
             int portraitH = (int) (h * 0.68f * size);
             if (portraitH > h) {
                 portraitH = h;
             }
-            float ratio = (float) this.previewW / (float) this.previewH;
+            // 宽高比：previewW/H 为 0（内置纹理未读取尺寸）时默认 1:1
+            float ratio = (this.previewW > 0 && this.previewH > 0)
+                    ? (float) this.previewW / (float) this.previewH
+                    : 1.0f;
             int portraitW = Math.max(1, (int) (portraitH * ratio));
             if (portraitW > w) {
                 portraitW = w;
@@ -435,10 +459,9 @@ public class PortraitListScreen extends Screen {
             int baseY = y + h - portraitH;
             int renderX = baseX + (int) (info.getOffsetX() * w);
             int renderY = baseY + (int) (info.getOffsetY() * h);
-            // 与原版编辑器模组 (sal_fish.vn_edit) PortraitListScreen.renderPreview 完全一致的渲染方式：
-            // 仅手动绑定纹理，不设置任何其它 RenderSystem 状态（setShader/setShaderColor/enableBlend
-            // 会与 GuiGraphics 托管批处理管线冲突，导致 blit 不可见——即"能拖动但没图片"）。
-            // 8 参数 float 版 blit：UV (0,0)~(1,1) 采样整张纹理，缩放绘制到 portraitW x portraitH。
+            // 与背景预览 / 原版编辑器模组完全一致的渲染方式：
+            // 仅手动绑定纹理 + 8 参数 float 版 blit（UV 0..1 采样整张纹理缩放绘制）。
+            // 不设置 setShader/setShaderColor/enableBlend，这些会与 GuiGraphics 托管批处理管线冲突。
             RenderSystem.setShaderTexture(0, this.previewTex);
             g.blit(this.previewTex, renderX, renderY, 0.0f, 0.0f, portraitW, portraitH, portraitW, portraitH);
             // 拖动提示
@@ -586,33 +609,76 @@ public class PortraitListScreen extends Screen {
             // 路径含非法字符（如中文）时 ResourceLocation 构造会抛异常，需 try-catch
             try {
                 ResourceLocation builtinLoc = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/portraits/" + path);
-                java.io.InputStream stream = Minecraft.getInstance().getResourceManager()
-                        .getResource(builtinLoc).orElseThrow().open();
-                NativeImage img = NativeImage.read(stream);
-                this.previewW = img.getWidth();
-                this.previewH = img.getHeight();
-                img.close();
-                stream.close();
-                this.previewTex = builtinLoc;
-                Dialog.LOGGER.info("Portrait preview loaded from builtin: {} ({}x{})", path, this.previewW, this.previewH);
-            } catch (Exception e) {
-                Dialog.LOGGER.warn("Portrait preview not found in config dir or builtin: {}", path, e);
+                if (Minecraft.getInstance().getResourceManager().getResource(builtinLoc).isPresent()) {
+                    // 内置纹理使用默认尺寸，blit 时按 UV 0..1 采样整张纹理缩放绘制
+                    this.previewW = 256;
+                    this.previewH = 256;
+                    this.previewTex = builtinLoc;
+                    Dialog.LOGGER.info("Portrait preview loaded from builtin: {}", path);
+                } else {
+                    Dialog.LOGGER.warn("Portrait preview not found in config dir or builtin: {}", path);
+                    this.previewTex = null;
+                }
+            } catch (net.minecraft.ResourceLocationException e) {
+                Dialog.LOGGER.warn("Portrait preview path invalid: {}", path, e);
                 this.previewTex = null;
             }
             return;
         }
-        try (FileInputStream fis = new FileInputStream(f)) {
-            NativeImage img = FileSystemTextureLoader.decodeToNativeImage(fis);
-            this.previewW = img.getWidth();
-            this.previewH = img.getHeight();
-            DynamicTexture dyn = new DynamicTexture(img);
-            ResourceLocation loc = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "editor_preview/portrait_" + UUID.randomUUID().toString().toLowerCase(Locale.ROOT));
-            Minecraft.getInstance().getTextureManager().register(loc, dyn);
-            this.previewTex = loc;
+        // 与 AppearancePropertyPage.loadTexture 完全一致的加载逻辑：
+        // 用 safeKey 缓存，命中直接返回；未命中则解码 + DynamicTexture + register。
+        ResourceLocation loaded = this.loadPreviewTexture(f, "portrait_" + path);
+        if (loaded != null) {
+            this.previewTex = loaded;
             Dialog.LOGGER.info("Portrait preview loaded from file: {} ({}x{})", f.getAbsolutePath(), this.previewW, this.previewH);
-        } catch (Exception e) {
-            Dialog.LOGGER.warn("Failed to load portrait preview from file: {}", f.getAbsolutePath(), e);
+        } else {
             this.previewTex = null;
+        }
+    }
+
+    /**
+     * 加载预览纹理：与 AppearancePropertyPage.loadTexture 完全一致的实现。
+     * 使用静态缓存复用纹理，命中时恢复尺寸，未命中时解码并注册。
+     */
+    private ResourceLocation loadPreviewTexture(File file, String cacheKey) {
+        String safeKey = cacheKey.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9/._-]", "_");
+        if (previewTextureCache.containsKey(safeKey)) {
+            int[] size = previewSizeCache.get(safeKey);
+            if (size != null) {
+                this.previewW = size[0];
+                this.previewH = size[1];
+            }
+            return previewTextureCache.get(safeKey);
+        }
+        if (!file.exists()) {
+            File parent = file.getParentFile();
+            if (parent != null && parent.isDirectory()) {
+                File finalFile = file;
+                File[] matches = parent.listFiles((dir, name) -> name.equalsIgnoreCase(finalFile.getName()));
+                if (matches != null && matches.length > 0) {
+                    file = matches[0];
+                } else {
+                    Dialog.LOGGER.warn("Texture file not found: {}", file.getAbsolutePath());
+                    return null;
+                }
+            } else {
+                Dialog.LOGGER.warn("Texture file not found: {}", file.getAbsolutePath());
+                return null;
+            }
+        }
+        try (FileInputStream fis = new FileInputStream(file)) {
+            NativeImage image = FileSystemTextureLoader.decodeToNativeImage(fis);
+            this.previewW = image.getWidth();
+            this.previewH = image.getHeight();
+            DynamicTexture dynamicTexture = new DynamicTexture(image);
+            ResourceLocation rl = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "editor_preview/" + safeKey);
+            Minecraft.getInstance().getTextureManager().register(rl, dynamicTexture);
+            previewTextureCache.put(safeKey, rl);
+            previewSizeCache.put(safeKey, new int[]{this.previewW, this.previewH});
+            return rl;
+        } catch (Exception e) {
+            Dialog.LOGGER.error("Failed to load preview texture: {}", file, e);
+            return null;
         }
     }
 
