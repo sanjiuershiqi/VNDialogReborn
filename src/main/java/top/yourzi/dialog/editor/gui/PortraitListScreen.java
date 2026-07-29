@@ -4,7 +4,7 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
+import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.texture.DynamicTexture;
@@ -53,10 +53,10 @@ public class PortraitListScreen extends Screen {
     private DropdownWidget animDropdown;
     private EditBox sizeBox;
     private EditBox brightnessBox;
-    private Button delBtn;
-    private Button upBtn;
-    private Button downBtn;
-    private Button folderBtn;
+    private EditorButton delBtn;
+    private EditorButton upBtn;
+    private EditorButton downBtn;
+    private EditorButton folderBtn;
     private static final List<String> POS_ITEMS = List.of(
             Component.translatable("gui.vn_edit.position.left").getString(),
             Component.translatable("gui.vn_edit.position.right").getString(),
@@ -86,13 +86,13 @@ public class PortraitListScreen extends Screen {
     @Override
     protected void init() {
         super.init();
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.vn_edit.add_portrait"), b -> this.openFileBrowser())
+        this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.add_portrait"), b -> this.openFileBrowser())
                 .bounds(10, this.height - 25, 80, 20).build());
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.vn_edit.builtin_portrait"), b -> this.openBuiltInBrowser())
+        this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.builtin_portrait"), b -> this.openBuiltInBrowser())
                 .bounds(95, this.height - 25, 60, 20).build());
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.vn_edit.save"), b -> this.onClose())
+        this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.save"), b -> this.onClose())
                 .bounds(this.width / 2 - 105, this.height - 25, 100, 20).build());
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.vn_edit.cancel"), b -> this.onClose())
+        this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.cancel"), b -> this.onClose())
                 .bounds(this.width / 2 + 5, this.height - 25, 100, 20).build());
         this.posDropdown = this.addRenderableWidget(new DropdownWidget(this.font, 0, 0, 100, 16, new ArrayList<>(POS_ITEMS), selected -> {
             PortraitInfo info = this.getSelected();
@@ -136,7 +136,7 @@ public class PortraitListScreen extends Screen {
                 }
             }
         });
-        this.delBtn = this.addRenderableWidget(Button.builder(Component.translatable("gui.vn_edit.delete"), b -> {
+        this.delBtn = this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.delete"), b -> {
             if (this.selectedIndex >= 0 && this.selectedIndex < this.portraits.size()) {
                 this.portraits.remove(this.selectedIndex);
                 if (this.selectedIndex >= this.portraits.size()) {
@@ -145,19 +145,19 @@ public class PortraitListScreen extends Screen {
                 this.updatePreview();
             }
         }).bounds(0, 0, 60, 16).build());
-        this.upBtn = this.addRenderableWidget(Button.builder(Component.literal("\u25b2"), b -> {
+        this.upBtn = this.addRenderableWidget(EditorButton.builder(Component.literal("\u25b2"), b -> {
             if (this.selectedIndex > 0 && this.selectedIndex < this.portraits.size()) {
                 this.portraits.add(this.selectedIndex - 1, this.portraits.remove(this.selectedIndex));
                 this.selectedIndex--;
             }
         }).bounds(0, 0, 20, 16).build());
-        this.downBtn = this.addRenderableWidget(Button.builder(Component.literal("\u25bc"), b -> {
+        this.downBtn = this.addRenderableWidget(EditorButton.builder(Component.literal("\u25bc"), b -> {
             if (this.selectedIndex >= 0 && this.selectedIndex < this.portraits.size() - 1) {
                 this.portraits.add(this.selectedIndex + 1, this.portraits.remove(this.selectedIndex));
                 this.selectedIndex++;
             }
         }).bounds(0, 0, 20, 16).build());
-        this.folderBtn = this.addRenderableWidget(Button.builder(Component.literal("\uD83D\uDCC2"), b -> EditorConfig.openFolder(EditorConfig.PORTRAITS_DIR))
+        this.folderBtn = this.addRenderableWidget(EditorButton.builder(Component.literal("\uD83D\uDCC2"), b -> EditorConfig.openFolder(EditorConfig.PORTRAITS_DIR))
                 .bounds(this.width - 30, 25, 25, 16).build());
         this.updateDynamicButtons();
     }

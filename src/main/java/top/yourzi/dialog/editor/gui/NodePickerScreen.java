@@ -1,7 +1,7 @@
 package top.yourzi.dialog.editor.gui;
 
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
+import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import top.yourzi.dialog.editor.util.EditorTheme;
@@ -42,7 +42,7 @@ public class NodePickerScreen extends Screen {
                 this.nodeIds.add(e.getId());
             }
         }
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.vn_edit.cancel"), btn -> this.onClose())
+        this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.cancel"), btn -> this.onClose())
                 .bounds(this.width / 2 - 50, this.height - 30, 100, 20).build());
     }
 

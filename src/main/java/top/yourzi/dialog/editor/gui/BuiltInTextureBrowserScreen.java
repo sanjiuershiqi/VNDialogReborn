@@ -2,7 +2,7 @@ package top.yourzi.dialog.editor.gui;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
+import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -42,9 +42,9 @@ public class BuiltInTextureBrowserScreen extends Screen {
     protected void init() {
         super.init();
         this.scanTextures();
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.vn_edit.cancel"), btn -> this.onClose())
+        this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.cancel"), btn -> this.onClose())
                 .bounds(this.width / 2 - 50, this.height - 30, 100, 20).build());
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.vn_edit.select"), btn -> this.confirmSelection())
+        this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.select"), btn -> this.confirmSelection())
                 .bounds(this.width / 2 - 110, this.height - 30, 50, 20).build());
     }
 

@@ -3,7 +3,7 @@ package top.yourzi.dialog.editor.gui;
 import com.google.gson.JsonPrimitive;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
+import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import net.minecraft.client.gui.components.Checkbox;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -27,11 +27,11 @@ public class OptionEditScreen extends Screen {
     private final Screen parent;
     private final DialogSequence sequence;
     private EditBox textBox;
-    private Button targetNodeBtn;
+    private EditorButton targetNodeBtn;
     private Checkbox alwaysVisibleCheck;
     private EditBox visibilityCommandBox;
     private final List<EditBox> commandBoxes = new ArrayList<>();
-    private final List<Button> commandDeleteButtons = new ArrayList<>();
+    private final List<EditorButton> commandDeleteButtons = new ArrayList<>();
     private int commandListY;
 
     public OptionEditScreen(DialogOption option, Consumer<DialogOption> onSave, Screen parent, DialogSequence sequence) {
@@ -57,7 +57,7 @@ public class OptionEditScreen extends Screen {
         this.addRenderableWidget(this.textBox);
         String currentTarget = this.option.getTargetId() != null ? this.option.getTargetId() : "None";
         y += inputHeight + 20;
-        this.targetNodeBtn = Button.builder(Component.literal(currentTarget), btn -> this.openNodePicker())
+        this.targetNodeBtn = EditorButton.builder(Component.literal(currentTarget), btn -> this.openNodePicker())
                 .bounds(fieldX, y + 10, fieldWidth, inputHeight).build();
         this.addRenderableWidget(this.targetNodeBtn);
         boolean isAlwaysVisible = this.option.getVisibilityCommand() == null || this.option.getVisibilityCommand().isEmpty();
@@ -75,7 +75,7 @@ public class OptionEditScreen extends Screen {
         this.visibilityCommandBox.setVisible(!isAlwaysVisible);
         this.addRenderableWidget(this.visibilityCommandBox);
         y += inputHeight + 10;
-        Button addCommandBtn = Button.builder(Component.translatable("gui.vn_edit.add_command"), btn -> this.addCommand(""))
+        EditorButton addCommandBtn = EditorButton.builder(Component.translatable("gui.vn_edit.add_command"), btn -> this.addCommand(""))
                 .bounds(fieldX, y, 60, 16).build();
         this.addRenderableWidget(addCommandBtn);
         this.commandListY = y + 18;
@@ -84,7 +84,7 @@ public class OptionEditScreen extends Screen {
             this.addCommand(cmd);
         }
         int bottomY = this.height - 30;
-        Button saveBtn = Button.builder(Component.translatable("gui.vn_edit.save"), btn -> {
+        EditorButton saveBtn = EditorButton.builder(Component.translatable("gui.vn_edit.save"), btn -> {
             this.option.setText(new JsonPrimitive(this.textBox.getValue()));
             if (this.alwaysVisibleCheck.selected()) {
                 this.option.setVisibilityCommand(null);
@@ -105,7 +105,7 @@ public class OptionEditScreen extends Screen {
             this.onClose();
         }).bounds(this.width / 2 - 55, bottomY, 110, 20).build();
         this.addRenderableWidget(saveBtn);
-        Button cancelBtn = Button.builder(Component.translatable("gui.vn_edit.cancel"), btn -> this.onClose())
+        EditorButton cancelBtn = EditorButton.builder(Component.translatable("gui.vn_edit.cancel"), btn -> this.onClose())
                 .bounds(this.width / 2 + 65, bottomY, 50, 20).build();
         this.addRenderableWidget(cancelBtn);
     }
@@ -129,7 +129,7 @@ public class OptionEditScreen extends Screen {
         box.setValue(initialValue);
         this.commandBoxes.add(box);
         this.addRenderableWidget(box);
-        Button delBtn = Button.builder(Component.literal("X"), btn -> {
+        EditorButton delBtn = EditorButton.builder(Component.literal("X"), btn -> {
             int i = this.commandDeleteButtons.indexOf(btn);
             if (i >= 0) {
                 this.removeCommand(i);
@@ -144,7 +144,7 @@ public class OptionEditScreen extends Screen {
             return;
         }
         EditBox box = this.commandBoxes.remove(index);
-        Button btn = this.commandDeleteButtons.remove(index);
+        EditorButton btn = this.commandDeleteButtons.remove(index);
         this.removeWidget(box);
         this.removeWidget(btn);
         for (int i = index; i < this.commandBoxes.size(); i++) {

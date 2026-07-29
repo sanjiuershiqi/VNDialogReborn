@@ -8,7 +8,6 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
@@ -18,7 +17,7 @@ import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.TextColor;
 import top.yourzi.dialog.Dialog;
 import top.yourzi.dialog.editor.gui.VNDialogEditorScreen;
-import top.yourzi.dialog.editor.gui.widget.FocusAwareButton;
+import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import top.yourzi.dialog.editor.gui.widget.MultiLineEditBox;
 import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.editor.util.EditorTheme;
@@ -59,19 +58,19 @@ public class TextPropertyPage implements PropertyPage {
     private int height;
     private DialogEntry currentEntry;
     private boolean textModified = false;
-    private Button boldBtn;
-    private Button italicBtn;
-    private Button underlineBtn;
-    private Button strikethroughBtn;
-    private Button obfuscatedBtn;
-    private Button resetBtn;
-    private Button clearBtn;
+    private EditorButton boldBtn;
+    private EditorButton italicBtn;
+    private EditorButton underlineBtn;
+    private EditorButton strikethroughBtn;
+    private EditorButton obfuscatedBtn;
+    private EditorButton resetBtn;
+    private EditorButton clearBtn;
     private EditBox hexColorBox;
-    private Button applyHexBtn;
-    private final List<Button> colorButtons = new ArrayList<>();
+    private EditorButton applyHexBtn;
+    private final List<EditorButton> colorButtons = new ArrayList<>();
     private int currentMode = MODE_PLAIN;
-    public Button modeSwitchBtn;
-    private Button generateLangBtn;
+    public EditorButton modeSwitchBtn;
+    private EditorButton generateLangBtn;
     private EditBox translationKeyBox;
     private EditBox translationZhCnBox;
     private EditBox translationEnUsBox;
@@ -125,7 +124,7 @@ public class TextPropertyPage implements PropertyPage {
 
         // 模式切换按钮
         int modeY = layout.fieldRow();
-        this.modeSwitchBtn = new FocusAwareButton(fieldX, modeY, 60, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.mode_plain"), b -> this.toggleMode());
+        this.modeSwitchBtn = new EditorButton(fieldX, modeY, 60, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.mode_plain"), b -> this.toggleMode());
 
         // ===== 翻译分节（翻译模式下显示）=====
         this.translationHeaderY = layout.section();
@@ -142,7 +141,7 @@ public class TextPropertyPage implements PropertyPage {
         this.translationEnUsBox.setMaxLength(999999999);
         this.translationEnUsBox.setResponder(s -> this.saveTranslationToEntry());
         int genLangY = layout.fieldRow();
-        this.generateLangBtn = new FocusAwareButton(fieldX, genLangY, 80, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.generate_lang"), b -> this.generateLangFiles());
+        this.generateLangBtn = new EditorButton(fieldX, genLangY, 80, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.generate_lang"), b -> this.generateLangFiles());
 
         // ===== 格式分节（正文模式下显示）=====
         this.formatHeaderY = layout.section();
@@ -156,7 +155,7 @@ public class TextPropertyPage implements PropertyPage {
             ChatFormatting color = COLORS[i];
             int rgb = color.getColor() != null ? color.getColor() : 0xFFFFFF;
             final int idx = i;
-            FocusAwareButton btn = new FocusAwareButton(colorPos[i][0], colorPos[i][1], btnSize, btnSize,
+            EditorButton btn = new EditorButton(colorPos[i][0], colorPos[i][1], btnSize, btnSize,
                     Component.literal("\u25a0").withStyle(Style.EMPTY.withColor(rgb)),
                     b -> this.contentBox.insertAtCursor("\u00a7" + COLORS[idx].getChar()));
             this.colorButtons.add(btn);
@@ -178,7 +177,7 @@ public class TextPropertyPage implements PropertyPage {
         this.strikethroughBtn = this.makeBtn("S", Style.EMPTY.withStrikethrough(true), 'm', formatPos[3][0], formatPos[3][1]);
         this.obfuscatedBtn = this.makeBtn("O", Style.EMPTY.withObfuscated(true), 'k', formatPos[4][0], formatPos[4][1]);
         this.resetBtn = this.makeBtn("R", Style.EMPTY.withColor(0xAAAAAA), 'r', formatPos[5][0], formatPos[5][1]);
-        this.clearBtn = new FocusAwareButton(formatPos[6][0], formatPos[6][1], 80, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.clear_format"), b -> this.clearFormatting());
+        this.clearBtn = new EditorButton(formatPos[6][0], formatPos[6][1], 80, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.clear_format"), b -> this.clearFormatting());
 
         // 十六进制颜色输入行
         int hexY = layout.fieldRow();
@@ -187,7 +186,7 @@ public class TextPropertyPage implements PropertyPage {
         this.hexColorBox = new EditBox(this.font, fieldX, hexY, hexBoxW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.hex_color"));
         this.hexColorBox.setMaxLength(7);
         this.hexColorBox.setValue("#");
-        this.applyHexBtn = new FocusAwareButton(fieldX + hexBoxW + gap, hexY, 30, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.apply"), b -> {
+        this.applyHexBtn = new EditorButton(fieldX + hexBoxW + gap, hexY, 30, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.apply"), b -> {
             String hex = this.hexColorBox.getValue().trim();
             if (hex.startsWith("#") && hex.length() == 7) {
                 this.contentBox.insertAtCursor("\u00a7x");
@@ -471,8 +470,8 @@ public class TextPropertyPage implements PropertyPage {
         return this.computedHeight;
     }
 
-    private Button makeBtn(String text, Style style, char code, int x, int y) {
-        return new FocusAwareButton(x, y, EditorTheme.COLOR_BTN_SZ, EditorTheme.COLOR_BTN_SZ, Component.literal(text).withStyle(style), b -> this.contentBox.insertAtCursor("\u00a7" + code));
+    private EditorButton makeBtn(String text, Style style, char code, int x, int y) {
+        return new EditorButton(x, y, EditorTheme.COLOR_BTN_SZ, EditorTheme.COLOR_BTN_SZ, Component.literal(text).withStyle(style), b -> this.contentBox.insertAtCursor("\u00a7" + code));
     }
 
     private void clearFormatting() {

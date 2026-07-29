@@ -5,7 +5,6 @@ import com.google.gson.JsonPrimitive;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Checkbox;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.events.GuiEventListener;
@@ -16,6 +15,7 @@ import top.yourzi.dialog.editor.gui.NodePickerScreen;
 import top.yourzi.dialog.editor.gui.OptionEditScreen;
 import top.yourzi.dialog.Dialog;
 import top.yourzi.dialog.editor.gui.VNDialogEditorScreen;
+import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import top.yourzi.dialog.editor.util.AudioPreviewPlayer;
 import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.editor.util.EditorTheme;
@@ -42,27 +42,27 @@ public class LogicPropertyPage implements PropertyPage {
     private static final int DYNAMIC_SECTION_OVERHEAD = EditorTheme.SECTION_GAP + EditorTheme.SECTION_HDR_H + EditorTheme.ROW_GAP + EditorTheme.FIELD_HEIGHT + EditorTheme.ROW_GAP;
 
     private final Font font;
-    private Button nextNodeBtn;
+    private EditorButton nextNodeBtn;
     private Checkbox endDialogCheck;
     private Checkbox allowSkipCheck;
-    private Button addCommandBtn;
-    private Button addOptionBtn;
+    private EditorButton addCommandBtn;
+    private EditorButton addOptionBtn;
     private EditBox audioPathBox;
-    private Button audioBrowseBtn;
-    private Button audioPlayBtn;
-    private Button audioFolderBtn;
+    private EditorButton audioBrowseBtn;
+    private EditorButton audioPlayBtn;
+    private EditorButton audioFolderBtn;
     private EditBox visibilityCommandBox;
     private DialogSequence currentSequence;
     private DialogEntry currentEntry;
     private final List<EditBox> commandEdits = new ArrayList<>();
-    private final List<Button> commandDeleteBtns = new ArrayList<>();
-    private final List<Button> editOptionButtons = new ArrayList<>();
-    private final List<Button> deleteOptionButtons = new ArrayList<>();
-    private Button addItemBtn;
+    private final List<EditorButton> commandDeleteBtns = new ArrayList<>();
+    private final List<EditorButton> editOptionButtons = new ArrayList<>();
+    private final List<EditorButton> deleteOptionButtons = new ArrayList<>();
+    private EditorButton addItemBtn;
     private final List<EditBox> itemIdEdits = new ArrayList<>();
     private final List<EditBox> itemCountEdits = new ArrayList<>();
     private final List<EditBox> itemNbtEdits = new ArrayList<>();
-    private final List<Button> itemDeleteBtns = new ArrayList<>();
+    private final List<EditorButton> itemDeleteBtns = new ArrayList<>();
     private int optionListStartY;
     private int commandListStartY;
     private int displayItemsStartY;
@@ -101,7 +101,7 @@ public class LogicPropertyPage implements PropertyPage {
         int nextY = layout.fieldRow();
         this.flowLabelY = nextY + 4;
         int nextBtnW = Math.max(60, fieldW - 50);
-        this.nextNodeBtn = Button.builder(Component.literal("None"), btn -> this.openNodePicker())
+        this.nextNodeBtn = EditorButton.builder(Component.literal("None"), btn -> this.openNodePicker())
                 .bounds(fieldX, nextY, nextBtnW, EditorTheme.FIELD_HEIGHT).build();
         int endY = layout.fieldRow();
         this.endDialogCheck = Checkbox.builder(Component.translatable("gui.vn_edit.end_dialog"), this.font)
@@ -144,10 +144,10 @@ public class LogicPropertyPage implements PropertyPage {
             }
         });
         int audioBtnOffset = fieldX + audioBoxW + EditorTheme.GAP;
-        this.audioBrowseBtn = Button.builder(Component.translatable("gui.vn_edit.browse"), btn -> this.onAudioBrowse())
+        this.audioBrowseBtn = EditorButton.builder(Component.translatable("gui.vn_edit.browse"), btn -> this.onAudioBrowse())
                 .bounds(audioBtnOffset, audioY, audioBrowseW, EditorTheme.FIELD_HEIGHT).build();
         audioBtnOffset += audioBrowseW + EditorTheme.GAP;
-        this.audioPlayBtn = Button.builder(Component.translatable("gui.vn_edit.play"), btn -> {
+        this.audioPlayBtn = EditorButton.builder(Component.translatable("gui.vn_edit.play"), btn -> {
             File audioFile;
             String pathStr = this.audioPathBox.getValue();
             if (!pathStr.isEmpty() && (audioFile = EditorConfig.SOUNDS_DIR.resolve(pathStr).toFile()).exists()) {
@@ -155,7 +155,7 @@ public class LogicPropertyPage implements PropertyPage {
             }
         }).bounds(audioBtnOffset, audioY, audioPlayW, EditorTheme.FIELD_HEIGHT).build();
         audioBtnOffset += audioPlayW + EditorTheme.GAP;
-        this.audioFolderBtn = Button.builder(Component.literal("\uD83D\uDCC2"), btn -> EditorConfig.openFolder(EditorConfig.SOUNDS_DIR))
+        this.audioFolderBtn = EditorButton.builder(Component.literal("\uD83D\uDCC2"), btn -> EditorConfig.openFolder(EditorConfig.SOUNDS_DIR))
                 .bounds(audioBtnOffset, audioY, audioFolderW, EditorTheme.FIELD_HEIGHT).build();
 
         // ===== 可见性分节 =====
@@ -175,14 +175,14 @@ public class LogicPropertyPage implements PropertyPage {
 
         // ===== 动态分节（命令/物品/选项）初始位置 =====
         this.commandListStartY = this.dynamicStartY + DYNAMIC_SECTION_OVERHEAD;
-        this.addCommandBtn = Button.builder(Component.translatable("gui.vn_edit.add_command"), btn -> this.onAddCommand())
+        this.addCommandBtn = EditorButton.builder(Component.translatable("gui.vn_edit.add_command"), btn -> this.onAddCommand())
                 .bounds(fieldX, this.commandListStartY - EditorTheme.FIELD_HEIGHT - EditorTheme.ROW_GAP, 60, EditorTheme.FIELD_HEIGHT).build();
         int itemHeaderY = this.commandListStartY + DYNAMIC_SECTION_OVERHEAD;
-        this.addItemBtn = Button.builder(Component.translatable("gui.vn_edit.add_item"), btn -> this.onAddItem())
+        this.addItemBtn = EditorButton.builder(Component.translatable("gui.vn_edit.add_item"), btn -> this.onAddItem())
                 .bounds(fieldX, itemHeaderY - EditorTheme.FIELD_HEIGHT - EditorTheme.ROW_GAP, 60, EditorTheme.FIELD_HEIGHT).build();
         this.displayItemsStartY = itemHeaderY;
         int optionHeaderY = this.displayItemsStartY + DYNAMIC_SECTION_OVERHEAD;
-        this.addOptionBtn = Button.builder(Component.translatable("gui.vn_edit.add_option"), btn -> this.onAddOption())
+        this.addOptionBtn = EditorButton.builder(Component.translatable("gui.vn_edit.add_option"), btn -> this.onAddOption())
                 .bounds(fieldX, optionHeaderY - EditorTheme.FIELD_HEIGHT - EditorTheme.ROW_GAP, 60, EditorTheme.FIELD_HEIGHT).build();
         this.optionListStartY = optionHeaderY;
     }
@@ -329,7 +329,7 @@ public class LogicPropertyPage implements PropertyPage {
             box.setValue(cmds.get(i));
             box.setResponder(s -> this.updateCommand(idx, s));
             this.commandEdits.add(box);
-            Button delBtn = Button.builder(Component.literal("X"), btn -> this.deleteCommand(idx))
+            EditorButton delBtn = EditorButton.builder(Component.literal("X"), btn -> this.deleteCommand(idx))
                     .bounds(fieldX + boxW + EditorTheme.GAP, rowY, 20, EditorTheme.FIELD_HEIGHT).build();
             this.commandDeleteBtns.add(delBtn);
         }
@@ -476,7 +476,7 @@ public class LogicPropertyPage implements PropertyPage {
             nbtBox.setResponder(s -> this.updateItem(idx, "nbt", s));
             this.itemNbtEdits.add(nbtBox);
             xCursor += nbtBoxW + EditorTheme.GAP;
-            Button delBtn = Button.builder(Component.literal("X"), btn -> this.deleteItem(idx))
+            EditorButton delBtn = EditorButton.builder(Component.literal("X"), btn -> this.deleteItem(idx))
                     .bounds(xCursor, rowY, delBtnW, EditorTheme.FIELD_HEIGHT).build();
             this.itemDeleteBtns.add(delBtn);
         }
@@ -498,10 +498,10 @@ public class LogicPropertyPage implements PropertyPage {
             int btnY = this.optionListStartY + i * (OPTION_ROW_HEIGHT + EditorTheme.ROW_GAP);
             int editX = fieldX + fieldW - editBtnW - deleteBtnW - EditorTheme.GAP;
             int deleteX = editX + editBtnW + EditorTheme.GAP;
-            Button editBtn = Button.builder(Component.translatable("gui.vn_edit.edit"), btn -> this.openOptionEditor(opt))
+            EditorButton editBtn = EditorButton.builder(Component.translatable("gui.vn_edit.edit"), btn -> this.openOptionEditor(opt))
                     .bounds(editX, btnY, editBtnW, EditorTheme.FIELD_HEIGHT).build();
             this.editOptionButtons.add(editBtn);
-            Button deleteBtn = Button.builder(Component.translatable("gui.vn_edit.delete"), btn -> this.deleteOption(opt))
+            EditorButton deleteBtn = EditorButton.builder(Component.translatable("gui.vn_edit.delete"), btn -> this.deleteOption(opt))
                     .bounds(deleteX, btnY, deleteBtnW, EditorTheme.FIELD_HEIGHT).build();
             this.deleteOptionButtons.add(deleteBtn);
         }
@@ -578,7 +578,7 @@ public class LogicPropertyPage implements PropertyPage {
         for (EditBox box : this.commandEdits) {
             box.render(graphics, mouseX, mouseY, partialTick);
         }
-        for (Button btn : this.commandDeleteBtns) {
+        for (EditorButton btn : this.commandDeleteBtns) {
             btn.render(graphics, mouseX, mouseY, partialTick);
         }
 
@@ -596,7 +596,7 @@ public class LogicPropertyPage implements PropertyPage {
         for (EditBox box : this.itemNbtEdits) {
             box.render(graphics, mouseX, mouseY, partialTick);
         }
-        for (Button btn : this.itemDeleteBtns) {
+        for (EditorButton btn : this.itemDeleteBtns) {
             btn.render(graphics, mouseX, mouseY, partialTick);
         }
 
@@ -621,10 +621,10 @@ public class LogicPropertyPage implements PropertyPage {
                 graphics.drawString(this.font, truncated, fieldX, yPos + 4, EditorTheme.TEXT_PRIMARY);
             }
         }
-        for (Button btn : this.editOptionButtons) {
+        for (EditorButton btn : this.editOptionButtons) {
             btn.render(graphics, mouseX, mouseY, partialTick);
         }
-        for (Button btn : this.deleteOptionButtons) {
+        for (EditorButton btn : this.deleteOptionButtons) {
             btn.render(graphics, mouseX, mouseY, partialTick);
         }
     }

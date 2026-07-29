@@ -1,7 +1,7 @@
 package top.yourzi.dialog.editor.gui;
 
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
+import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -36,14 +36,14 @@ public class InputDialogScreen extends Screen {
         this.inputBox.setValue(this.initialValue);
         this.addRenderableWidget(this.inputBox);
         y += 30;
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.vn_edit.save"), btn -> {
+        this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.save"), btn -> {
             String result = this.inputBox.getValue().trim();
             if (!result.isEmpty()) {
                 this.onConfirm.accept(result);
             }
             this.onClose();
         }).bounds(this.width / 2 - 55, y, 110, 20).build());
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.vn_edit.cancel"), btn -> this.onClose())
+        this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.cancel"), btn -> this.onClose())
                 .bounds(this.width / 2 + 65, y, 50, 20).build());
     }
 

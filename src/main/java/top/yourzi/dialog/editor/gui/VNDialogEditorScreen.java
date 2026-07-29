@@ -6,7 +6,6 @@ import com.google.gson.JsonPrimitive;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -15,6 +14,7 @@ import top.yourzi.dialog.Dialog;
 import top.yourzi.dialog.DialogManager;
 import top.yourzi.dialog.editor.gui.property.AppearancePropertyPage;
 import top.yourzi.dialog.editor.gui.widget.DialogTreeWidget;
+import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import top.yourzi.dialog.editor.gui.widget.PropertyPanel;
 import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.editor.util.EditorTheme;
@@ -51,9 +51,9 @@ public class VNDialogEditorScreen extends Screen {
     private DialogTreeWidget treeWidget;
     private PropertyPanel propertyPanel;
     private final List<TabButton> tabButtons = new ArrayList<>();
-    private Button addTabBtn;
-    private Button tabLeftArrow;
-    private Button tabRightArrow;
+    private EditorButton addTabBtn;
+    private EditorButton tabLeftArrow;
+    private EditorButton tabRightArrow;
     private int tabScrollOffset = 0;
     private DialogSequence currentSequence;
     private DialogEntry editingEntry;
@@ -114,17 +114,17 @@ public class VNDialogEditorScreen extends Screen {
         int totalGap = (btnCount - 1) * EditorTheme.GAP;
         int maxBtnWidth = (this.width - totalGap - 4) / btnCount;
         int btnWidth = Math.min(EditorTheme.BTN_WIDTH, Math.max(36, maxBtnWidth));
-        Button newBtn = Button.builder(Component.translatable("gui.vn_edit.new"), b -> this.onNew())
+        EditorButton newBtn = EditorButton.builder(Component.translatable("gui.vn_edit.new"), b -> this.onNew())
                 .bounds(btnX, btnY, btnWidth, btnHeight).build();
-        Button saveBtn = Button.builder(Component.translatable("gui.vn_edit.save"), b -> this.onSave())
+        EditorButton saveBtn = EditorButton.builder(Component.translatable("gui.vn_edit.save"), b -> this.onSave())
                 .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight).build();
-        Button loadBtn = Button.builder(Component.translatable("gui.vn_edit.load"), b -> this.onLoad())
+        EditorButton loadBtn = EditorButton.builder(Component.translatable("gui.vn_edit.load"), b -> this.onLoad())
                 .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight).build();
-        Button testBtn = Button.builder(Component.translatable("gui.vn_edit.test"), b -> this.onTest())
+        EditorButton testBtn = EditorButton.builder(Component.translatable("gui.vn_edit.test"), b -> this.onTest())
                 .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight).build();
-        Button importBtn = Button.builder(Component.translatable("gui.vn_edit.import"), b -> this.onImport())
+        EditorButton importBtn = EditorButton.builder(Component.translatable("gui.vn_edit.import"), b -> this.onImport())
                 .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight).build();
-        Button propsBtn = Button.builder(Component.translatable("gui.vn_edit.sequence_props"), b -> this.onSequenceProps())
+        EditorButton propsBtn = EditorButton.builder(Component.translatable("gui.vn_edit.sequence_props"), b -> this.onSequenceProps())
                 .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight).build();
         this.addRenderableWidget(newBtn);
         this.addRenderableWidget(saveBtn);
@@ -132,17 +132,17 @@ public class VNDialogEditorScreen extends Screen {
         this.addRenderableWidget(testBtn);
         this.addRenderableWidget(importBtn);
         this.addRenderableWidget(propsBtn);
-        this.tabLeftArrow = Button.builder(Component.literal("\u25c0"), b -> this.scrollTabs(-80))
+        this.tabLeftArrow = EditorButton.builder(Component.literal("\u25c0"), b -> this.scrollTabs(-80))
                 .bounds(0, 0, 14, 18).build();
-        this.tabRightArrow = Button.builder(Component.literal("\u25b6"), b -> this.scrollTabs(80))
+        this.tabRightArrow = EditorButton.builder(Component.literal("\u25b6"), b -> this.scrollTabs(80))
                 .bounds(0, 0, 14, 18).build();
-        this.addTabBtn = Button.builder(Component.literal("+"), b -> this.onNew())
+        this.addTabBtn = EditorButton.builder(Component.literal("+"), b -> this.onNew())
                 .bounds(0, 0, 18, 18).build();
         this.addRenderableWidget(this.tabLeftArrow);
         this.addRenderableWidget(this.tabRightArrow);
         this.addRenderableWidget(this.addTabBtn);
         int treeY = TOOLBAR_HEIGHT + TAB_BAR_HEIGHT;
-        Button addNodeBtn = Button.builder(Component.translatable("gui.vn_edit.add_node"), b -> this.onAddNode())
+        EditorButton addNodeBtn = EditorButton.builder(Component.translatable("gui.vn_edit.add_node"), b -> this.onAddNode())
                 .bounds(0, treeY, TREE_WIDTH, EditorTheme.BTN_HEIGHT).build();
         this.addRenderableWidget(addNodeBtn);
         int treeContentY = treeY + EditorTheme.BTN_HEIGHT;
@@ -618,11 +618,8 @@ public class VNDialogEditorScreen extends Screen {
         graphics.enableScissor(TAB_AREA_LEFT, tabBarTop, clipRight, tabBarBottom);
         try {
             for (TabButton btn : this.tabButtons) {
+                btn.setActiveTab(btn.index == this.activeSequenceIndex);
                 btn.render(graphics, mouseX, mouseY, partialTick);
-                // 激活标签的 ACCENT 色底部亮线
-                if (btn.index == this.activeSequenceIndex) {
-                    graphics.fill(btn.getX(), btn.getY() + btn.getHeight() - 2, btn.getX() + btn.getWidth(), btn.getY() + btn.getHeight(), EditorTheme.ACCENT);
-                }
             }
         } finally {
             graphics.disableScissor();
@@ -691,19 +688,55 @@ public class VNDialogEditorScreen extends Screen {
 
     /**
      * 标签页按钮：支持单击切换、双击重命名、右键关闭。
+     * 继承 EditorButton 以统一编辑器风格。
      */
-    private static class TabButton extends Button {
+    private static class TabButton extends EditorButton {
         private final int index;
         private final Consumer<Integer> onRightClick;
         private final Consumer<Integer> onDoubleClick;
+        private boolean activeTab = false;
         private long lastClickTime = 0L;
 
-        TabButton(int x, int y, int width, int height, Component message, Button.OnPress onPress,
+        TabButton(int x, int y, int width, int height, Component message, EditorButton.OnPress onPress,
                   int index, Consumer<Integer> onRightClick, Consumer<Integer> onDoubleClick) {
-            super(x, y, width, height, message, onPress, Button.DEFAULT_NARRATION);
+            super(x, y, width, height, message, onPress);
             this.index = index;
             this.onRightClick = onRightClick;
             this.onDoubleClick = onDoubleClick;
+        }
+
+        public void setActiveTab(boolean active) {
+            this.activeTab = active;
+        }
+
+        @Override
+        public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+            int x = this.getX();
+            int y = this.getY();
+            int w = this.getWidth();
+            int h = this.getHeight();
+            // 活动标签使用面板色，非活动使用高亮色
+            int bgColor = this.activeTab ? EditorTheme.BG_SURFACE : (this.isHoveredOrFocused() ? EditorTheme.BG_HOVER : EditorTheme.BG_ELEVATED);
+            graphics.fill(x, y, x + w, y + h, bgColor);
+            // 活动标签底部强调线
+            if (this.activeTab) {
+                graphics.fill(x, y + h - 2, x + w, y + h, EditorTheme.ACCENT);
+            } else {
+                graphics.fill(x, y + h - 1, x + w, y + h, EditorTheme.BORDER);
+            }
+            // 边框
+            int borderColor = this.isHoveredOrFocused() ? EditorTheme.ACCENT : EditorTheme.BORDER;
+            graphics.fill(x, y, x + w, y + 1, borderColor);
+            graphics.fill(x, y, x + 1, y + h, borderColor);
+            graphics.fill(x + w - 1, y, x + w, y + h, borderColor);
+            // 文字
+            int textColor = this.activeTab ? EditorTheme.TEXT_PRIMARY : (this.isHoveredOrFocused() ? EditorTheme.TEXT_PRIMARY : EditorTheme.TEXT_SECONDARY);
+            String text = this.getMessage().getString();
+            int maxWidth = w - 6;
+            if (Minecraft.getInstance().font.width(text) > maxWidth) {
+                text = Minecraft.getInstance().font.plainSubstrByWidth(text, maxWidth - 8) + "...";
+            }
+            graphics.drawCenteredString(Minecraft.getInstance().font, Component.literal(text), x + w / 2, y + (h - 8) / 2, textColor);
         }
 
         @Override

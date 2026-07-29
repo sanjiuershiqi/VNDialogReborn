@@ -5,11 +5,9 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -19,6 +17,7 @@ import top.yourzi.dialog.editor.gui.PortraitListScreen;
 import top.yourzi.dialog.editor.gui.BuiltInTextureBrowserScreen;
 import top.yourzi.dialog.editor.gui.VNDialogEditorScreen;
 import top.yourzi.dialog.editor.gui.widget.DropdownWidget;
+import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.editor.util.EditorTheme;
 import top.yourzi.dialog.editor.util.PageLayout;
@@ -56,10 +55,10 @@ public class AppearancePropertyPage implements PropertyPage {
 
     private final Font font;
     private EditBox backgroundPathBox;
-    private Button backgroundBrowseBtn;
-    private Button backgroundBuiltInBtn;
-    private Button backgroundFolderBtn;
-    private Button portraitListBtn;
+    private EditorButton backgroundBrowseBtn;
+    private EditorButton backgroundBuiltInBtn;
+    private EditorButton backgroundFolderBtn;
+    private EditorButton portraitListBtn;
     private DropdownWidget backgroundRenderDropdown;
     private DropdownWidget backgroundAnimDropdown;
     private boolean visible = true;
@@ -81,6 +80,8 @@ public class AppearancePropertyPage implements PropertyPage {
     private int width;
     private int height;
     private ResourceLocation backgroundTexture = null;
+    private int backgroundTexWidth = 0;
+    private int backgroundTexHeight = 0;
     private int backgroundPreviewX;
     private int backgroundPreviewY;
     private int backgroundPreviewWidth = 100;
@@ -143,13 +144,13 @@ public class AppearancePropertyPage implements PropertyPage {
             }
         });
         int btnOffset = fieldX + pathBoxW + EditorTheme.GAP;
-        this.backgroundBrowseBtn = Button.builder(Component.translatable("gui.vn_edit.browse"), btn -> this.onBackgroundBrowse())
+        this.backgroundBrowseBtn = EditorButton.builder(Component.translatable("gui.vn_edit.browse"), btn -> this.onBackgroundBrowse())
                 .bounds(btnOffset, bgRowY, browseBtnW, EditorTheme.FIELD_HEIGHT).build();
         btnOffset += browseBtnW + EditorTheme.GAP;
-        this.backgroundBuiltInBtn = Button.builder(Component.translatable("gui.vn_edit.builtin_bg"), btn -> this.onBackgroundBuiltIn())
+        this.backgroundBuiltInBtn = EditorButton.builder(Component.translatable("gui.vn_edit.builtin_bg"), btn -> this.onBackgroundBuiltIn())
                 .bounds(btnOffset, bgRowY, builtinBtnW, EditorTheme.FIELD_HEIGHT).build();
         btnOffset += builtinBtnW + EditorTheme.GAP;
-        this.backgroundFolderBtn = Button.builder(Component.literal("\uD83D\uDCC2"), btn -> EditorConfig.openFolder(EditorConfig.BACKGROUNDS_DIR))
+        this.backgroundFolderBtn = EditorButton.builder(Component.literal("\uD83D\uDCC2"), btn -> EditorConfig.openFolder(EditorConfig.BACKGROUNDS_DIR))
                 .bounds(btnOffset, bgRowY, folderBtnW, EditorTheme.FIELD_HEIGHT).build();
 
         // 背景预览
@@ -163,7 +164,7 @@ public class AppearancePropertyPage implements PropertyPage {
         int portraitRowY = layout.fieldRow();
         this.portraitLabelY = portraitRowY + 4;
         int portraitBtnW = Math.min(120, fieldW);
-        this.portraitListBtn = Button.builder(Component.translatable("gui.vn_edit.edit_portrait_list"), btn -> this.openPortraitList())
+        this.portraitListBtn = EditorButton.builder(Component.translatable("gui.vn_edit.edit_portrait_list"), btn -> this.openPortraitList())
                 .bounds(fieldX, portraitRowY, portraitBtnW, EditorTheme.FIELD_HEIGHT).build();
 
         // ===== 渲染分节 =====
@@ -274,6 +275,8 @@ public class AppearancePropertyPage implements PropertyPage {
     private void loadBackgroundPreview(String path) {
         if (path.isEmpty()) {
             this.backgroundTexture = null;
+            this.backgroundTexWidth = 0;
+            this.backgroundTexHeight = 0;
             return;
         }
         File file = EditorConfig.BACKGROUNDS_DIR.resolve(path).toFile();
@@ -283,8 +286,13 @@ public class AppearancePropertyPage implements PropertyPage {
             ResourceLocation builtinLoc = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/backgrounds/" + path);
             if (Minecraft.getInstance().getResourceManager().getResource(builtinLoc).isPresent()) {
                 this.backgroundTexture = builtinLoc;
+                // 内置纹理使用默认尺寸，blit 时按 256x256 作为源
+                this.backgroundTexWidth = 256;
+                this.backgroundTexHeight = 256;
             } else {
                 this.backgroundTexture = null;
+                this.backgroundTexWidth = 0;
+                this.backgroundTexHeight = 0;
             }
         }
     }
@@ -312,6 +320,8 @@ public class AppearancePropertyPage implements PropertyPage {
         }
         try (FileInputStream fis = new FileInputStream(file)) {
             NativeImage image = NativeImage.read(fis);
+            this.backgroundTexWidth = image.getWidth();
+            this.backgroundTexHeight = image.getHeight();
             DynamicTexture dynamicTexture = new DynamicTexture(image);
             ResourceLocation rl = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "editor_preview/" + safeKey);
             Minecraft.getInstance().getTextureManager().register(rl, dynamicTexture);
@@ -343,10 +353,16 @@ public class AppearancePropertyPage implements PropertyPage {
         this.backgroundBuiltInBtn.render(graphics, mouseX, mouseY, partialTick);
         this.backgroundFolderBtn.render(graphics, mouseX, mouseY, partialTick);
         // 背景预览
-        if (this.backgroundTexture != null) {
+        if (this.backgroundTexture != null && this.backgroundTexWidth > 0 && this.backgroundTexHeight > 0) {
+            RenderSystem.setShaderTexture(0, this.backgroundTexture);
+            // 使用完整纹理尺寸作为源，将整张图缩放绘制到预览区域内
+            graphics.blit(this.backgroundTexture, this.backgroundPreviewX, this.backgroundPreviewY, 0.0f, 0.0f,
+                    this.backgroundPreviewWidth, this.backgroundPreviewHeight, this.backgroundTexWidth, this.backgroundTexHeight);
+        } else if (this.backgroundTexture != null) {
+            // 纹理尺寸未知时，使用默认 256x256 作为源尺寸
             RenderSystem.setShaderTexture(0, this.backgroundTexture);
             graphics.blit(this.backgroundTexture, this.backgroundPreviewX, this.backgroundPreviewY, 0.0f, 0.0f,
-                    this.backgroundPreviewWidth, this.backgroundPreviewHeight, this.backgroundPreviewWidth, this.backgroundPreviewHeight);
+                    this.backgroundPreviewWidth, this.backgroundPreviewHeight, 256, 256);
         } else {
             graphics.fill(this.backgroundPreviewX, this.backgroundPreviewY,
                     this.backgroundPreviewX + this.backgroundPreviewWidth, this.backgroundPreviewY + this.backgroundPreviewHeight, EditorTheme.BG_SURFACE);
