@@ -53,14 +53,22 @@ public class FileSystemTextureLoader {
     public static NativeImage decodeToNativeImage(InputStream stream) throws IOException {
         byte[] bytes = stream.readAllBytes();
         // PNG 签名: 89 50 4E 47 0D 0A 1A 0A
-        if (bytes.length >= 8
+        boolean isPng = bytes.length >= 8
                 && (bytes[0] & 0xFF) == 0x89
                 && bytes[1] == (byte) 'P'
                 && bytes[2] == (byte) 'N'
-                && bytes[3] == (byte) 'G') {
+                && bytes[3] == (byte) 'G';
+        if (isPng) {
+            Dialog.LOGGER.info("decodeToNativeImage: real PNG ({} bytes), using NativeImage.read", bytes.length);
             return NativeImage.read(new ByteArrayInputStream(bytes));
         }
-        // 非 PNG：用 ImageIO 解码（支持 JPG/BMP/GIF 等），再重新编码为 PNG 交给 NativeImage
+        // 非 PNG（可能是扩展名为 .png 但实际是 JPG/BMP/GIF 等）：用 ImageIO 解码后重新编码为 PNG
+        Dialog.LOGGER.info("decodeToNativeImage: non-PNG file ({} bytes, header={} {} {} {}), decoding via ImageIO",
+                bytes.length,
+                String.format("%02X", bytes[0] & 0xFF),
+                String.format("%02X", bytes[1] & 0xFF),
+                String.format("%02X", bytes[2] & 0xFF),
+                String.format("%02X", bytes[3] & 0xFF));
         BufferedImage img = ImageIO.read(new ByteArrayInputStream(bytes));
         if (img == null) {
             throw new IOException("Unsupported or unrecognized image format");
@@ -70,6 +78,7 @@ public class FileSystemTextureLoader {
             throw new IOException("Failed to re-encode image to PNG");
         }
         img.flush();
+        Dialog.LOGGER.info("decodeToNativeImage: re-encoded to PNG ({} bytes), reading via NativeImage", baos.size());
         return NativeImage.read(new ByteArrayInputStream(baos.toByteArray()));
     }
 }
