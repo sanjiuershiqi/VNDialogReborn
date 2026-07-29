@@ -53,6 +53,8 @@ public class PortraitListScreen extends Screen {
     private DropdownWidget animDropdown;
     private EditBox sizeBox;
     private EditBox brightnessBox;
+    private EditBox offsetXBox;
+    private EditBox offsetYBox;
     private EditorButton delBtn;
     private EditorButton upBtn;
     private EditorButton downBtn;
@@ -132,6 +134,30 @@ public class PortraitListScreen extends Screen {
                 try {
                     float v = Float.parseFloat(s.trim());
                     info.setBrightness(Math.max(0.0f, Math.min(1.0f, v)));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        });
+        this.offsetXBox = this.addRenderableWidget(new EditBox(this.font, 0, 0, 80, 16, Component.translatable("gui.vn_edit.offset_x")));
+        this.offsetXBox.setMaxLength(10);
+        this.offsetXBox.setResponder(s -> {
+            PortraitInfo info = this.getSelected();
+            if (info != null && !s.isEmpty()) {
+                try {
+                    float v = Float.parseFloat(s.trim());
+                    info.setOffsetX(v);
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        });
+        this.offsetYBox = this.addRenderableWidget(new EditBox(this.font, 0, 0, 80, 16, Component.translatable("gui.vn_edit.offset_y")));
+        this.offsetYBox.setMaxLength(10);
+        this.offsetYBox.setResponder(s -> {
+            PortraitInfo info = this.getSelected();
+            if (info != null && !s.isEmpty()) {
+                try {
+                    float v = Float.parseFloat(s.trim());
+                    info.setOffsetY(v);
                 } catch (NumberFormatException ignored) {
                 }
             }
@@ -226,6 +252,8 @@ public class PortraitListScreen extends Screen {
         this.animDropdown.visible = visible;
         this.sizeBox.visible = visible;
         this.brightnessBox.visible = visible;
+        this.offsetXBox.visible = visible;
+        this.offsetYBox.visible = visible;
         this.delBtn.visible = visible;
         this.upBtn.visible = visible && this.selectedIndex > 0;
         this.downBtn.visible = visible && this.selectedIndex < this.portraits.size() - 1;
@@ -235,6 +263,8 @@ public class PortraitListScreen extends Screen {
             int line3Y = 90;
             int line4Y = 115;
             int line5Y = 140;
+            int line6Y = 165;
+            int line7Y = 190;
             this.posDropdown.setX(200);
             this.posDropdown.setY(line1Y);
             this.posDropdown.setSelected(this.getPositionDisplay(info.getPosition()).getString());
@@ -269,12 +299,40 @@ public class PortraitListScreen extends Screen {
                     }
                 }
             });
+            this.offsetXBox.setX(200);
+            this.offsetXBox.setY(line5Y);
+            this.offsetXBox.setResponder(null);
+            this.offsetXBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getOffsetX()));
+            this.offsetXBox.setResponder(s -> {
+                PortraitInfo si = this.getSelected();
+                if (si != null && !s.isEmpty()) {
+                    try {
+                        float v = Float.parseFloat(s.trim());
+                        si.setOffsetX(v);
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            });
+            this.offsetYBox.setX(200);
+            this.offsetYBox.setY(line6Y);
+            this.offsetYBox.setResponder(null);
+            this.offsetYBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getOffsetY()));
+            this.offsetYBox.setResponder(s -> {
+                PortraitInfo si = this.getSelected();
+                if (si != null && !s.isEmpty()) {
+                    try {
+                        float v = Float.parseFloat(s.trim());
+                        si.setOffsetY(v);
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            });
             this.delBtn.setX(145);
-            this.delBtn.setY(line5Y);
+            this.delBtn.setY(line7Y);
             this.upBtn.setX(260);
-            this.upBtn.setY(line5Y);
+            this.upBtn.setY(line7Y);
             this.downBtn.setX(285);
-            this.downBtn.setY(line5Y);
+            this.downBtn.setY(line7Y);
         }
     }
 
@@ -324,6 +382,8 @@ public class PortraitListScreen extends Screen {
         g.drawString(this.font, Component.translatable("gui.vn_edit.animation"), x + 5, 69, EditorTheme.TEXT_SECONDARY);
         g.drawString(this.font, Component.translatable("gui.vn_edit.size"), x + 5, 94, EditorTheme.TEXT_SECONDARY);
         g.drawString(this.font, Component.translatable("gui.vn_edit.brightness"), x + 5, 119, EditorTheme.TEXT_SECONDARY);
+        g.drawString(this.font, Component.translatable("gui.vn_edit.offset_x"), x + 5, 144, EditorTheme.TEXT_SECONDARY);
+        g.drawString(this.font, Component.translatable("gui.vn_edit.offset_y"), x + 5, 169, EditorTheme.TEXT_SECONDARY);
     }
 
     private void renderPreview(GuiGraphics g) {

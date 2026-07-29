@@ -198,6 +198,8 @@
   "gui.vn_edit.delete_dialog.message": "确定要删除对话 '%s' 吗？这将同时删除对应的文件。",
   "gui.vn_edit.size": "大小",
   "gui.vn_edit.brightness": "亮度",
+  "gui.vn_edit.offset_x": "横向偏移",
+  "gui.vn_edit.offset_y": "纵向偏移",
   "gui.vn_edit.visibility_command": "可见性命令",
   "gui.vn_edit.display_items": "显示物品",
   "gui.vn_edit.add_item": "添加物品",

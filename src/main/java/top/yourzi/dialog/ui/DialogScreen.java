@@ -130,7 +130,9 @@ public class DialogScreen extends Screen {
                     portrait.getAnimationType() == null ? PortraitAnimationType.NONE : portrait.getAnimationType(),
                     System.currentTimeMillis(),
                     textureSize.width(),
-                    textureSize.height()
+                    textureSize.height(),
+                    Mth.clamp(portrait.getOffsetX(), -1.0f, 1.0f),
+                    Mth.clamp(portrait.getOffsetY(), -1.0f, 1.0f)
             ));
         }
     }
@@ -397,8 +399,9 @@ public class DialogScreen extends Screen {
             };
             PortraitAnimationFrame animation = getPortraitAnimationFrame(portrait, x, portraitWidth);
             int y = animation.topAligned ? 0 : height - portraitHeight;
-            int renderX = x + animation.xOffset;
-            int renderY = y + animation.yOffset;
+            // 应用用户配置的位置微调（相对屏幕尺寸的比例偏移）
+            int renderX = x + animation.xOffset + (int) (portrait.offsetX * width);
+            int renderY = y + animation.yOffset + (int) (portrait.offsetY * height);
             RenderSystem.setShader(GameRenderer::getPositionTexShader);
             RenderSystem.setShaderColor(portrait.brightness, portrait.brightness, portrait.brightness, animation.alpha);
             if (animation.rotationDegrees != 0.0f) {
@@ -833,7 +836,7 @@ public class DialogScreen extends Screen {
 
     private record PortraitRenderInfo(ResourceLocation texture, PortraitPosition position, float brightness, float size,
                                       PortraitAnimationType animationType, long animationStartTime,
-                                      int textureWidth, int textureHeight) {
+                                      int textureWidth, int textureHeight, float offsetX, float offsetY) {
         private float aspectRatio() {
             return textureWidth > 0 && textureHeight > 0 ? (float) textureWidth / textureHeight : PortraitTextureSize.FALLBACK.aspectRatio();
         }
