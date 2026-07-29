@@ -8,6 +8,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -376,12 +377,16 @@ public class AppearancePropertyPage implements PropertyPage {
         this.backgroundFolderBtn.render(graphics, mouseX, mouseY, partialTick);
         // 背景预览
         if (this.backgroundTexture != null) {
+            // 显式设置 shader / color，对齐 DialogScreen 的渲染方式，避免其他绘制残留状态导致 blit 不可见
+            RenderSystem.setShader(GameRenderer::getPositionTexShader);
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
             RenderSystem.setShaderTexture(0, this.backgroundTexture);
             // 用归一化 UV 采样整张纹理并缩放绘制到预览区域（textureWidth/Height 传绘制尺寸使 UV 归一化到 0~1）
             graphics.blit(this.backgroundTexture, this.backgroundPreviewX, this.backgroundPreviewY,
                     this.backgroundPreviewWidth, this.backgroundPreviewHeight, 0, 0,
                     this.backgroundPreviewWidth, this.backgroundPreviewHeight,
                     this.backgroundPreviewWidth, this.backgroundPreviewHeight);
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
         } else {
             graphics.fill(this.backgroundPreviewX, this.backgroundPreviewY,
                     this.backgroundPreviewX + this.backgroundPreviewWidth, this.backgroundPreviewY + this.backgroundPreviewHeight, EditorTheme.BG_SURFACE);

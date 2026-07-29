@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.GameRenderer;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -436,9 +437,14 @@ public class PortraitListScreen extends Screen {
             int renderX = baseX + (int) (info.getOffsetX() * w);
             int renderY = baseY + (int) (info.getOffsetY() * h);
             // 用归一化 UV 采样整张纹理并缩放绘制
-            RenderSystem.setShaderTexture(0, this.previewTex);
+            // 显式设置 shader / color / blend，对齐 DialogScreen 的立绘渲染方式，避免 fill 等绘制残留状态导致 blit 不可见
             RenderSystem.enableBlend();
+            RenderSystem.defaultBlendFunc();
+            RenderSystem.setShader(GameRenderer::getPositionTexShader);
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+            RenderSystem.setShaderTexture(0, this.previewTex);
             g.blit(this.previewTex, renderX, renderY, portraitW, portraitH, 0, 0, portraitW, portraitH, portraitW, portraitH);
+            RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
             RenderSystem.disableBlend();
             // 拖动提示
             if (this.draggingPortrait) {
