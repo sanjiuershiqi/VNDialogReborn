@@ -8,6 +8,7 @@ import net.minecraft.client.gui.components.Checkbox;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import top.yourzi.dialog.editor.util.EditorTheme;
 import top.yourzi.dialog.model.DialogOption;
 import top.yourzi.dialog.model.DialogSequence;
 
@@ -156,16 +157,16 @@ public class OptionEditScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics, mouseX, mouseY, partialTick);
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, 10, 0xFFFFFF);
+        graphics.drawCenteredString(this.font, this.title, this.width / 2, 10, EditorTheme.TEXT_PRIMARY);
         int fieldX = (this.width - 200) / 2;
         int y = 25;
-        graphics.drawString(this.font, Component.translatable("gui.vn_edit.option_text"), fieldX + 5, y, 0xCCCCCC);
+        graphics.drawString(this.font, Component.translatable("gui.vn_edit.option_text"), fieldX + 5, y, EditorTheme.TEXT_SECONDARY);
         y += 36;
-        graphics.drawString(this.font, Component.translatable("gui.vn_edit.option_target"), fieldX + 5, y, 0xCCCCCC);
+        graphics.drawString(this.font, Component.translatable("gui.vn_edit.option_target"), fieldX + 5, y, EditorTheme.TEXT_SECONDARY);
         y += 36;
         y += 30;
         if (!this.alwaysVisibleCheck.selected()) {
-            graphics.drawString(this.font, Component.translatable("gui.vn_edit.visibility_command"), fieldX + 5, y, 0xCCCCCC);
+            graphics.drawString(this.font, Component.translatable("gui.vn_edit.visibility_command"), fieldX + 5, y, EditorTheme.TEXT_SECONDARY);
         }
         this.visibilityCommandBox.setVisible(!this.alwaysVisibleCheck.selected());
         super.render(graphics, mouseX, mouseY, partialTick);
@@ -173,7 +174,7 @@ public class OptionEditScreen extends Screen {
 
     @Override
     public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, this.width, this.height, 0xFF1A1A1A);
+        graphics.fill(0, 0, this.width, this.height, EditorTheme.BG_DEEPEST);
     }
 
     @Override

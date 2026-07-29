@@ -7,6 +7,7 @@ import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
+import top.yourzi.dialog.editor.util.EditorTheme;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -67,16 +68,16 @@ public class DropdownWidget extends AbstractWidget {
      */
     @Override
     protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), -14540254);
+        graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), EditorTheme.BG_ELEVATED);
         if (this.isHovered()) {
-            graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), 0x44FFFFFF);
+            graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), EditorTheme.BG_HOVER);
         }
         String text = this.selectedIndex >= 0 ? this.items.get(this.selectedIndex) : "";
         if (text.length() > 20) {
             text = text.substring(0, 17) + "...";
         }
-        graphics.drawString(this.font, text, this.getX() + 3, this.getY() + (this.getHeight() - 8) / 2, 0xFFFFFF);
-        graphics.drawString(this.font, this.expanded ? "\u25b2" : "\u25bc", this.getX() + this.getWidth() - 10, this.getY() + (this.getHeight() - 8) / 2, 0xAAAAAA);
+        graphics.drawString(this.font, text, this.getX() + 3, this.getY() + (this.getHeight() - 8) / 2, EditorTheme.TEXT_PRIMARY);
+        graphics.drawString(this.font, this.expanded ? "\u25b2" : "\u25bc", this.getX() + this.getWidth() - 10, this.getY() + (this.getHeight() - 8) / 2, EditorTheme.TEXT_MUTED);
     }
 
     /**
@@ -90,12 +91,12 @@ public class DropdownWidget extends AbstractWidget {
         int visibleCount = Math.min(MAX_VISIBLE, this.items.size());
         int totalHeight = visibleCount * ITEM_HEIGHT;
         // 不透明背景，确保文字清晰
-        graphics.fill(this.getX(), dropY, this.getX() + this.getWidth(), dropY + totalHeight + 2, 0xF0101010);
+        graphics.fill(this.getX(), dropY, this.getX() + this.getWidth(), dropY + totalHeight + 2, 0xF0181818);
         // 边框
-        graphics.fill(this.getX(), dropY, this.getX() + this.getWidth(), dropY + 1, 0xFF555555);
-        graphics.fill(this.getX(), dropY + totalHeight + 1, this.getX() + this.getWidth(), dropY + totalHeight + 2, 0xFF555555);
-        graphics.fill(this.getX(), dropY, this.getX() + 1, dropY + totalHeight + 2, 0xFF555555);
-        graphics.fill(this.getX() + this.getWidth() - 1, dropY, this.getX() + this.getWidth(), dropY + totalHeight + 2, 0xFF555555);
+        graphics.fill(this.getX(), dropY, this.getX() + this.getWidth(), dropY + 1, EditorTheme.BORDER);
+        graphics.fill(this.getX(), dropY + totalHeight + 1, this.getX() + this.getWidth(), dropY + totalHeight + 2, EditorTheme.BORDER);
+        graphics.fill(this.getX(), dropY, this.getX() + 1, dropY + totalHeight + 2, EditorTheme.BORDER);
+        graphics.fill(this.getX() + this.getWidth() - 1, dropY, this.getX() + this.getWidth(), dropY + totalHeight + 2, EditorTheme.BORDER);
 
         graphics.enableScissor(this.getX(), dropY, this.getX() + this.getWidth(), dropY + totalHeight + 2);
         try {
@@ -105,13 +106,13 @@ public class DropdownWidget extends AbstractWidget {
                     continue;
                 }
                 boolean hovered = mouseX >= this.getX() && mouseX <= this.getX() + this.getWidth() && mouseY >= rowY && mouseY <= rowY + ITEM_HEIGHT;
-                int bg = hovered ? 0xFF404040 : (i == this.selectedIndex ? 0xFF305060 : 0xFF202020);
+                int bg = hovered ? EditorTheme.BG_HOVER : (i == this.selectedIndex ? EditorTheme.BG_SELECTED : EditorTheme.BG_SURFACE);
                 graphics.fill(this.getX() + 1, rowY, this.getX() + this.getWidth() - 1, rowY + ITEM_HEIGHT, bg);
                 String itemText = this.items.get(i);
                 if (itemText.length() > 22) {
                     itemText = itemText.substring(0, 19) + "...";
                 }
-                int textColor = hovered ? 0xFFFFFF : 0xCCCCCC;
+                int textColor = hovered ? EditorTheme.TEXT_PRIMARY : EditorTheme.TEXT_SECONDARY;
                 graphics.drawString(this.font, itemText, this.getX() + 3, rowY + 2, textColor);
             }
         } finally {

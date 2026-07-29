@@ -6,6 +6,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import top.yourzi.dialog.editor.util.EditorTheme;
 import top.yourzi.dialog.model.DialogSequence;
 
 import java.util.function.Consumer;
@@ -90,22 +91,22 @@ public class SequencePropertiesScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics, mouseX, mouseY, partialTick);
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, 10, 0xFFFFFF);
+        graphics.drawCenteredString(this.font, this.title, this.width / 2, 10, EditorTheme.TEXT_PRIMARY);
         int fieldX = (this.width - FIELD_WIDTH) / 2;
         int y = 30;
-        graphics.drawString(this.font, Component.translatable("gui.vn_edit.sequence_title"), fieldX, y, 0xCCCCCC);
+        graphics.drawString(this.font, Component.translatable("gui.vn_edit.sequence_title"), fieldX, y, EditorTheme.TEXT_SECONDARY);
         y += 38;
-        graphics.drawString(this.font, Component.translatable("gui.vn_edit.sequence_description"), fieldX, y, 0xCCCCCC);
+        graphics.drawString(this.font, Component.translatable("gui.vn_edit.sequence_description"), fieldX, y, EditorTheme.TEXT_SECONDARY);
         y += 38;
-        graphics.drawString(this.font, Component.translatable("gui.vn_edit.sequence_effect"), fieldX, y, 0xCCCCCC);
+        graphics.drawString(this.font, Component.translatable("gui.vn_edit.sequence_effect"), fieldX, y, EditorTheme.TEXT_SECONDARY);
         y += 38;
-        graphics.drawString(this.font, Component.translatable("gui.vn_edit.sequence_start"), fieldX, y, 0xCCCCCC);
+        graphics.drawString(this.font, Component.translatable("gui.vn_edit.sequence_start"), fieldX, y, EditorTheme.TEXT_SECONDARY);
         super.render(graphics, mouseX, mouseY, partialTick);
     }
 
     @Override
     public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, this.width, this.height, 0xFF1A1A1A);
+        graphics.fill(0, 0, this.width, this.height, EditorTheme.BG_DEEPEST);
     }
 
     @Override

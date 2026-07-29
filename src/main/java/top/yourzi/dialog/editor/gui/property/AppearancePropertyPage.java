@@ -349,7 +349,7 @@ public class AppearancePropertyPage implements PropertyPage {
                     this.backgroundPreviewWidth, this.backgroundPreviewHeight, this.backgroundPreviewWidth, this.backgroundPreviewHeight);
         } else {
             graphics.fill(this.backgroundPreviewX, this.backgroundPreviewY,
-                    this.backgroundPreviewX + this.backgroundPreviewWidth, this.backgroundPreviewY + this.backgroundPreviewHeight, -11184811);
+                    this.backgroundPreviewX + this.backgroundPreviewWidth, this.backgroundPreviewY + this.backgroundPreviewHeight, EditorTheme.BG_SURFACE);
             graphics.drawCenteredString(this.font, Component.translatable("gui.vn_edit.no_background"),
                     this.backgroundPreviewX + this.backgroundPreviewWidth / 2, this.backgroundPreviewY + 20, EditorTheme.TEXT_SECONDARY);
         }

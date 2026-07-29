@@ -7,6 +7,7 @@ import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
+import top.yourzi.dialog.editor.util.EditorTheme;
 
 import java.util.function.Consumer;
 
@@ -24,8 +25,6 @@ public class MultiLineEditBox extends AbstractWidget {
     private Consumer<String> responder;
     private static final int LINE_HEIGHT = 9;
     private static final int PADDING = 2;
-    private static final int TEXT_COLOR = 0xE0E0E0;
-    private static final int FORMAT_COLOR = -5592406;
     private static final int SECTION_WIDTH = 5;
     private static final int SECTION_HEIGHT = 7;
 
@@ -272,8 +271,8 @@ public class MultiLineEditBox extends AbstractWidget {
 
     @Override
     protected void renderWidget(GuiGraphics g, int mx, int my, float pt) {
-        g.fill(getX() - 1, getY() - 1, getX() + getWidth() + 1, getY() + getHeight() + 1, focused ? -1 : FORMAT_COLOR);
-        g.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), -872415232);
+        g.fill(getX() - 1, getY() - 1, getX() + getWidth() + 1, getY() + getHeight() + 1, focused ? EditorTheme.ACCENT : EditorTheme.BORDER);
+        g.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), EditorTheme.BG_DEEPEST);
         g.enableScissor(getX(), getY(), getX() + getWidth(), getY() + getHeight());
         String[] lines = value.split("\n", -1);
         int maxVis = (getHeight() - 4) / LINE_HEIGHT;
@@ -290,11 +289,11 @@ public class MultiLineEditBox extends AbstractWidget {
                 if (c == '\u00a7' && j + 1 < line.length()) {
                     char code = line.charAt(j + 1);
                     drawSectionSign(g, x, y);
-                    g.drawString(font, String.valueOf(code), x += SECTION_WIDTH, y, FORMAT_COLOR, false);
+                    g.drawString(font, String.valueOf(code), x += SECTION_WIDTH, y, EditorTheme.TEXT_MUTED, false);
                     x += font.width(String.valueOf(code));
                     j++;
                 } else {
-                    g.drawString(font, String.valueOf(c), x, y, TEXT_COLOR, false);
+                    g.drawString(font, String.valueOf(c), x, y, EditorTheme.TEXT_PRIMARY, false);
                     x += font.width(String.valueOf(c));
                 }
             }
@@ -312,16 +311,16 @@ public class MultiLineEditBox extends AbstractWidget {
                 }
             }
             int cursorY = getY() + PADDING + (cursorLine - scrollLine) * LINE_HEIGHT;
-            g.fill(cursorX, cursorY - 1, cursorX + 1, cursorY + LINE_HEIGHT - 1, -1);
+            g.fill(cursorX, cursorY - 1, cursorX + 1, cursorY + LINE_HEIGHT - 1, EditorTheme.TEXT_PRIMARY);
         }
         g.disableScissor();
     }
 
     private void drawSectionSign(GuiGraphics g, int x, int y) {
-        g.fill(x, y + 1, x + 1, y + SECTION_HEIGHT - 1, FORMAT_COLOR);
-        g.fill(x + SECTION_WIDTH - 1, y + 1, x + SECTION_WIDTH, y + SECTION_HEIGHT - 1, FORMAT_COLOR);
-        g.fill(x + 1, y + 1, x + 3, y + 3, FORMAT_COLOR);
-        g.fill(x + 2, y + SECTION_HEIGHT - 3, x + 4, y + SECTION_HEIGHT - 1, FORMAT_COLOR);
+        g.fill(x, y + 1, x + 1, y + SECTION_HEIGHT - 1, EditorTheme.TEXT_MUTED);
+        g.fill(x + SECTION_WIDTH - 1, y + 1, x + SECTION_WIDTH, y + SECTION_HEIGHT - 1, EditorTheme.TEXT_MUTED);
+        g.fill(x + 1, y + 1, x + 3, y + 3, EditorTheme.TEXT_MUTED);
+        g.fill(x + 2, y + SECTION_HEIGHT - 3, x + 4, y + SECTION_HEIGHT - 1, EditorTheme.TEXT_MUTED);
     }
 
     @Override

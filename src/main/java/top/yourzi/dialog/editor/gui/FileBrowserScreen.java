@@ -5,6 +5,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import top.yourzi.dialog.editor.util.EditorTheme;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -70,7 +71,7 @@ public class FileBrowserScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics, mouseX, mouseY, partialTick);
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, 10, 0xFFFFFF);
+        graphics.drawCenteredString(this.font, this.title, this.width / 2, 10, EditorTheme.TEXT_PRIMARY);
         int listHeight = this.height - LIST_Y - LIST_BOTTOM_PAD;
         graphics.enableScissor(0, LIST_Y, this.width, LIST_Y + listHeight);
         int yOffset = LIST_Y - this.scrollOffset;
@@ -80,7 +81,10 @@ public class FileBrowserScreen extends Screen {
                 continue;
             }
             boolean hovered = mouseX >= 10 && mouseX <= this.width - 10 && mouseY >= rowY && mouseY <= rowY + ROW_HEIGHT;
-            int color = hovered ? -256 : -3355444;
+            if (hovered) {
+                graphics.fill(10, rowY, this.width - 10, rowY + ROW_HEIGHT, EditorTheme.BG_HOVER);
+            }
+            int color = hovered ? EditorTheme.ACCENT : EditorTheme.TEXT_SECONDARY;
             graphics.drawString(this.font, this.files.get(i).name, 15, rowY + 1, color);
         }
         graphics.disableScissor();
@@ -124,7 +128,7 @@ public class FileBrowserScreen extends Screen {
 
     @Override
     public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, this.width, this.height, 0xFF1A1A1A);
+        graphics.fill(0, 0, this.width, this.height, EditorTheme.BG_DEEPEST);
     }
 
     private static class FileEntry {

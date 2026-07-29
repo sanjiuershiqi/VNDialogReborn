@@ -5,6 +5,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import top.yourzi.dialog.editor.util.EditorTheme;
 
 import java.util.function.Consumer;
 
@@ -49,13 +50,13 @@ public class InputDialogScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics, mouseX, mouseY, partialTick);
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, 20, 0xFFFFFF);
+        graphics.drawCenteredString(this.font, this.title, this.width / 2, 20, EditorTheme.TEXT_PRIMARY);
         super.render(graphics, mouseX, mouseY, partialTick);
     }
 
     @Override
     public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, this.width, this.height, 0xFF1A1A1A);
+        graphics.fill(0, 0, this.width, this.height, EditorTheme.BG_DEEPEST);
     }
 
     @Override

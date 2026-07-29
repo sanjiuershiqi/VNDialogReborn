@@ -15,6 +15,7 @@ import top.yourzi.dialog.Dialog;
 import top.yourzi.dialog.editor.gui.widget.DropdownWidget;
 import top.yourzi.dialog.editor.gui.BuiltInTextureBrowserScreen;
 import top.yourzi.dialog.editor.util.EditorConfig;
+import top.yourzi.dialog.editor.util.EditorTheme;
 import top.yourzi.dialog.model.PortraitAnimationType;
 import top.yourzi.dialog.model.PortraitInfo;
 import top.yourzi.dialog.model.PortraitPosition;
@@ -206,7 +207,7 @@ public class PortraitListScreen extends Screen {
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
         this.renderBackground(g, mx, my, pt);
-        g.drawCenteredString(this.font, this.title, this.width / 2, 10, 0xFFFFFF);
+        g.drawCenteredString(this.font, this.title, this.width / 2, 10, EditorTheme.TEXT_PRIMARY);
         int contentH = this.height - HEADER - FOOTER;
         this.renderLeftList(g, mx, my, contentH);
         this.renderMiddlePanel(g, mx, my, contentH);
@@ -282,7 +283,7 @@ public class PortraitListScreen extends Screen {
         int y = HEADER;
         int w = LEFT_W;
         int h = contentH;
-        g.fill(x, y, x + w, y + h, -1442840576);
+        g.fill(x, y, x + w, y + h, EditorTheme.BG_SURFACE);
         g.enableScissor(x, y, x + w, y + h);
         int maxScroll = Math.max(0, this.portraits.size() * ROW_H - h);
         this.scrollOffset = Mth.clamp(this.scrollOffset, 0, maxScroll);
@@ -294,18 +295,18 @@ public class PortraitListScreen extends Screen {
                 continue;
             }
             boolean hover = isMouseInRect(mx, my, x, rowY, w, ROW_H);
-            int bg = i == this.selectedIndex ? 0x66FFFFFF : (hover ? 0x33FFFFFF : 0);
+            int bg = i == this.selectedIndex ? EditorTheme.BG_SELECTED : (hover ? EditorTheme.BG_HOVER : 0);
             g.fill(x, rowY, x + w, rowY + ROW_H, bg);
             String name = info.getPath() != null ? info.getPath() : "";
             String trimmed = this.font.plainSubstrByWidth(name, w - 10);
-            g.drawString(this.font, trimmed, x + 4, rowY + 2, 0xFFFFFF);
+            g.drawString(this.font, trimmed, x + 4, rowY + 2, EditorTheme.TEXT_PRIMARY);
         }
         g.disableScissor();
         if (maxScroll > 0) {
             int sbH = Math.max(10, h * h / (this.portraits.size() * ROW_H));
             int sbY = y + (int) ((float) this.scrollOffset / (float) maxScroll * (float) (h - sbH));
             g.fill(x + w - 4, y, x + w, y + h, 0x33FFFFFF);
-            g.fill(x + w - 4, sbY, x + w, sbY + sbH, -1);
+            g.fill(x + w - 4, sbY, x + w, sbY + sbH, EditorTheme.TEXT_MUTED);
         }
     }
 
@@ -314,22 +315,22 @@ public class PortraitListScreen extends Screen {
         int y = HEADER;
         int w = 180;
         int h = contentH;
-        g.fill(x, y, x + w, y + h, -1441722095);
+        g.fill(x, y, x + w, y + h, EditorTheme.BG_ELEVATED);
         if (this.selectedIndex < 0 || this.selectedIndex >= this.portraits.size()) {
-            g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.no_portrait_selected"), x + w / 2, y + 20, 0x888888);
+            g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.no_portrait_selected"), x + w / 2, y + 20, EditorTheme.TEXT_MUTED);
             return;
         }
-        g.drawString(this.font, Component.translatable("gui.vn_edit.position"), x + 5, 44, 0xCCCCCC);
-        g.drawString(this.font, Component.translatable("gui.vn_edit.animation"), x + 5, 69, 0xCCCCCC);
-        g.drawString(this.font, Component.translatable("gui.vn_edit.size"), x + 5, 94, 0xCCCCCC);
-        g.drawString(this.font, Component.translatable("gui.vn_edit.brightness"), x + 5, 119, 0xCCCCCC);
+        g.drawString(this.font, Component.translatable("gui.vn_edit.position"), x + 5, 44, EditorTheme.TEXT_SECONDARY);
+        g.drawString(this.font, Component.translatable("gui.vn_edit.animation"), x + 5, 69, EditorTheme.TEXT_SECONDARY);
+        g.drawString(this.font, Component.translatable("gui.vn_edit.size"), x + 5, 94, EditorTheme.TEXT_SECONDARY);
+        g.drawString(this.font, Component.translatable("gui.vn_edit.brightness"), x + 5, 119, EditorTheme.TEXT_SECONDARY);
     }
 
     private void renderPreview(GuiGraphics g) {
         int x = 330;
         int y = HEADER;
         int size = PREVIEW_SIZE;
-        g.fill(x, y, x + size, y + size, -1440603614);
+        g.fill(x, y, x + size, y + size, EditorTheme.BG_SURFACE);
         if (this.previewTex != null && this.getSelected() != null) {
             float ratio = this.previewW > 0 && this.previewH > 0 ? (float) this.previewW / (float) this.previewH : 1.0f;
             int dw = size;
@@ -344,7 +345,7 @@ public class PortraitListScreen extends Screen {
             RenderSystem.setShaderTexture(0, this.previewTex);
             g.blit(this.previewTex, dx, dy, 0.0f, 0.0f, dw, dh, dw, dh);
         } else {
-            g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.no_preview"), x + size / 2, y + size / 2 - 4, 0x888888);
+            g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.no_preview"), x + size / 2, y + size / 2 - 4, EditorTheme.TEXT_MUTED);
         }
     }
 
@@ -471,7 +472,7 @@ public class PortraitListScreen extends Screen {
 
     @Override
     public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, this.width, this.height, 0xFF1A1A1A);
+        graphics.fill(0, 0, this.width, this.height, EditorTheme.BG_DEEPEST);
     }
 
     @Override

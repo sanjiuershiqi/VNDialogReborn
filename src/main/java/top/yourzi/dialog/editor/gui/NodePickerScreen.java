@@ -4,6 +4,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import top.yourzi.dialog.editor.util.EditorTheme;
 import top.yourzi.dialog.model.DialogEntry;
 import top.yourzi.dialog.model.DialogSequence;
 
@@ -48,7 +49,7 @@ public class NodePickerScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics, mouseX, mouseY, partialTick);
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, 10, 0xFFFFFF);
+        graphics.drawCenteredString(this.font, this.title, this.width / 2, 10, EditorTheme.TEXT_PRIMARY);
         int listHeight = this.height - LIST_TOP - LIST_BOTTOM;
         graphics.enableScissor(0, LIST_TOP, this.width, LIST_TOP + listHeight);
         int yOffset = LIST_TOP - this.scrollOffset;
@@ -58,9 +59,9 @@ public class NodePickerScreen extends Screen {
                 continue;
             }
             boolean hovered = mouseX >= 20 && mouseX <= this.width - 20 && mouseY >= rowY && mouseY <= rowY + ROW_HEIGHT;
-            int color = hovered ? -256 : -1;
+            int color = hovered ? EditorTheme.ACCENT : EditorTheme.TEXT_PRIMARY;
             if (hovered) {
-                graphics.fill(20, rowY, this.width - 20, rowY + ROW_HEIGHT, 0x44FFFFFF);
+                graphics.fill(20, rowY, this.width - 20, rowY + ROW_HEIGHT, EditorTheme.BG_HOVER);
             }
             graphics.drawString(this.font, this.nodeIds.get(i), 25, rowY + 2, color);
         }
@@ -96,7 +97,7 @@ public class NodePickerScreen extends Screen {
 
     @Override
     public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, this.width, this.height, 0xFF1A1A1A);
+        graphics.fill(0, 0, this.width, this.height, EditorTheme.BG_DEEPEST);
     }
 
     @Override

@@ -7,6 +7,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
+import top.yourzi.dialog.editor.util.EditorTheme;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -71,7 +72,7 @@ public class BuiltInTextureBrowserScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics, mouseX, mouseY, partialTick);
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, 10, 0xFFFFFF);
+        graphics.drawCenteredString(this.font, this.title, this.width / 2, 10, EditorTheme.TEXT_PRIMARY);
         int listHeight = this.height - LIST_Y - LIST_BOTTOM_PAD;
         int listWidth = this.width - PREVIEW_SIZE - 30;
         graphics.enableScissor(10, LIST_Y, 10 + listWidth, LIST_Y + listHeight);
@@ -84,11 +85,11 @@ public class BuiltInTextureBrowserScreen extends Screen {
             boolean selected = i == this.selectedIndex;
             boolean hovered = mouseX >= 10 && mouseX <= 10 + listWidth && mouseY >= rowY && mouseY <= rowY + ROW_HEIGHT;
             if (selected) {
-                graphics.fill(10, rowY, 10 + listWidth, rowY + ROW_HEIGHT, 0x66FFFFFF);
+                graphics.fill(10, rowY, 10 + listWidth, rowY + ROW_HEIGHT, EditorTheme.BG_SELECTED);
             } else if (hovered) {
-                graphics.fill(10, rowY, 10 + listWidth, rowY + ROW_HEIGHT, 0x33FFFFFF);
+                graphics.fill(10, rowY, 10 + listWidth, rowY + ROW_HEIGHT, EditorTheme.BG_HOVER);
             }
-            int color = selected ? -256 : (hovered ? -1 : -3355444);
+            int color = selected ? EditorTheme.ACCENT : (hovered ? EditorTheme.TEXT_PRIMARY : EditorTheme.TEXT_SECONDARY);
             String name = this.textureNames.get(i);
             String trimmed = this.font.plainSubstrByWidth(name, listWidth - 10);
             graphics.drawString(this.font, trimmed, 15, rowY + 2, color);
@@ -101,14 +102,14 @@ public class BuiltInTextureBrowserScreen extends Screen {
     private void renderPreview(GuiGraphics graphics, int listWidth) {
         int px = 10 + listWidth + 10;
         int py = LIST_Y;
-        graphics.fill(px, py, px + PREVIEW_SIZE, py + PREVIEW_SIZE, -11184811);
+        graphics.fill(px, py, px + PREVIEW_SIZE, py + PREVIEW_SIZE, EditorTheme.BG_SURFACE);
         if (this.selectedIndex >= 0 && this.selectedIndex < this.textureNames.size()) {
             String name = this.textureNames.get(this.selectedIndex);
             ResourceLocation rl = ResourceLocation.fromNamespaceAndPath("dialog", this.texturePrefix + name);
             graphics.blit(rl, px, py, 0.0f, 0.0f, PREVIEW_SIZE, PREVIEW_SIZE, PREVIEW_SIZE, PREVIEW_SIZE);
         } else {
             graphics.drawCenteredString(this.font, Component.translatable("gui.vn_edit.no_preview"),
-                    px + PREVIEW_SIZE / 2, py + PREVIEW_SIZE / 2 - 4, 0x888888);
+                    px + PREVIEW_SIZE / 2, py + PREVIEW_SIZE / 2 - 4, EditorTheme.TEXT_MUTED);
         }
     }
 
@@ -140,7 +141,7 @@ public class BuiltInTextureBrowserScreen extends Screen {
 
     @Override
     public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, this.width, this.height, 0xFF1A1A1A);
+        graphics.fill(0, 0, this.width, this.height, EditorTheme.BG_DEEPEST);
     }
 
     @Override

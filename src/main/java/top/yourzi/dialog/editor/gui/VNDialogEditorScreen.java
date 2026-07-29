@@ -215,7 +215,7 @@ public class VNDialogEditorScreen extends Screen {
         if (seq == null) {
             return;
         }
-        Minecraft.getInstance().setScreen(new RenameStringDialogScreen(seq.getId(), newId -> {
+        Minecraft.getInstance().setScreen(new InputDialogScreen(Component.translatable("gui.vn_edit.rename.title"), seq.getId(), newId -> {
             if (!newId.isEmpty() && !newId.equals(seq.getId())) {
                 String oldId = seq.getId();
                 seq.setId(newId);

@@ -10,7 +10,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import top.yourzi.dialog.Dialog;
-import top.yourzi.dialog.editor.gui.RenameDialogScreen;
+import top.yourzi.dialog.editor.gui.InputDialogScreen;
 import top.yourzi.dialog.editor.util.EditorTheme;
 import top.yourzi.dialog.model.DialogEntry;
 import top.yourzi.dialog.model.DialogOption;
@@ -252,7 +252,7 @@ public class DialogTreeWidget extends AbstractWidget {
             if (button == 0) {
                 long now = System.currentTimeMillis();
                 if (this.lastClickIndex == index && now - this.lastClickTime < 500L) {
-                    Minecraft.getInstance().setScreen(new RenameDialogScreen(node.entry, newId -> {
+                    Minecraft.getInstance().setScreen(new InputDialogScreen(Component.translatable("gui.vn_edit.rename.title"), node.entry.getId(), newId -> {
                         String oldId = node.entry.getId();
                         if (oldId.equals(newId)) {
                             return;
