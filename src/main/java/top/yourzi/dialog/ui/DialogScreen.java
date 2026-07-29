@@ -518,9 +518,12 @@ public class DialogScreen extends Screen {
         Component text = dialogEntry.getText(playerName);
         String rawText = text.getString();
         advanceText(rawText);
-        String displayedText = rawText.substring(0, Math.min(currentCharIndex, rawText.length()));
+        int displayedChars = Math.min(currentCharIndex, rawText.length());
+        boolean fullyShown = currentCharIndex >= rawText.length();
+        // 按字符索引截断 Component，保留样式（颜色/加粗等），避免 getString() 丢样式
+        Component displayComponent = fullyShown ? text : substringComponent(text, displayedChars);
 
-        for (FormattedCharSequence line : font.split(Component.literal(displayedText), dialogBoxWidth - padding * 2)) {
+        for (FormattedCharSequence line : font.split(displayComponent, dialogBoxWidth - padding * 2)) {
             guiGraphics.drawString(font, line, textX, textY, ClientConfig.DIALOG_TEXT_COLOR.get());
             textY += font.lineHeight + 2;
         }
@@ -537,6 +540,30 @@ public class DialogScreen extends Screen {
                     : autoPlayButton.getX() - indicatorWidth - 8;
             guiGraphics.drawString(font, indicator, Math.max(textX, indicatorX), dialogBoxY + dialogBoxHeight - 18, 0xFFFFFF);
         }
+    }
+
+    /**
+     * 按字符索引截断 Component，保留各段样式（颜色/加粗等）。
+     * 用于打字机动画效果中逐字显示带样式的文本。
+     */
+    private Component substringComponent(Component component, int maxChars) {
+        MutableComponent result = Component.empty();
+        int[] remaining = {maxChars};
+        component.visit((style, textPart) -> {
+            if (remaining[0] <= 0) {
+                return java.util.Optional.empty();
+            }
+            int len = textPart.length();
+            if (len <= remaining[0]) {
+                result.append(Component.literal(textPart).setStyle(style));
+                remaining[0] -= len;
+            } else {
+                result.append(Component.literal(textPart.substring(0, remaining[0])).setStyle(style));
+                remaining[0] = 0;
+            }
+            return java.util.Optional.empty();
+        }, Style.EMPTY);
+        return result;
     }
 
     private void advanceText(String rawText) {
