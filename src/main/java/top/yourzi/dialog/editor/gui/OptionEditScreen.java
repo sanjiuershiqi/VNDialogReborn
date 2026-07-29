@@ -26,6 +26,11 @@ public class OptionEditScreen extends Screen {
     private final Consumer<DialogOption> onSave;
     private final Screen parent;
     private final DialogSequence sequence;
+    /** 编辑期间的临时状态，取消时不影响原 option */
+    private String draftText;
+    private String draftTargetId;
+    private String draftVisibilityCommand;
+    private List<String> draftCommands;
     private EditBox textBox;
     private EditorButton targetNodeBtn;
     private Checkbox alwaysVisibleCheck;
@@ -40,6 +45,11 @@ public class OptionEditScreen extends Screen {
         this.onSave = onSave;
         this.parent = parent;
         this.sequence = sequence;
+        // 初始化草稿，编辑期间只修改草稿，保存时才写回 option
+        this.draftText = option.getText("") != null ? option.getText("").getString() : "";
+        this.draftTargetId = option.getTargetId() != null ? option.getTargetId() : null;
+        this.draftVisibilityCommand = option.getVisibilityCommand() != null ? option.getVisibilityCommand() : "";
+        this.draftCommands = new ArrayList<>(option.getCommand() != null ? option.getCommand() : new ArrayList<>());
     }
 
     @Override
@@ -53,14 +63,14 @@ public class OptionEditScreen extends Screen {
         int inputHeight = 16;
         this.textBox = new EditBox(this.font, fieldX, y + 10, fieldWidth, inputHeight, Component.translatable("gui.vn_edit.option_text"));
         this.textBox.setMaxLength(999999999);
-        this.textBox.setValue(this.option.getText("") != null ? this.option.getText("").getString() : "");
+        this.textBox.setValue(this.draftText);
         this.addRenderableWidget(this.textBox);
-        String currentTarget = this.option.getTargetId() != null ? this.option.getTargetId() : "None";
+        String currentTarget = this.draftTargetId != null ? this.draftTargetId : "None";
         y += inputHeight + 20;
         this.targetNodeBtn = EditorButton.builder(Component.literal(currentTarget), btn -> this.openNodePicker())
                 .bounds(fieldX, y + 10, fieldWidth, inputHeight).build();
         this.addRenderableWidget(this.targetNodeBtn);
-        boolean isAlwaysVisible = this.option.getVisibilityCommand() == null || this.option.getVisibilityCommand().isEmpty();
+        boolean isAlwaysVisible = this.draftVisibilityCommand == null || this.draftVisibilityCommand.isEmpty();
         y += inputHeight + 20;
         this.alwaysVisibleCheck = Checkbox.builder(Component.translatable("gui.vn_edit.always_visible"), this.font)
                 .pos(fieldX, y + 10)
@@ -71,7 +81,7 @@ public class OptionEditScreen extends Screen {
         y += 30;
         this.visibilityCommandBox = new EditBox(this.font, fieldX, y, fieldWidth, inputHeight, Component.translatable("gui.vn_edit.visibility_command"));
         this.visibilityCommandBox.setMaxLength(999999999);
-        this.visibilityCommandBox.setValue(this.option.getVisibilityCommand() != null ? this.option.getVisibilityCommand() : "");
+        this.visibilityCommandBox.setValue(this.draftVisibilityCommand != null ? this.draftVisibilityCommand : "");
         this.visibilityCommandBox.setVisible(!isAlwaysVisible);
         this.addRenderableWidget(this.visibilityCommandBox);
         y += inputHeight + 10;
@@ -79,19 +89,22 @@ public class OptionEditScreen extends Screen {
                 .bounds(fieldX, y, 60, 16).build();
         this.addRenderableWidget(addCommandBtn);
         this.commandListY = y + 18;
-        List<String> existingCmds = this.option.getCommand() != null ? this.option.getCommand() : new ArrayList<>();
-        for (String cmd : existingCmds) {
+        for (String cmd : this.draftCommands) {
             this.addCommand(cmd);
         }
         int bottomY = this.height - 30;
         EditorButton saveBtn = EditorButton.builder(Component.translatable("gui.vn_edit.save"), btn -> {
-            this.option.setText(new JsonPrimitive(this.textBox.getValue()));
+            // 保存时才将草稿写回原 option
+            this.draftText = this.textBox.getValue();
+            this.option.setText(new JsonPrimitive(this.draftText));
             if (this.alwaysVisibleCheck.selected()) {
                 this.option.setVisibilityCommand(null);
             } else {
                 String visCmd = this.visibilityCommandBox.getValue().trim();
                 this.option.setVisibilityCommand(visCmd.isEmpty() ? null : visCmd);
             }
+            this.draftTargetId = this.draftTargetId != null && this.draftTargetId.isEmpty() ? null : this.draftTargetId;
+            this.option.setTargetId(this.draftTargetId);
             ArrayList<String> cmds = new ArrayList<>();
             for (EditBox box : this.commandBoxes) {
                 String val = box.getValue().trim();
@@ -111,13 +124,14 @@ public class OptionEditScreen extends Screen {
     }
 
     private void openNodePicker() {
-        this.option.setText(new JsonPrimitive(this.textBox.getValue()));
+        // 只更新草稿，不修改原 option
+        this.draftText = this.textBox.getValue();
         if (this.sequence == null) {
             return;
         }
         Minecraft.getInstance().setScreen(new NodePickerScreen(this.sequence, selectedId -> {
+            this.draftTargetId = selectedId.isEmpty() ? null : selectedId;
             this.targetNodeBtn.setMessage(Component.literal(selectedId.isEmpty() ? "None" : selectedId));
-            this.option.setTargetId(selectedId.isEmpty() ? null : selectedId);
         }, Minecraft.getInstance().screen));
     }
 

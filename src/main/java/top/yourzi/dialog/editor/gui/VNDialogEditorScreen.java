@@ -57,6 +57,8 @@ public class VNDialogEditorScreen extends Screen {
     private int tabScrollOffset = 0;
     private DialogSequence currentSequence;
     private DialogEntry editingEntry;
+    /** 跟踪有未保存修改的对话序列 ID */
+    private final java.util.Set<String> dirtySequences = new java.util.HashSet<>();
     public String statusText = "";
     private boolean isInitialized = false;
     private int pendingTabIndex = 0;
@@ -181,11 +183,13 @@ public class VNDialogEditorScreen extends Screen {
         for (int i = 0; i < this.openSequences.size(); i++) {
             DialogSequence seq = this.openSequences.get(i);
             String title = seq.getId() != null ? seq.getId() : "untitled";
-            int rawWidth = Math.max(40, this.font.width(title) + 10);
+            // 有未保存修改的标签显示 * 前缀
+            boolean dirty = seq.getId() != null && this.dirtySequences.contains(seq.getId());
+            String displayTitle = (dirty ? "* " : "") + title;
+            int rawWidth = Math.max(40, this.font.width(displayTitle) + 10);
             int width = Math.min(rawWidth, MAX_TAB_WIDTH);
-            String displayTitle = title;
             if (rawWidth > MAX_TAB_WIDTH) {
-                displayTitle = this.font.plainSubstrByWidth(title, 90) + "...";
+                displayTitle = this.font.plainSubstrByWidth(displayTitle, 90) + "...";
             }
             int index = i;
             TabButton tabBtn = new TabButton(tabX, tabY, width, 18, Component.literal(displayTitle),
@@ -297,6 +301,7 @@ public class VNDialogEditorScreen extends Screen {
             this.editingEntry = newEntry;
             this.propertyPanel.bindTo(this.editingEntry);
             this.propertyPanel.setVisible(true);
+            this.markDirty(this.currentSequence);
             this.statusText = Component.translatable("gui.vn_edit.status.node_added", newId).getString();
         }, this));
     }
@@ -308,10 +313,30 @@ public class VNDialogEditorScreen extends Screen {
         this.currentSequence.setAllowClose(true);
         this.saveCurrentSequenceToFile();
         this.saveSession();
+        this.markClean(this.currentSequence);
         this.statusText = Component.translatable("gui.vn_edit.status.saved", this.currentSequence.getId()).getString();
         if (Minecraft.getInstance().player != null) {
             NetworkHandler.sendExecuteCommandToServer("dialog reload");
         }
+    }
+
+    /** 标记序列为有未保存修改 */
+    public void markDirty(DialogSequence seq) {
+        if (seq != null && seq.getId() != null) {
+            this.dirtySequences.add(seq.getId());
+        }
+    }
+
+    /** 标记序列为已保存 */
+    private void markClean(DialogSequence seq) {
+        if (seq != null && seq.getId() != null) {
+            this.dirtySequences.remove(seq.getId());
+        }
+    }
+
+    /** 是否有未保存的修改 */
+    private boolean hasUnsavedChanges() {
+        return !this.dirtySequences.isEmpty();
     }
 
     private void saveCurrentSequenceToFile() {
@@ -475,6 +500,7 @@ public class VNDialogEditorScreen extends Screen {
                 this.propertyPanel.setVisible(false);
             }
         }
+        this.markDirty(this.currentSequence);
         this.statusText = Component.translatable("gui.vn_edit.status.node_deleted", entry.getId()).getString();
     }
 
@@ -658,8 +684,33 @@ public class VNDialogEditorScreen extends Screen {
 
     @Override
     public void onClose() {
+        if (this.hasUnsavedChanges()) {
+            // 有未保存的修改时，弹出确认对话框
+            Minecraft mc = Minecraft.getInstance();
+            mc.setScreen(new ConfirmScreen(confirmed -> {
+                if (confirmed) {
+                    this.doSaveAllAndClose();
+                } else {
+                    // 丢弃修改直接关闭
+                    this.dirtySequences.clear();
+                    this.doSaveAllAndClose();
+                }
+            }, Component.translatable("gui.vn_edit.unsaved.title"),
+               Component.translatable("gui.vn_edit.unsaved.message"),
+               Component.translatable("gui.vn_edit.save_all"),
+               Component.translatable("gui.vn_edit.discard")));
+        } else {
+            this.doSaveAllAndClose();
+        }
+    }
+
+    private void doSaveAllAndClose() {
         for (DialogSequence seq : this.openSequences) {
             if (seq == null || seq.getId() == null) {
+                continue;
+            }
+            // 只保存有修改的序列，避免覆盖未修改的文件
+            if (!this.dirtySequences.contains(seq.getId())) {
                 continue;
             }
             String json = PRETTY_GSON.toJson(seq);
@@ -669,8 +720,10 @@ public class VNDialogEditorScreen extends Screen {
                 Files.writeString(path, json);
             } catch (IOException e) {
                 Dialog.LOGGER.error("Auto-save failed for {}: {}", seq.getId(), e.getMessage());
+                this.statusText = Component.translatable("gui.vn_edit.status.save_failed", seq.getId()).getString();
             }
         }
+        this.dirtySequences.clear();
         this.saveSession();
         AppearancePropertyPage.releaseTextures();
         super.onClose();

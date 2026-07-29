@@ -13,7 +13,6 @@ import net.minecraft.network.chat.Component;
 import top.yourzi.dialog.editor.gui.FileBrowserScreen;
 import top.yourzi.dialog.editor.gui.NodePickerScreen;
 import top.yourzi.dialog.editor.gui.OptionEditScreen;
-import top.yourzi.dialog.Dialog;
 import top.yourzi.dialog.editor.gui.VNDialogEditorScreen;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import top.yourzi.dialog.editor.util.AudioPreviewPlayer;
@@ -72,6 +71,8 @@ public class LogicPropertyPage implements PropertyPage {
     private int y;
     private int width;
     private int height;
+    /** 程序化设置 Checkbox 状态时抑制 onValueChange 回调，避免回写 entry（C6 反射修复） */
+    private boolean suppressCheckboxCallback = false;
 
     // 渲染位置缓存
     private int flowHeaderY;
@@ -109,6 +110,9 @@ public class LogicPropertyPage implements PropertyPage {
                 .maxWidth(fieldW)
                 .selected(false)
                 .onValueChange((checkbox, value) -> {
+                    if (this.suppressCheckboxCallback) {
+                        return;
+                    }
                     if (this.currentEntry != null) {
                         this.currentEntry.setEndDialog(value);
                     }
@@ -120,6 +124,9 @@ public class LogicPropertyPage implements PropertyPage {
                 .maxWidth(fieldW)
                 .selected(true)
                 .onValueChange((checkbox, value) -> {
+                    if (this.suppressCheckboxCallback) {
+                        return;
+                    }
                     if (this.currentEntry != null) {
                         this.currentEntry.setAllowSkip(value);
                     }
@@ -683,18 +690,20 @@ public class LogicPropertyPage implements PropertyPage {
     }
 
     /**
-     * 静默设置 Checkbox 的选中状态，不触发 OnValueChange 回调。
+     * 静默设置 Checkbox 的选中状态，不触发 onValueChange 回调副作用。
+     * 使用 onPress() 公开 API 切换状态，配合 suppressCheckboxCallback 标志抑制回调，
+     * 避免使用反射访问私有字段（C6 反射修复）。
      */
-    private static void setCheckboxSelectedSilent(Checkbox checkbox, boolean selected) {
+    private void setCheckboxSelectedSilent(Checkbox checkbox, boolean selected) {
         if (checkbox == null || checkbox.selected() == selected) {
             return;
         }
+        boolean prev = this.suppressCheckboxCallback;
+        this.suppressCheckboxCallback = true;
         try {
-            java.lang.reflect.Field f = Checkbox.class.getDeclaredField("selected");
-            f.setAccessible(true);
-            f.setBoolean(checkbox, selected);
-        } catch (ReflectiveOperationException e) {
-            Dialog.LOGGER.warn("Failed to silently set checkbox state via reflection", e);
+            checkbox.onPress();
+        } finally {
+            this.suppressCheckboxCallback = prev;
         }
     }
 }

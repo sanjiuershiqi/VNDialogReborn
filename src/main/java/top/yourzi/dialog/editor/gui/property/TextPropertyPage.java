@@ -543,16 +543,49 @@ public class TextPropertyPage implements PropertyPage {
         }
     }
 
+    /**
+     * 将 Component 转换回带 § 格式代码的字符串。
+     * 关键点：段落间样式若出现「属性被移除或颜色变化」，必须先 emit §r 重置，
+     * 否则后续文本会错误继承前段格式（C4 往返丢失修复）。
+     */
     private String componentToFormattingCodes(Component comp) {
         StringBuilder sb = new StringBuilder();
+        final Style[] prev = {Style.EMPTY};
         comp.visit((style, textPart) -> {
-            if (!style.isEmpty()) {
-                this.appendStyle(style, sb);
+            if (!textPart.isEmpty()) {
+                boolean needsReset = needsReset(prev[0], style);
+                if (needsReset) {
+                    sb.append("\u00a7r");
+                }
+                // 样式有变化时 emit 当前完整样式（含 §r 后重建，或仅新增属性时冗余但无害）
+                if (needsReset || !style.equals(prev[0])) {
+                    this.appendStyle(style, sb);
+                }
+                sb.append(textPart);
+                prev[0] = style;
             }
-            sb.append(textPart);
             return java.util.Optional.empty();
         }, Style.EMPTY);
         return sb.toString();
+    }
+
+    /**
+     * 判断从 prev 切换到 cur 是否需要先 emit §r。
+     * 当 prev 的某属性在 cur 中被移除或颜色发生变化时必须重置。
+     */
+    private boolean needsReset(Style prev, Style cur) {
+        if (prev.isEmpty()) {
+            return false;
+        }
+        if (prev.isBold() && !cur.isBold()) return true;
+        if (prev.isItalic() && !cur.isItalic()) return true;
+        if (prev.isUnderlined() && !cur.isUnderlined()) return true;
+        if (prev.isStrikethrough() && !cur.isStrikethrough()) return true;
+        if (prev.isObfuscated() && !cur.isObfuscated()) return true;
+        TextColor pc = prev.getColor();
+        TextColor cc = cur.getColor();
+        if (pc != null && !pc.equals(cc)) return true;
+        return false;
     }
 
     private void appendStyle(Style style, StringBuilder sb) {
