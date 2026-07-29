@@ -206,5 +206,18 @@
   "gui.vn_edit.nbt": "NBT",
   "gui.vn_edit.hex_color": "十六进制颜色",
   "gui.vn_edit.apply": "应用",
-  "gui.vn_edit.commands": "命令"
+  "gui.vn_edit.commands": "命令",
+  "gui.vn_edit.confirm": "确认",
+  "gui.vn_edit.save_all": "全部保存",
+  "gui.vn_edit.discard": "丢弃",
+  "gui.vn_edit.unsaved.title": "未保存的修改",
+  "gui.vn_edit.unsaved.message": "有未保存的修改，是否保存后再关闭？",
+  "gui.vn_edit.status.saved_with_warnings": "已保存：%s（警告：%s 处悬空引用）",
+  "gui.vn_edit.status.save_failed": "保存失败：%s",
+  "gui.vn_edit.tooltip.new": "新建对话序列",
+  "gui.vn_edit.tooltip.save": "保存当前序列 (Ctrl+S)",
+  "gui.vn_edit.tooltip.load": "从文件读取对话",
+  "gui.vn_edit.tooltip.test": "测试当前对话",
+  "gui.vn_edit.tooltip.import": "从资源包导入对话",
+  "gui.vn_edit.tooltip.sequence_props": "编辑序列属性（标题/描述/起始节点等）"
 }

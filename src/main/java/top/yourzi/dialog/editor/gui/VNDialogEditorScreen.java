@@ -6,7 +6,6 @@ import com.google.gson.JsonPrimitive;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
@@ -54,6 +53,8 @@ public class VNDialogEditorScreen extends Screen {
     private EditorButton addTabBtn;
     private EditorButton tabLeftArrow;
     private EditorButton tabRightArrow;
+    /** 顶部工具栏按钮引用，用于 tooltip 检测（顺序：新建/保存/读取/测试/导入/序列属性） */
+    private final List<EditorButton> toolbarButtons = new ArrayList<>();
     private int tabScrollOffset = 0;
     private DialogSequence currentSequence;
     private DialogEntry editingEntry;
@@ -134,6 +135,14 @@ public class VNDialogEditorScreen extends Screen {
         this.addRenderableWidget(testBtn);
         this.addRenderableWidget(importBtn);
         this.addRenderableWidget(propsBtn);
+        // 维护工具栏按钮引用，用于 tooltip 检测
+        this.toolbarButtons.clear();
+        this.toolbarButtons.add(newBtn);
+        this.toolbarButtons.add(saveBtn);
+        this.toolbarButtons.add(loadBtn);
+        this.toolbarButtons.add(testBtn);
+        this.toolbarButtons.add(importBtn);
+        this.toolbarButtons.add(propsBtn);
         this.tabLeftArrow = EditorButton.builder(Component.literal("\u25c0"), b -> this.scrollTabs(-80))
                 .bounds(0, 0, 14, 18).build();
         this.tabRightArrow = EditorButton.builder(Component.literal("\u25b6"), b -> this.scrollTabs(80))
@@ -311,13 +320,57 @@ public class VNDialogEditorScreen extends Screen {
             return;
         }
         this.currentSequence.setAllowClose(true);
+        // 保存前验证：检测悬空引用（nextId / option.targetId 指向不存在的节点）
+        List<String> dangling = this.findDanglingReferences(this.currentSequence);
         this.saveCurrentSequenceToFile();
         this.saveSession();
         this.markClean(this.currentSequence);
-        this.statusText = Component.translatable("gui.vn_edit.status.saved", this.currentSequence.getId()).getString();
+        if (dangling.isEmpty()) {
+            this.statusText = Component.translatable("gui.vn_edit.status.saved", this.currentSequence.getId()).getString();
+        } else {
+            // 保存成功但存在悬空引用，附加警告
+            this.statusText = Component.translatable("gui.vn_edit.status.saved_with_warnings",
+                    this.currentSequence.getId(), dangling.size()).getString();
+        }
         if (Minecraft.getInstance().player != null) {
             NetworkHandler.sendExecuteCommandToServer("dialog reload");
         }
+    }
+
+    /**
+     * 扫描序列中所有 nextId 和选项 targetId，返回指向不存在节点的引用列表。
+     * 用于保存前向用户提示潜在的流程断裂问题。
+     */
+    private List<String> findDanglingReferences(DialogSequence seq) {
+        List<String> result = new ArrayList<>();
+        DialogEntry[] entries = seq.getEntries();
+        if (entries == null) {
+            return result;
+        }
+        // 收集所有已存在的节点 ID
+        java.util.Set<String> ids = new java.util.HashSet<>();
+        for (DialogEntry e : entries) {
+            if (e.getId() != null) {
+                ids.add(e.getId());
+            }
+        }
+        for (DialogEntry e : entries) {
+            String nextId = e.getNextId();
+            if (nextId != null && !nextId.isEmpty() && !ids.contains(nextId)) {
+                result.add(e.getId() + " -> next:" + nextId);
+            }
+            DialogOption[] opts = e.getOptions();
+            if (opts == null) {
+                continue;
+            }
+            for (DialogOption o : opts) {
+                String t = o.getTargetId();
+                if (t != null && !t.isEmpty() && !ids.contains(t)) {
+                    result.add(e.getId() + " -> option:" + t);
+                }
+            }
+        }
+        return result;
     }
 
     /** 标记序列为有未保存修改 */
@@ -454,13 +507,14 @@ public class VNDialogEditorScreen extends Screen {
             return;
         }
         if (this.minecraft != null) {
-            this.minecraft.setScreen(new ConfirmScreen(confirmed -> {
-                if (confirmed) {
-                    this.performDeleteEntry(entry);
-                }
-                this.minecraft.setScreen(this);
-            }, Component.translatable("gui.vn_edit.delete_confirm.title"),
-                    Component.translatable("gui.vn_edit.delete_confirm.message", entry.getId())));
+            this.minecraft.setScreen(new EditorConfirmScreen(
+                    Component.translatable("gui.vn_edit.delete_confirm.title"),
+                    Component.translatable("gui.vn_edit.delete_confirm.message", entry.getId()),
+                    confirmed -> {
+                        if (confirmed) {
+                            this.performDeleteEntry(entry);
+                        }
+                    }, this));
         }
     }
 
@@ -602,32 +656,33 @@ public class VNDialogEditorScreen extends Screen {
         }
         DialogSequence seq = this.openSequences.get(index);
         if (this.minecraft != null) {
-            this.minecraft.setScreen(new ConfirmScreen(confirmed -> {
-                if (confirmed) {
-                    Path file = EditorConfig.DIALOG_JSON_DIR.resolve(seq.getId() + ".json");
-                    try {
-                        Files.deleteIfExists(file);
-                    } catch (IOException e) {
-                        Dialog.LOGGER.error("Failed to delete file: {}", file);
-                    }
-                    this.openSequences.remove(index);
-                    if (this.openSequences.isEmpty()) {
-                        this.activeSequenceIndex = -1;
-                        this.currentSequence = null;
-                        this.treeWidget.setSequence(null);
-                        this.propertyPanel.unbind();
-                        this.editingEntry = null;
-                        this.propertyPanel.setVisible(false);
-                    } else if (this.activeSequenceIndex >= index) {
-                        this.activeSequenceIndex = Math.min(this.activeSequenceIndex, this.openSequences.size() - 1);
-                        this.switchToSequence(this.activeSequenceIndex);
-                    } else {
-                        this.rebuildTabButtons();
-                    }
-                }
-                this.minecraft.setScreen(this);
-            }, Component.translatable("gui.vn_edit.delete_dialog.title"),
-                    Component.translatable("gui.vn_edit.delete_dialog.message", seq.getId())));
+            this.minecraft.setScreen(new EditorConfirmScreen(
+                    Component.translatable("gui.vn_edit.delete_dialog.title"),
+                    Component.translatable("gui.vn_edit.delete_dialog.message", seq.getId()),
+                    confirmed -> {
+                        if (confirmed) {
+                            Path file = EditorConfig.DIALOG_JSON_DIR.resolve(seq.getId() + ".json");
+                            try {
+                                Files.deleteIfExists(file);
+                            } catch (IOException e) {
+                                Dialog.LOGGER.error("Failed to delete file: {}", file);
+                            }
+                            this.openSequences.remove(index);
+                            if (this.openSequences.isEmpty()) {
+                                this.activeSequenceIndex = -1;
+                                this.currentSequence = null;
+                                this.treeWidget.setSequence(null);
+                                this.propertyPanel.unbind();
+                                this.editingEntry = null;
+                                this.propertyPanel.setVisible(false);
+                            } else if (this.activeSequenceIndex >= index) {
+                                this.activeSequenceIndex = Math.min(this.activeSequenceIndex, this.openSequences.size() - 1);
+                                this.switchToSequence(this.activeSequenceIndex);
+                            } else {
+                                this.rebuildTabButtons();
+                            }
+                        }
+                    }, this));
         }
     }
 
@@ -651,6 +706,33 @@ public class VNDialogEditorScreen extends Screen {
             graphics.disableScissor();
         }
         super.render(graphics, mouseX, mouseY, partialTick);
+        // 工具栏按钮 tooltip：悬停时显示功能说明
+        this.renderToolbarTooltips(graphics, mouseX, mouseY);
+    }
+
+    /**
+     * 为顶部工具栏按钮渲染 tooltip。
+     * 按钮顺序与 buildWidgets() 中创建顺序一致：新建/保存/读取/测试/导入/序列属性。
+     */
+    private void renderToolbarTooltips(GuiGraphics graphics, int mouseX, int mouseY) {
+        for (int i = 0; i < this.toolbarButtons.size(); i++) {
+            EditorButton btn = this.toolbarButtons.get(i);
+            if (btn.isMouseOver(mouseX, mouseY)) {
+                Component tip = switch (i) {
+                    case 0 -> Component.translatable("gui.vn_edit.tooltip.new");
+                    case 1 -> Component.translatable("gui.vn_edit.tooltip.save");
+                    case 2 -> Component.translatable("gui.vn_edit.tooltip.load");
+                    case 3 -> Component.translatable("gui.vn_edit.tooltip.test");
+                    case 4 -> Component.translatable("gui.vn_edit.tooltip.import");
+                    case 5 -> Component.translatable("gui.vn_edit.tooltip.sequence_props");
+                    default -> null;
+                };
+                if (tip != null) {
+                    graphics.renderTooltip(this.font, tip, mouseX, mouseY);
+                }
+                return;
+            }
+        }
     }
 
     @Override
@@ -687,18 +769,20 @@ public class VNDialogEditorScreen extends Screen {
         if (this.hasUnsavedChanges()) {
             // 有未保存的修改时，弹出确认对话框
             Minecraft mc = Minecraft.getInstance();
-            mc.setScreen(new ConfirmScreen(confirmed -> {
-                if (confirmed) {
-                    this.doSaveAllAndClose();
-                } else {
-                    // 丢弃修改直接关闭
-                    this.dirtySequences.clear();
-                    this.doSaveAllAndClose();
-                }
-            }, Component.translatable("gui.vn_edit.unsaved.title"),
-               Component.translatable("gui.vn_edit.unsaved.message"),
-               Component.translatable("gui.vn_edit.save_all"),
-               Component.translatable("gui.vn_edit.discard")));
+            mc.setScreen(new EditorConfirmScreen(
+                    Component.translatable("gui.vn_edit.unsaved.title"),
+                    Component.translatable("gui.vn_edit.unsaved.message"),
+                    confirmed -> {
+                        if (confirmed) {
+                            this.doSaveAllAndClose();
+                        } else {
+                            // 丢弃修改直接关闭
+                            this.dirtySequences.clear();
+                            this.doSaveAllAndClose();
+                        }
+                    }, this,
+                    Component.translatable("gui.vn_edit.save_all"),
+                    Component.translatable("gui.vn_edit.discard")));
         } else {
             this.doSaveAllAndClose();
         }

@@ -206,5 +206,18 @@
   "gui.vn_edit.nbt": "NBT",
   "gui.vn_edit.hex_color": "Hex Color",
   "gui.vn_edit.apply": "Apply",
-  "gui.vn_edit.commands": "Commands"
+  "gui.vn_edit.commands": "Commands",
+  "gui.vn_edit.confirm": "Confirm",
+  "gui.vn_edit.save_all": "Save All",
+  "gui.vn_edit.discard": "Discard",
+  "gui.vn_edit.unsaved.title": "Unsaved Changes",
+  "gui.vn_edit.unsaved.message": "There are unsaved changes. Save before closing?",
+  "gui.vn_edit.status.saved_with_warnings": "Saved: %s (warning: %s dangling reference(s))",
+  "gui.vn_edit.status.save_failed": "Save failed: %s",
+  "gui.vn_edit.tooltip.new": "Create a new dialog sequence",
+  "gui.vn_edit.tooltip.save": "Save current sequence (Ctrl+S)",
+  "gui.vn_edit.tooltip.load": "Load a dialog from file",
+  "gui.vn_edit.tooltip.test": "Test current dialog",
+  "gui.vn_edit.tooltip.import": "Import a dialog from a resource pack",
+  "gui.vn_edit.tooltip.sequence_props": "Edit sequence properties (title/description/start node, etc.)"
 }
