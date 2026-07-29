@@ -40,7 +40,6 @@ import java.util.Map;
  * 使用 PageLayout 游标布局，自动适应不同屏幕尺寸。
  */
 public class AppearancePropertyPage implements PropertyPage {
-    private static final int LABEL_WIDTH = EditorTheme.LABEL_WIDTH;
     private static final int MAX_CACHE_SIZE = 30;
     private static final Map<String, ResourceLocation> textureCache = new LinkedHashMap<String, ResourceLocation>() {
         @Override
@@ -78,7 +77,6 @@ public class AppearancePropertyPage implements PropertyPage {
     private int x;
     private int y;
     private int width;
-    private int height;
     private ResourceLocation backgroundTexture = null;
     private int backgroundTexWidth = 0;
     private int backgroundTexHeight = 0;
@@ -106,7 +104,6 @@ public class AppearancePropertyPage implements PropertyPage {
         this.x = x;
         this.y = y;
         this.width = width;
-        this.height = height;
 
         PageLayout layout = new PageLayout(x, y, width);
         int fieldX = layout.fieldX();

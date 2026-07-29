@@ -1,6 +1,5 @@
 package top.yourzi.dialog.editor.gui.property;
 
-import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -70,7 +69,6 @@ public class LogicPropertyPage implements PropertyPage {
     private int x;
     private int y;
     private int width;
-    private int height;
     /** 程序化设置 Checkbox 状态时抑制 onValueChange 回调，避免回写 entry（C6 反射修复） */
     private boolean suppressCheckboxCallback = false;
 
@@ -91,7 +89,6 @@ public class LogicPropertyPage implements PropertyPage {
         this.x = x;
         this.y = y;
         this.width = width;
-        this.height = height;
 
         PageLayout layout = new PageLayout(x, y, width);
         int fieldX = layout.fieldX();

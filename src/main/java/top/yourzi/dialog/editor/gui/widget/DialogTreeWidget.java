@@ -6,7 +6,6 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import top.yourzi.dialog.Dialog;
@@ -38,7 +37,6 @@ public class DialogTreeWidget extends AbstractWidget {
     private int selectedIndex = -1;
     private Consumer<DialogEntry> onEntrySelected;
     private Consumer<DialogEntry> onEntryDelete;
-    private Consumer<DialogEntry> onEntryAddChild;
     private final List<TreeNode> roots = new ArrayList<>();
     private final List<TreeNode> orphans = new ArrayList<>();
     private int lastClickIndex = -1;
@@ -60,7 +58,7 @@ public class DialogTreeWidget extends AbstractWidget {
     public void setCallbacks(Consumer<DialogEntry> onSelect, Consumer<DialogEntry> onDelete, Consumer<DialogEntry> onAddChild) {
         this.onEntrySelected = onSelect;
         this.onEntryDelete = onDelete;
-        this.onEntryAddChild = onAddChild;
+        // onAddChild 回调当前未实现，保留参数以维持 API 兼容
     }
 
     private void buildTree() {

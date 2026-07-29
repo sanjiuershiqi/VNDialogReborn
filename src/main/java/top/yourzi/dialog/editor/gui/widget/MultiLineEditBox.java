@@ -9,7 +9,6 @@ import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
-import net.minecraft.network.chat.TextColor;
 import net.minecraft.util.Mth;
 import top.yourzi.dialog.editor.util.EditorTheme;
 
@@ -134,27 +133,14 @@ public class MultiLineEditBox extends AbstractWidget {
 
     private int getColumnAtX(String line, int targetX) {
         int x = 0;
-        int col;
-        for (col = 0; col < line.length(); ) {
-            int w = getCharWidth(line, col);
+        int col = 0;
+        for (Token tok : tokenizeLine(line)) {
+            int w = tokenWidth(tok);
             if (x + w > targetX) break;
             x += w;
-            if (line.charAt(col) == '\u00a7' && col + 1 < line.length()) {
-                col += 2;
-            } else {
-                col++;
-            }
+            col += tok.isFormat() ? 2 : 1;
         }
         return col;
-    }
-
-    private int getCharWidth(String line, int pos) {
-        if (pos >= line.length()) return 0;
-        char c = line.charAt(pos);
-        if (c == '\u00a7' && pos + 1 < line.length()) {
-            return SECTION_WIDTH + font.width(String.valueOf(line.charAt(pos + 1)));
-        }
-        return font.width(String.valueOf(c));
     }
 
     @Override
@@ -289,47 +275,33 @@ public class MultiLineEditBox extends AbstractWidget {
         Style currentStyle = Style.EMPTY;
 
         for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
             if (i < scrollLine || i >= scrollLine + maxVis) {
                 // 不可见的行也要更新样式状态，以保持跨行样式连续性
-                currentStyle = processLineStyle(lines[i], currentStyle);
+                currentStyle = processLineStyle(line, currentStyle);
                 continue;
             }
-            String line = lines[i];
             int x = getX() + PADDING;
-            int j = 0;
-            while (j < line.length()) {
-                char c = line.charAt(j);
-                if (c == '\u00a7' && j + 1 < line.length()) {
-                    char code = line.charAt(j + 1);
+            for (Token tok : tokenizeLine(line)) {
+                if (tok.isFormat()) {
                     // 显示 § 符号（小灰色图标）和格式代码字母
                     drawSectionSign(g, x, y);
                     x += SECTION_WIDTH;
-                    g.drawString(font, String.valueOf(code), x, y, EditorTheme.TEXT_MUTED, false);
-                    x += font.width(String.valueOf(code));
-                    // 更新当前样式
-                    currentStyle = applyFormatCode(currentStyle, code);
-                    j += 2;
+                    g.drawString(font, String.valueOf(tok.code), x, y, EditorTheme.TEXT_MUTED, false);
+                    x += font.width(String.valueOf(tok.code));
+                    currentStyle = applyFormatCode(currentStyle, tok.code);
                 } else {
                     // 使用当前样式渲染字符
-                    MutableComponent ch = Component.literal(String.valueOf(c)).setStyle(currentStyle);
+                    MutableComponent ch = Component.literal(tok.text).setStyle(currentStyle);
                     g.drawString(font, ch, x, y, 0xFFFFFFFF, false);
                     x += font.width(ch);
-                    j++;
                 }
             }
             y += LINE_HEIGHT;
         }
         if (focused) {
             String curLine = lines.length > cursorLine ? lines[cursorLine] : "";
-            int cursorX = getX() + PADDING;
-            for (int j = 0; j < cursorColumn && j < curLine.length(); j++) {
-                if (curLine.charAt(j) == '\u00a7' && j + 1 < curLine.length()) {
-                    cursorX += SECTION_WIDTH + font.width(String.valueOf(curLine.charAt(j + 1)));
-                    j++;
-                } else {
-                    cursorX += font.width(String.valueOf(curLine.charAt(j)));
-                }
-            }
+            int cursorX = getX() + PADDING + measureLineWidth(curLine, cursorColumn);
             int cursorY = getY() + PADDING + (cursorLine - scrollLine) * LINE_HEIGHT;
             g.fill(cursorX, cursorY - 1, cursorX + 1, cursorY + LINE_HEIGHT - 1, EditorTheme.TEXT_PRIMARY);
         }
@@ -337,14 +309,70 @@ public class MultiLineEditBox extends AbstractWidget {
     }
 
     /**
+     * 行内的可见 token：普通字符片段，或 § 格式代码（占两列但渲染为标记+字母）。
+     * 统一解析逻辑供渲染、游标定位、宽度计算复用，消除重复的 § 遍历代码。
+     */
+    private static final class Token {
+        final String text;  // 普通字符（单字符）
+        final char code;    // 格式代码字符（§ 后的字母）
+        final boolean format;
+        Token(String text) { this.text = text; this.code = 0; this.format = false; }
+        Token(char code) { this.text = null; this.code = code; this.format = true; }
+        boolean isFormat() { return format; }
+    }
+
+    /**
+     * 将一行拆分为 token 序列：普通字符与 § 格式代码交替。
+     */
+    private static java.util.List<Token> tokenizeLine(String line) {
+        java.util.List<Token> tokens = new java.util.ArrayList<>();
+        int j = 0;
+        while (j < line.length()) {
+            char c = line.charAt(j);
+            if (c == '\u00a7' && j + 1 < line.length()) {
+                tokens.add(new Token(line.charAt(j + 1)));
+                j += 2;
+            } else {
+                tokens.add(new Token(String.valueOf(c)));
+                j++;
+            }
+        }
+        return tokens;
+    }
+
+    /**
+     * 测量行内从 0 到 column 的渲染宽度（像素）。
+     * column 按「字符列」计数，§ 及其后的字母各占一列。
+     */
+    private int measureLineWidth(String line, int column) {
+        int x = 0;
+        int col = 0;
+        for (Token tok : tokenizeLine(line)) {
+            if (col >= column) break;
+            x += tokenWidth(tok);
+            col += tok.isFormat() ? 2 : 1;
+        }
+        return x;
+    }
+
+    /**
+     * 单个 token 的渲染宽度。
+     */
+    private int tokenWidth(Token tok) {
+        if (tok.isFormat()) {
+            return SECTION_WIDTH + font.width(String.valueOf(tok.code));
+        }
+        return font.width(tok.text);
+    }
+
+    /**
      * 解析一行中的格式代码，返回行末时的样式状态（用于跨行保持）。
      */
     private Style processLineStyle(String line, Style initialStyle) {
         Style style = initialStyle;
-        for (int j = 0; j < line.length(); j++) {
-            if (line.charAt(j) == '\u00a7' && j + 1 < line.length()) {
-                style = applyFormatCode(style, line.charAt(j + 1));
-                j++;
+        for (Token tok : tokenizeLine(line)) {
+            if (tok.isFormat()) {
+                style = applyFormatCode(style, tok.code);
             }
         }
         return style;

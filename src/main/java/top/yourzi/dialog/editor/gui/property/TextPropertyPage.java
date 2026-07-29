@@ -15,7 +15,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.TextColor;
-import top.yourzi.dialog.Dialog;
 import top.yourzi.dialog.editor.gui.VNDialogEditorScreen;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import top.yourzi.dialog.editor.gui.widget.MultiLineEditBox;
@@ -37,7 +36,6 @@ import java.util.Map;
  * 使用 PageLayout 游标布局，自动适应不同屏幕尺寸和 GUI 缩放。
  */
 public class TextPropertyPage implements PropertyPage {
-    private static final int LABEL_WIDTH = EditorTheme.LABEL_WIDTH;
     private static final int MODE_PLAIN = 0;
     private static final int MODE_TRANSLATION = 1;
     private static final ChatFormatting[] COLORS = new ChatFormatting[]{
@@ -55,7 +53,6 @@ public class TextPropertyPage implements PropertyPage {
     private int x;
     private int y;
     private int width;
-    private int height;
     private DialogEntry currentEntry;
     private boolean textModified = false;
     private EditorButton boldBtn;
@@ -94,7 +91,6 @@ public class TextPropertyPage implements PropertyPage {
         this.x = x;
         this.y = y;
         this.width = width;
-        this.height = height;
 
         PageLayout layout = new PageLayout(x, y, width);
         int fieldX = layout.fieldX();
