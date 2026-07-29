@@ -119,11 +119,14 @@ public class VNDialogEditorScreen extends Screen {
                 .bounds(btnX += btnWidth + 2, btnY, btnWidth, btnHeight).build();
         Button importBtn = Button.builder(Component.translatable("gui.vn_edit.import"), b -> this.onImport())
                 .bounds(btnX += btnWidth + 2, btnY, btnWidth, btnHeight).build();
+        Button propsBtn = Button.builder(Component.translatable("gui.vn_edit.sequence_props"), b -> this.onSequenceProps())
+                .bounds(btnX += btnWidth + 2, btnY, btnWidth, btnHeight).build();
         this.addRenderableWidget(newBtn);
         this.addRenderableWidget(saveBtn);
         this.addRenderableWidget(loadBtn);
         this.addRenderableWidget(testBtn);
         this.addRenderableWidget(importBtn);
+        this.addRenderableWidget(propsBtn);
         this.tabLeftArrow = Button.builder(Component.literal("\u25c0"), b -> this.scrollTabs(-80))
                 .bounds(0, 0, 12, 16).build();
         this.tabRightArrow = Button.builder(Component.literal("\u25b6"), b -> this.scrollTabs(80))
@@ -366,6 +369,16 @@ public class VNDialogEditorScreen extends Screen {
                 this.loadImportedDialog(importedPath);
             }
         }));
+    }
+
+    private void onSequenceProps() {
+        if (this.currentSequence == null) {
+            return;
+        }
+        Minecraft.getInstance().setScreen(new SequencePropertiesScreen(this.currentSequence, seq -> {
+            this.rebuildTabButtons();
+            this.statusText = Component.translatable("gui.vn_edit.status.props_saved").getString();
+        }, this));
     }
 
     private void loadImportedDialog(Path dialogFile) {

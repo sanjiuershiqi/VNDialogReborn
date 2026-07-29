@@ -13,6 +13,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import top.yourzi.dialog.Dialog;
 import top.yourzi.dialog.editor.gui.widget.DropdownWidget;
+import top.yourzi.dialog.editor.gui.BuiltInTextureBrowserScreen;
 import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.model.PortraitAnimationType;
 import top.yourzi.dialog.model.PortraitInfo;
@@ -86,6 +87,8 @@ public class PortraitListScreen extends Screen {
         super.init();
         this.addRenderableWidget(Button.builder(Component.translatable("gui.vn_edit.add_portrait"), b -> this.openFileBrowser())
                 .bounds(10, this.height - 25, 80, 20).build());
+        this.addRenderableWidget(Button.builder(Component.translatable("gui.vn_edit.builtin_portrait"), b -> this.openBuiltInBrowser())
+                .bounds(95, this.height - 25, 60, 20).build());
         this.addRenderableWidget(Button.builder(Component.translatable("gui.vn_edit.save"), b -> this.onClose())
                 .bounds(this.width / 2 - 105, this.height - 25, 100, 20).build());
         this.addRenderableWidget(Button.builder(Component.translatable("gui.vn_edit.cancel"), b -> this.onClose())
@@ -177,9 +180,24 @@ public class PortraitListScreen extends Screen {
         }, this);
     }
 
+    private void openBuiltInBrowser() {
+        Minecraft.getInstance().setScreen(new BuiltInTextureBrowserScreen("textures/portraits/", path -> {
+            String lower = path.toLowerCase(Locale.ROOT);
+            boolean exists = this.portraits.stream().anyMatch(p -> p.getPath() != null && p.getPath().equalsIgnoreCase(lower));
+            if (!exists) {
+                this.portraits.add(new PortraitInfo(lower, PortraitPosition.RIGHT, 1.0f, PortraitAnimationType.NONE));
+                this.selectedIndex = this.portraits.size() - 1;
+                this.updatePreview();
+            }
+        }, Minecraft.getInstance().screen));
+    }
+
     private void releasePreviewTexture() {
         if (this.previewTex != null) {
-            Minecraft.getInstance().getTextureManager().release(this.previewTex);
+            // 不释放内置纹理（由资源管理器管理），仅释放编辑器动态注册的预览纹理
+            if (!this.previewTex.getPath().startsWith("textures/portraits/")) {
+                Minecraft.getInstance().getTextureManager().release(this.previewTex);
+            }
             this.previewTex = null;
             this.previewPath = null;
         }
@@ -392,7 +410,19 @@ public class PortraitListScreen extends Screen {
         this.previewPath = path;
         File f = EditorConfig.PORTRAITS_DIR.resolve(path).toFile();
         if (!f.exists()) {
-            this.previewTex = null;
+            // 配置目录没有该文件，检查是否为模组内置纹理
+            ResourceLocation builtinLoc = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/portraits/" + path);
+            if (Minecraft.getInstance().getResourceManager().getResource(builtinLoc).isPresent()) {
+                this.previewTex = builtinLoc;
+                try (com.mojang.blaze3d.platform.NativeImage img = com.mojang.blaze3d.platform.NativeImage.read(builtinLoc)) {
+                    this.previewW = img.getWidth();
+                    this.previewH = img.getHeight();
+                } catch (IOException e) {
+                    this.previewW = this.previewH = 64;
+                }
+            } else {
+                this.previewTex = null;
+            }
             return;
         }
         try (FileInputStream fis = new FileInputStream(f)) {

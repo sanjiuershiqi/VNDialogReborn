@@ -16,6 +16,7 @@ import net.minecraft.resources.ResourceLocation;
 import top.yourzi.dialog.Dialog;
 import top.yourzi.dialog.editor.gui.FileBrowserScreen;
 import top.yourzi.dialog.editor.gui.PortraitListScreen;
+import top.yourzi.dialog.editor.gui.BuiltInTextureBrowserScreen;
 import top.yourzi.dialog.editor.gui.VNDialogEditorScreen;
 import top.yourzi.dialog.editor.gui.widget.DropdownWidget;
 import top.yourzi.dialog.editor.util.EditorConfig;
@@ -54,6 +55,7 @@ public class AppearancePropertyPage implements PropertyPage {
     private final Font font;
     private EditBox backgroundPathBox;
     private Button backgroundBrowseBtn;
+    private Button backgroundBuiltInBtn;
     private Button backgroundFolderBtn;
     private Button portraitListBtn;
     private DropdownWidget backgroundRenderDropdown;
@@ -116,8 +118,10 @@ public class AppearancePropertyPage implements PropertyPage {
         });
         this.backgroundBrowseBtn = Button.builder(Component.translatable("gui.vn_edit.browse"), btn -> this.onBackgroundBrowse())
                 .bounds(fieldX + fieldWidth + 5, y + 5, 48, 16).build();
+        this.backgroundBuiltInBtn = Button.builder(Component.translatable("gui.vn_edit.builtin_bg"), btn -> this.onBackgroundBuiltIn())
+                .bounds(fieldX + fieldWidth + 5 + 48 + 2, y + 5, 40, 16).build();
         this.backgroundFolderBtn = Button.builder(Component.literal("\uD83D\uDCC2"), btn -> EditorConfig.openFolder(EditorConfig.BACKGROUNDS_DIR))
-                .bounds(fieldX + fieldWidth + 5 + 48 + 2, y + 5, 20, 16).build();
+                .bounds(fieldX + fieldWidth + 5 + 48 + 2 + 40 + 2, y + 5, 20, 16).build();
         this.portraitListBtn = Button.builder(Component.translatable("gui.vn_edit.edit_portrait_list"), btn -> this.openPortraitList())
                 .bounds(fieldX, y + 25 + 5, 100, 16).build();
         this.backgroundRenderDropdown = new DropdownWidget(this.font, fieldX, y + 25 + 25, 80, 16, new ArrayList<>(RENDER_ITEMS), selected -> {
@@ -190,6 +194,14 @@ public class AppearancePropertyPage implements PropertyPage {
         }, Minecraft.getInstance().screen);
     }
 
+    private void onBackgroundBuiltIn() {
+        Minecraft.getInstance().setScreen(new BuiltInTextureBrowserScreen("textures/backgrounds/", path -> {
+            String lowerPath = path.toLowerCase(Locale.ROOT);
+            this.backgroundPathBox.setValue(lowerPath);
+            this.recoverAppearanceTab();
+        }, Minecraft.getInstance().screen));
+    }
+
     private void openPortraitList() {
         if (this.currentEntry == null) {
             return;
@@ -214,7 +226,18 @@ public class AppearancePropertyPage implements PropertyPage {
             this.backgroundTexture = null;
             return;
         }
-        this.backgroundTexture = this.loadTexture(EditorConfig.BACKGROUNDS_DIR.resolve(path).toFile(), "background_" + path);
+        File file = EditorConfig.BACKGROUNDS_DIR.resolve(path).toFile();
+        if (file.exists()) {
+            this.backgroundTexture = this.loadTexture(file, "background_" + path);
+        } else {
+            // 配置目录没有该文件，检查是否为模组内置纹理
+            ResourceLocation builtinLoc = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/backgrounds/" + path);
+            if (Minecraft.getInstance().getResourceManager().getResource(builtinLoc).isPresent()) {
+                this.backgroundTexture = builtinLoc;
+            } else {
+                this.backgroundTexture = null;
+            }
+        }
     }
 
     private ResourceLocation loadTexture(File file, String cacheKey) {
@@ -268,6 +291,7 @@ public class AppearancePropertyPage implements PropertyPage {
         graphics.drawString(this.font, Component.translatable("gui.vn_edit.render_option"), this.x + 5, this.y + 25 + 29, 0xCCCCCC);
         this.backgroundPathBox.render(graphics, mouseX, mouseY, partialTick);
         this.backgroundBrowseBtn.render(graphics, mouseX, mouseY, partialTick);
+        this.backgroundBuiltInBtn.render(graphics, mouseX, mouseY, partialTick);
         this.backgroundFolderBtn.render(graphics, mouseX, mouseY, partialTick);
         this.portraitListBtn.render(graphics, mouseX, mouseY, partialTick);
         this.backgroundRenderDropdown.render(graphics, mouseX, mouseY, partialTick);
@@ -286,7 +310,7 @@ public class AppearancePropertyPage implements PropertyPage {
 
     @Override
     public List<? extends GuiEventListener> children() {
-        return List.of(this.backgroundPathBox, this.backgroundBrowseBtn, this.backgroundFolderBtn, this.portraitListBtn, this.backgroundRenderDropdown, this.backgroundAnimDropdown);
+        return List.of(this.backgroundPathBox, this.backgroundBrowseBtn, this.backgroundBuiltInBtn, this.backgroundFolderBtn, this.portraitListBtn, this.backgroundRenderDropdown, this.backgroundAnimDropdown);
     }
 
     @Override
@@ -343,6 +367,7 @@ public class AppearancePropertyPage implements PropertyPage {
         this.visible = visible;
         this.backgroundPathBox.setVisible(visible);
         this.backgroundBrowseBtn.visible = visible;
+        this.backgroundBuiltInBtn.visible = visible;
         this.backgroundFolderBtn.visible = visible;
         this.portraitListBtn.visible = visible;
         this.backgroundRenderDropdown.visible = visible;
