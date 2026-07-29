@@ -205,7 +205,11 @@ public class DialogEntry {
                 String key = jsonObjectCopy.get("translate").getAsString();
                 String translated = top.yourzi.dialog.editor.util.ConfigLanguageCache.get(key);
                 if (translated != null) {
-                    return Component.literal(translated.replace(fromString, replacement));
+                    // 保留 JSON 中定义的样式 (color/bold/italic 等)，避免丢失
+                    Component styled = ComponentJson.fromJson(jsonObjectCopy);
+                    MutableComponent result = Component.literal(translated.replace(fromString, replacement));
+                    result.setStyle(styled.getStyle());
+                    return result;
                 }
             }
             try {

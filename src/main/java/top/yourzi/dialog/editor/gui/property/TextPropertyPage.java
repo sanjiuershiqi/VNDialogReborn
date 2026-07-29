@@ -3,7 +3,6 @@ package top.yourzi.dialog.editor.gui.property;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonPrimitive;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
@@ -57,6 +56,7 @@ public class TextPropertyPage implements PropertyPage {
     private int width;
     private int height;
     private DialogEntry currentEntry;
+    private boolean textModified = false;
     private Button boldBtn;
     private Button italicBtn;
     private Button underlineBtn;
@@ -91,7 +91,8 @@ public class TextPropertyPage implements PropertyPage {
         this.speakerBox.setEditable(true);
         this.speakerBox.setResponder(s -> {
             if (this.currentEntry != null) {
-                this.currentEntry.setSpeaker(new JsonPrimitive(s));
+                MutableComponent component = this.parseFormattingCodesToComponent(s);
+                this.currentEntry.setSpeaker(ComponentJson.toJsonTree(component));
             }
         });
         this.contentBox = new MultiLineEditBox(this.font, fieldX, y + 25, fieldWidth, 80);
@@ -202,6 +203,7 @@ public class TextPropertyPage implements PropertyPage {
         if (this.currentEntry == null || this.currentMode != MODE_PLAIN) {
             return;
         }
+        this.textModified = true;
         String rawText = this.contentBox.getValue();
         MutableComponent component = this.parseFormattingCodesToComponent(rawText);
         this.currentEntry.setText(ComponentJson.toJsonTree(component));
@@ -215,7 +217,14 @@ public class TextPropertyPage implements PropertyPage {
         if (key.isEmpty()) {
             this.currentEntry.setText(null);
         } else {
-            JsonObject json = new JsonObject();
+            // 保留已有的所有字段 (color/bold/italic/with 等)，仅更新 translate 键
+            JsonElement currentText = this.currentEntry.getText();
+            JsonObject json;
+            if (currentText != null && currentText.isJsonObject()) {
+                json = currentText.getAsJsonObject().deepCopy();
+            } else {
+                json = new JsonObject();
+            }
             json.addProperty("translate", key);
             this.currentEntry.setText(json);
         }
@@ -256,7 +265,11 @@ public class TextPropertyPage implements PropertyPage {
 
     @Override
     public void unbind() {
-        this.saveToEntryBasedOnMode();
+        // 仅在用户实际修改了文本时才保存，避免覆盖未修改的原始数据（如 text 数组）
+        if (this.textModified) {
+            this.saveToEntryBasedOnMode();
+        }
+        this.textModified = false;
         this.currentEntry = null;
         this.speakerBox.setValue("");
         this.contentBox.setValueSilently("");
@@ -283,13 +296,14 @@ public class TextPropertyPage implements PropertyPage {
                 speakerStr = speakerJson.getAsString();
             } else {
                 Component comp = ComponentJson.fromJson(speakerJson);
-                speakerStr = comp != null ? comp.getString() : speakerJson.toString();
+                speakerStr = comp != null ? this.componentToFormattingCodes(comp) : speakerJson.toString();
             }
         }
         this.speakerBox.setValue(speakerStr);
         this.speakerBox.setResponder(s -> {
             if (this.currentEntry != null) {
-                this.currentEntry.setSpeaker(new JsonPrimitive(s));
+                MutableComponent component = this.parseFormattingCodesToComponent(s);
+                this.currentEntry.setSpeaker(ComponentJson.toJsonTree(component));
             }
         });
         JsonElement textJson = this.currentEntry.getText();
@@ -321,6 +335,7 @@ public class TextPropertyPage implements PropertyPage {
             }
             this.contentBox.setValueSilently(text);
         }
+        this.textModified = false;
         this.updateVisibility();
     }
 
@@ -472,31 +487,35 @@ public class TextPropertyPage implements PropertyPage {
 
     private String componentToFormattingCodes(Component comp) {
         StringBuilder sb = new StringBuilder();
-        if (!comp.getString().isEmpty()) {
-            this.appendStyledText(comp, sb);
-        }
-        for (Component sibling : comp.getSiblings()) {
-            this.appendStyledText(sibling, sb);
-        }
+        // 使用 visit 遍历所有文本段（含 siblings），避免 getString() 导致的重复
+        comp.visit((style, textPart) -> {
+            if (!style.isEmpty()) {
+                this.appendStyle(style, sb);
+            }
+            sb.append(textPart);
+            return java.util.Optional.empty();
+        }, Style.EMPTY);
         return sb.toString();
-    }
-
-    private void appendStyledText(Component comp, StringBuilder sb) {
-        Style style = comp.getStyle();
-        if (!style.isEmpty()) {
-            this.appendStyle(style, sb);
-        }
-        sb.append(comp.getString());
     }
 
     private void appendStyle(Style style, StringBuilder sb) {
         TextColor color = style.getColor();
         if (color != null) {
             int rgb = color.getValue();
+            boolean found = false;
             for (ChatFormatting f : ChatFormatting.values()) {
                 if (f.getColor() != null && f.getColor() == rgb) {
                     sb.append('\u00a7').append(f.getChar());
+                    found = true;
                     break;
+                }
+            }
+            // 非标准颜色使用十六进制格式 §x§R§R§G§G§B§B
+            if (!found) {
+                sb.append("\u00a7x");
+                String hex = String.format("%06X", rgb);
+                for (int i = 0; i < hex.length(); i++) {
+                    sb.append('\u00a7').append(hex.charAt(i));
                 }
             }
         }
@@ -511,6 +530,9 @@ public class TextPropertyPage implements PropertyPage {
         }
         if (style.isStrikethrough()) {
             sb.append("\u00a7m");
+        }
+        if (style.isObfuscated()) {
+            sb.append("\u00a7k");
         }
     }
 }
