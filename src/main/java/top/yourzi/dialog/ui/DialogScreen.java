@@ -104,15 +104,22 @@ public class DialogScreen extends Screen {
             if (portrait.getPath() == null || portrait.getPath().isEmpty()) {
                 continue;
             }
-            ResourceLocation texture = getPortraitTextureLocation(portrait.getPath());
+            ResourceLocation texture;
             PortraitTextureSize textureSize;
-            // 先检查资源包是否有该纹理，如果没有则从编辑器配置目录加载
+            // 先尝试从编辑器配置目录加载（能处理任意字符的文件名，如中文）
             FileSystemTextureLoader.LoadedTexture fsTex = tryLoadFromFileSystem(
                     portrait.getPath(), EditorConfig.PORTRAITS_DIR, "portraits");
             if (fsTex != null) {
                 texture = fsTex.location();
                 textureSize = new PortraitTextureSize(fsTex.width(), fsTex.height());
             } else {
+                // 文件系统没有，尝试资源包（路径必须合法）
+                texture = getPortraitTextureLocation(portrait.getPath());
+                if (texture == null) {
+                    // 路径非法（如含中文）且文件系统也没有，跳过
+                    Dialog.LOGGER.warn("Skipping portrait with invalid path: {}", portrait.getPath());
+                    continue;
+                }
                 textureSize = readPortraitTextureSize(texture);
             }
             portraits.add(new PortraitRenderInfo(
@@ -133,9 +140,14 @@ public class DialogScreen extends Screen {
      * 替代原 visual_mod_edit_vndialog 的 MixinDialogScreenPortraitDisplayData/BackgroundImageDisplayData 功能。
      */
     private FileSystemTextureLoader.LoadedTexture tryLoadFromFileSystem(String path, Path fsDir, String prefix) {
-        ResourceLocation packLocation = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/" + prefix + "/" + path);
-        if (Minecraft.getInstance().getResourceManager().getResource(packLocation).isPresent()) {
-            return null;
+        // 路径可能含非法字符（如中文），ResourceLocation 构造会抛异常；此时资源包肯定也没有，直接走文件系统
+        try {
+            ResourceLocation packLocation = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/" + prefix + "/" + path);
+            if (Minecraft.getInstance().getResourceManager().getResource(packLocation).isPresent()) {
+                return null;
+            }
+        } catch (net.minecraft.ResourceLocationException e) {
+            // 路径非法，跳过资源包检查，继续尝试文件系统加载
         }
         java.io.File fsFile = fsDir.resolve(path).toFile();
         if (!fsFile.exists()) {
@@ -149,7 +161,11 @@ public class DialogScreen extends Screen {
     }
 
     private ResourceLocation getPortraitTextureLocation(String path) {
-        return ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/portraits/" + path);
+        try {
+            return ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/portraits/" + path);
+        } catch (net.minecraft.ResourceLocationException e) {
+            return null;
+        }
     }
 
     private PortraitTextureSize readPortraitTextureSize(ResourceLocation texture) {
@@ -195,7 +211,10 @@ public class DialogScreen extends Screen {
         }
         for (PortraitInfo portrait : entry.getPortraits()) {
             if (portrait.getPath() != null && !portrait.getPath().isEmpty()) {
-                readPortraitTextureSize(getPortraitTextureLocation(portrait.getPath()));
+                ResourceLocation loc = getPortraitTextureLocation(portrait.getPath());
+                if (loc != null) {
+                    readPortraitTextureSize(loc);
+                }
             }
         }
     }
@@ -241,8 +260,15 @@ public class DialogScreen extends Screen {
         if (background != null && background.getPath() != null && !background.getPath().isEmpty()) {
             FileSystemTextureLoader.LoadedTexture fsTex = tryLoadFromFileSystem(
                     background.getPath(), EditorConfig.BACKGROUNDS_DIR, "backgrounds");
-            backgroundLocation = fsTex != null ? fsTex.location()
-                    : ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/backgrounds/" + background.getPath());
+            if (fsTex != null) {
+                backgroundLocation = fsTex.location();
+            } else {
+                try {
+                    backgroundLocation = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/backgrounds/" + background.getPath());
+                } catch (net.minecraft.ResourceLocationException e) {
+                    Dialog.LOGGER.warn("Skipping background with invalid path: {}", background.getPath());
+                }
+            }
         }
     }
 
