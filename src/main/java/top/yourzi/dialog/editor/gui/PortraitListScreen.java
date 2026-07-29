@@ -412,15 +412,16 @@ public class PortraitListScreen extends Screen {
         if (!f.exists()) {
             // 配置目录没有该文件，检查是否为模组内置纹理
             ResourceLocation builtinLoc = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/portraits/" + path);
-            if (Minecraft.getInstance().getResourceManager().getResource(builtinLoc).isPresent()) {
+            try {
+                java.io.InputStream stream = Minecraft.getInstance().getResourceManager()
+                        .getResource(builtinLoc).orElseThrow().open();
+                NativeImage img = NativeImage.read(stream);
+                this.previewW = img.getWidth();
+                this.previewH = img.getHeight();
+                img.close();
+                stream.close();
                 this.previewTex = builtinLoc;
-                try (com.mojang.blaze3d.platform.NativeImage img = com.mojang.blaze3d.platform.NativeImage.read(builtinLoc)) {
-                    this.previewW = img.getWidth();
-                    this.previewH = img.getHeight();
-                } catch (IOException e) {
-                    this.previewW = this.previewH = 64;
-                }
-            } else {
+            } catch (Exception e) {
                 this.previewTex = null;
             }
             return;
