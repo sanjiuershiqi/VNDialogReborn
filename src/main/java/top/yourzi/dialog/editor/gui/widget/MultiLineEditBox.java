@@ -1,11 +1,15 @@
 package top.yourzi.dialog.editor.gui.widget;
 
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Style;
+import net.minecraft.network.chat.TextColor;
 import net.minecraft.util.Mth;
 import top.yourzi.dialog.editor.util.EditorTheme;
 
@@ -280,21 +284,37 @@ public class MultiLineEditBox extends AbstractWidget {
         if (cursorLine >= scrollLine + maxVis) scrollLine = cursorLine - maxVis + 1;
         if (scrollLine < 0) scrollLine = 0;
         int y = getY() + PADDING - scrollLine * LINE_HEIGHT;
+
+        // 当前激活的格式样式，跨行保持（与 Minecraft 行为一致）
+        Style currentStyle = Style.EMPTY;
+
         for (int i = 0; i < lines.length; i++) {
-            if (i < scrollLine || i >= scrollLine + maxVis) continue;
+            if (i < scrollLine || i >= scrollLine + maxVis) {
+                // 不可见的行也要更新样式状态，以保持跨行样式连续性
+                currentStyle = processLineStyle(lines[i], currentStyle);
+                continue;
+            }
             String line = lines[i];
             int x = getX() + PADDING;
-            for (int j = 0; j < line.length(); j++) {
+            int j = 0;
+            while (j < line.length()) {
                 char c = line.charAt(j);
                 if (c == '\u00a7' && j + 1 < line.length()) {
                     char code = line.charAt(j + 1);
+                    // 显示 § 符号（小灰色图标）和格式代码字母
                     drawSectionSign(g, x, y);
-                    g.drawString(font, String.valueOf(code), x += SECTION_WIDTH, y, EditorTheme.TEXT_MUTED, false);
+                    x += SECTION_WIDTH;
+                    g.drawString(font, String.valueOf(code), x, y, EditorTheme.TEXT_MUTED, false);
                     x += font.width(String.valueOf(code));
-                    j++;
+                    // 更新当前样式
+                    currentStyle = applyFormatCode(currentStyle, code);
+                    j += 2;
                 } else {
-                    g.drawString(font, String.valueOf(c), x, y, EditorTheme.TEXT_PRIMARY, false);
-                    x += font.width(String.valueOf(c));
+                    // 使用当前样式渲染字符
+                    MutableComponent ch = Component.literal(String.valueOf(c)).setStyle(currentStyle);
+                    g.drawString(font, ch, x, y, 0xFFFFFFFF, false);
+                    x += font.width(ch);
+                    j++;
                 }
             }
             y += LINE_HEIGHT;
@@ -314,6 +334,31 @@ public class MultiLineEditBox extends AbstractWidget {
             g.fill(cursorX, cursorY - 1, cursorX + 1, cursorY + LINE_HEIGHT - 1, EditorTheme.TEXT_PRIMARY);
         }
         g.disableScissor();
+    }
+
+    /**
+     * 解析一行中的格式代码，返回行末时的样式状态（用于跨行保持）。
+     */
+    private Style processLineStyle(String line, Style initialStyle) {
+        Style style = initialStyle;
+        for (int j = 0; j < line.length(); j++) {
+            if (line.charAt(j) == '\u00a7' && j + 1 < line.length()) {
+                style = applyFormatCode(style, line.charAt(j + 1));
+                j++;
+            }
+        }
+        return style;
+    }
+
+    /**
+     * 根据 Minecraft 格式代码字符更新样式。
+     */
+    private Style applyFormatCode(Style style, char code) {
+        ChatFormatting fmt = ChatFormatting.getByCode(code);
+        if (fmt == null) {
+            return style;
+        }
+        return style.applyFormat(fmt);
     }
 
     private void drawSectionSign(GuiGraphics g, int x, int y) {
