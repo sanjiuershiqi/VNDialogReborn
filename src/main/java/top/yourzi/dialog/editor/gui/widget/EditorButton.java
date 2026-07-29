@@ -59,16 +59,12 @@ public class EditorButton extends AbstractButton {
 
         // 边框：悬停/聚焦时使用强调色，否则使用普通边框色
         int borderColor = this.isHoveredOrFocused() && this.active ? EditorTheme.ACCENT : EditorTheme.BORDER;
-        // 上边框
         graphics.fill(x, y, x + w, y + 1, borderColor);
-        // 下边框
         graphics.fill(x, y + h - 1, x + w, y + h, borderColor);
-        // 左边框
         graphics.fill(x, y, x + 1, y + h, borderColor);
-        // 右边框
         graphics.fill(x + w - 1, y, x + w, y + h, borderColor);
 
-        // 文字
+        // 计算文字颜色：根据按钮状态
         int textColor;
         if (!this.active) {
             textColor = EditorTheme.TEXT_MUTED;
@@ -78,15 +74,29 @@ public class EditorButton extends AbstractButton {
             textColor = EditorTheme.TEXT_SECONDARY;
         }
 
-        // 文字截断以适应按钮宽度
+        // 使用原版滚动文字渲染：文字超长时自动滚动（与原版 Button 行为一致）
+        // drawCenteredString 内部的 Font.draw 会优先使用 Component 自带的 Style 颜色，
+        // 因此颜色按钮（■ 带颜色样式）会显示自身颜色，普通按钮使用 textColor
         Component message = this.getMessage();
-        String text = message.getString();
-        int maxWidth = w - 6;
-        if (font.width(text) > maxWidth) {
-            text = font.plainSubstrByWidth(text, maxWidth - 8);
-            text = text + "...";
+        int textY = y + (h - 8) / 2;
+        int textW = font.width(message);
+        int padding = 2;
+        int availW = w - padding * 2;
+
+        if (textW > availW) {
+            // 文字超长：使用滚动渲染（模拟原版按钮行为）
+            int scrollAmount = textW - availW;
+            double time = (double) System.currentTimeMillis() / 1000.0;
+            double speed = Math.max(scrollAmount * 0.5, 3.0);
+            double wave = Math.sin((Math.PI / 2) * Math.cos((Math.PI * 2) * time / speed)) / 2.0 + 0.5;
+            double offset = Mth.lerp(wave, 0.0, scrollAmount);
+            graphics.enableScissor(x + padding, y + 1, x + w - padding, y + h - 1);
+            graphics.drawString(font, message, x + padding - (int) offset, textY, textColor, false);
+            graphics.disableScissor();
+        } else {
+            // 文字不超长：居中显示
+            graphics.drawCenteredString(font, message, x + w / 2, textY, textColor);
         }
-        graphics.drawCenteredString(font, Component.literal(text), x + w / 2, y + (h - 8) / 2, textColor);
     }
 
     @Override

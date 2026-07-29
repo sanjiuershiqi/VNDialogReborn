@@ -729,14 +729,9 @@ public class VNDialogEditorScreen extends Screen {
             graphics.fill(x, y, x + w, y + 1, borderColor);
             graphics.fill(x, y, x + 1, y + h, borderColor);
             graphics.fill(x + w - 1, y, x + w, y + h, borderColor);
-            // 文字
+            // 文字：标签文字在 rebuildTabButtons 中已预截断，直接居中渲染
             int textColor = this.activeTab ? EditorTheme.TEXT_PRIMARY : (this.isHoveredOrFocused() ? EditorTheme.TEXT_PRIMARY : EditorTheme.TEXT_SECONDARY);
-            String text = this.getMessage().getString();
-            int maxWidth = w - 6;
-            if (Minecraft.getInstance().font.width(text) > maxWidth) {
-                text = Minecraft.getInstance().font.plainSubstrByWidth(text, maxWidth - 8) + "...";
-            }
-            graphics.drawCenteredString(Minecraft.getInstance().font, Component.literal(text), x + w / 2, y + (h - 8) / 2, textColor);
+            graphics.drawCenteredString(Minecraft.getInstance().font, this.getMessage(), x + w / 2, y + (h - 8) / 2, textColor);
         }
 
         @Override
