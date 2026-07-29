@@ -20,6 +20,7 @@ import top.yourzi.dialog.editor.gui.widget.DropdownWidget;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.editor.util.EditorTheme;
+import top.yourzi.dialog.editor.util.FileSystemTextureLoader;
 import top.yourzi.dialog.editor.util.PageLayout;
 import top.yourzi.dialog.model.BackgroundAnimationType;
 import top.yourzi.dialog.model.BackgroundImageInfo;
@@ -28,7 +29,6 @@ import top.yourzi.dialog.model.DialogEntry;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -332,7 +332,7 @@ public class AppearancePropertyPage implements PropertyPage {
             }
         }
         try (FileInputStream fis = new FileInputStream(file)) {
-            NativeImage image = NativeImage.read(fis);
+            NativeImage image = FileSystemTextureLoader.decodeToNativeImage(fis);
             this.backgroundTexWidth = image.getWidth();
             this.backgroundTexHeight = image.getHeight();
             DynamicTexture dynamicTexture = new DynamicTexture(image);
@@ -340,7 +340,7 @@ public class AppearancePropertyPage implements PropertyPage {
             Minecraft.getInstance().getTextureManager().register(rl, dynamicTexture);
             textureCache.put(safeKey, rl);
             return rl;
-        } catch (IOException e) {
+        } catch (Exception e) {
             Dialog.LOGGER.error("Failed to load preview texture: {}", file, e);
             return null;
         }

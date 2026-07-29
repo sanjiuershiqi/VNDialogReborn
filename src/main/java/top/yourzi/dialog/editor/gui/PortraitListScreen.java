@@ -16,6 +16,7 @@ import top.yourzi.dialog.editor.gui.widget.DropdownWidget;
 import top.yourzi.dialog.editor.gui.BuiltInTextureBrowserScreen;
 import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.editor.util.EditorTheme;
+import top.yourzi.dialog.editor.util.FileSystemTextureLoader;
 import top.yourzi.dialog.model.PortraitAnimationType;
 import top.yourzi.dialog.model.PortraitInfo;
 import top.yourzi.dialog.model.PortraitPosition;
@@ -600,7 +601,7 @@ public class PortraitListScreen extends Screen {
             return;
         }
         try (FileInputStream fis = new FileInputStream(f)) {
-            NativeImage img = NativeImage.read(fis);
+            NativeImage img = FileSystemTextureLoader.decodeToNativeImage(fis);
             this.previewW = img.getWidth();
             this.previewH = img.getHeight();
             DynamicTexture dyn = new DynamicTexture(img);
