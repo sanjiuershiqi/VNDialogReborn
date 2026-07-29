@@ -107,9 +107,13 @@ public class VNDialogEditorScreen extends Screen {
 
     private void buildWidgets() {
         int btnY = 2;
-        int btnWidth = EditorTheme.BTN_WIDTH;
         int btnHeight = 20;
         int btnX = 2;
+        // 按钮宽度自适应：根据屏幕宽度和按钮数量计算，确保不溢出
+        int btnCount = 6;
+        int totalGap = (btnCount - 1) * EditorTheme.GAP;
+        int maxBtnWidth = (this.width - totalGap - 4) / btnCount;
+        int btnWidth = Math.min(EditorTheme.BTN_WIDTH, Math.max(36, maxBtnWidth));
         Button newBtn = Button.builder(Component.translatable("gui.vn_edit.new"), b -> this.onNew())
                 .bounds(btnX, btnY, btnWidth, btnHeight).build();
         Button saveBtn = Button.builder(Component.translatable("gui.vn_edit.save"), b -> this.onSave())

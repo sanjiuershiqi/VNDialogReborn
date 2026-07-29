@@ -28,7 +28,8 @@ public class EditorTheme {
     public static final int PADDING      = 6;
     public static final int GAP          = 5;
     public static final int GAP_TIGHT    = 3;
-    public static final int SECTION_GAP  = 10;
+    public static final int SECTION_GAP  = 8;
+    public static final int ROW_GAP      = 4;   // 行间距
     public static final int SCROLLBAR_W  = 5;
 
     // ===== 尺寸 =====
@@ -43,10 +44,11 @@ public class EditorTheme {
     public static final int LABEL_WIDTH  = 62;
     public static final int FIELD_HEIGHT = 18;
     public static final int BTN_HEIGHT   = 18;
-    public static final int BTN_WIDTH    = 52;
+    public static final int BTN_WIDTH    = 48;
     public static final int SECTION_HDR_H = 14;
-    public static final int COLOR_BTN_SZ  = 18;
+    public static final int COLOR_BTN_SZ  = 16;
     public static final int COLOR_BTN_GAP = 3;
+    public static final int CONTENT_BOX_H = 80;  // 多行文本框默认高度
 
     private EditorTheme() {
     }

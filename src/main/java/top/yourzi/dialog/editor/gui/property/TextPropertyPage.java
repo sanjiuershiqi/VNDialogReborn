@@ -23,6 +23,7 @@ import top.yourzi.dialog.editor.gui.widget.MultiLineEditBox;
 import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.editor.util.EditorTheme;
 import top.yourzi.dialog.editor.util.LangFileGenerator;
+import top.yourzi.dialog.editor.util.PageLayout;
 import top.yourzi.dialog.model.DialogEntry;
 import top.yourzi.dialog.util.ComponentJson;
 
@@ -34,10 +35,10 @@ import java.util.Map;
 
 /**
  * 文本属性页：说话者、正文、格式化代码、翻译模式。融合自 visual_mod_edit_vndialog。
+ * 使用 PageLayout 游标布局，自动适应不同屏幕尺寸和 GUI 缩放。
  */
 public class TextPropertyPage implements PropertyPage {
     private static final int LABEL_WIDTH = EditorTheme.LABEL_WIDTH;
-    private static final int FIELD_SPACING = 25;
     private static final int MODE_PLAIN = 0;
     private static final int MODE_TRANSLATION = 1;
     private static final ChatFormatting[] COLORS = new ChatFormatting[]{
@@ -74,6 +75,16 @@ public class TextPropertyPage implements PropertyPage {
     private EditBox translationKeyBox;
     private EditBox translationZhCnBox;
     private EditBox translationEnUsBox;
+    private int computedHeight = 0;
+
+    // 渲染位置缓存（init 阶段计算，render 阶段使用）
+    private int speakerHeaderY;
+    private int speakerLabelY;
+    private int contentHeaderY;
+    private int contentLabelY;
+    private int formatHeaderY;
+    private int translationHeaderY;
+    private int hexLabelY;
 
     public TextPropertyPage(Font font) {
         this.font = font;
@@ -85,9 +96,16 @@ public class TextPropertyPage implements PropertyPage {
         this.y = y;
         this.width = width;
         this.height = height;
-        int fieldX = x + LABEL_WIDTH + 5;
-        int fieldWidth = width - LABEL_WIDTH - 10;
-        this.speakerBox = new EditBox(this.font, fieldX, y + 20, fieldWidth, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.speaker"));
+
+        PageLayout layout = new PageLayout(x, y, width);
+        int fieldX = layout.fieldX();
+        int fieldW = layout.fieldWidth();
+
+        // ===== 说话者分节 =====
+        this.speakerHeaderY = layout.section();
+        int speakerY = layout.fieldRow();
+        this.speakerLabelY = speakerY + 4;
+        this.speakerBox = new EditBox(this.font, fieldX, speakerY, fieldW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.speaker"));
         this.speakerBox.setMaxLength(999999999);
         this.speakerBox.setEditable(true);
         this.speakerBox.setResponder(s -> {
@@ -96,54 +114,80 @@ public class TextPropertyPage implements PropertyPage {
                 this.currentEntry.setSpeaker(ComponentJson.toJsonTree(component));
             }
         });
-        this.contentBox = new MultiLineEditBox(this.font, fieldX, y + 60, fieldWidth, 100);
+
+        // ===== 正文 / 翻译分节（根据模式不同位置不同）=====
+        // 正文模式布局
+        this.contentHeaderY = layout.section();
+        int contentY = layout.customRow(EditorTheme.CONTENT_BOX_H);
+        this.contentLabelY = contentY + 4;
+        this.contentBox = new MultiLineEditBox(this.font, fieldX, contentY, fieldW, EditorTheme.CONTENT_BOX_H);
         this.contentBox.setResponder(s -> this.saveTextToEntry());
-        this.modeSwitchBtn = new FocusAwareButton(fieldX, y + 164, 60, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.mode_plain"), b -> this.toggleMode());
-        this.translationKeyBox = new EditBox(this.font, fieldX, y + 204, fieldWidth, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.translation_key"));
+
+        // 模式切换按钮
+        int modeY = layout.fieldRow();
+        this.modeSwitchBtn = new FocusAwareButton(fieldX, modeY, 60, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.mode_plain"), b -> this.toggleMode());
+
+        // ===== 翻译分节（翻译模式下显示）=====
+        this.translationHeaderY = layout.section();
+        int transKeyY = layout.fieldRow();
+        this.translationKeyBox = new EditBox(this.font, fieldX, transKeyY, fieldW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.translation_key"));
         this.translationKeyBox.setMaxLength(999999999);
         this.translationKeyBox.setResponder(s -> this.saveTranslationToEntry());
-        this.translationZhCnBox = new EditBox(this.font, fieldX, y + 226, fieldWidth, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.translation_zh_cn"));
+        int transZhY = layout.fieldRow();
+        this.translationZhCnBox = new EditBox(this.font, fieldX, transZhY, fieldW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.translation_zh_cn"));
         this.translationZhCnBox.setMaxLength(999999999);
         this.translationZhCnBox.setResponder(s -> this.saveTranslationToEntry());
-        this.translationEnUsBox = new EditBox(this.font, fieldX, y + 248, fieldWidth, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.translation_en_us"));
+        int transEnY = layout.fieldRow();
+        this.translationEnUsBox = new EditBox(this.font, fieldX, transEnY, fieldW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.translation_en_us"));
         this.translationEnUsBox.setMaxLength(999999999);
         this.translationEnUsBox.setResponder(s -> this.saveTranslationToEntry());
-        this.generateLangBtn = new FocusAwareButton(fieldX, y + 270, 80, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.generate_lang"), b -> this.generateLangFiles());
-        int barY = y + 310;
+        int genLangY = layout.fieldRow();
+        this.generateLangBtn = new FocusAwareButton(fieldX, genLangY, 80, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.generate_lang"), b -> this.generateLangFiles());
+
+        // ===== 格式分节（正文模式下显示）=====
+        this.formatHeaderY = layout.section();
+
+        // 颜色按钮网格（自动换行）
         int btnSize = EditorTheme.COLOR_BTN_SZ;
         int gap = EditorTheme.COLOR_BTN_GAP;
-        int bx = fieldX;
-        int colorsPerRow = 8;
-        int colorCount = 0;
-        for (ChatFormatting color : COLORS) {
+        int[][] colorPos = layout.gridLayout(COLORS.length, btnSize, btnSize, gap);
+        this.colorButtons.clear();
+        for (int i = 0; i < COLORS.length; i++) {
+            ChatFormatting color = COLORS[i];
             int rgb = color.getColor() != null ? color.getColor() : 0xFFFFFF;
-            FocusAwareButton btn = new FocusAwareButton(bx, barY, btnSize, btnSize,
+            final int idx = i;
+            FocusAwareButton btn = new FocusAwareButton(colorPos[i][0], colorPos[i][1], btnSize, btnSize,
                     Component.literal("\u25a0").withStyle(Style.EMPTY.withColor(rgb)),
-                    b -> this.contentBox.insertAtCursor("\u00a7" + color.getChar()));
+                    b -> this.contentBox.insertAtCursor("\u00a7" + COLORS[idx].getChar()));
             this.colorButtons.add(btn);
-            bx += btnSize + gap;
-            if (++colorCount % colorsPerRow == 0) {
-                bx = fieldX;
-                barY += btnSize + gap;
-            }
         }
-        if (colorCount % colorsPerRow != 0) {
-            barY += btnSize + gap;
-        }
-        int formatY = y + 354;
-        bx = fieldX;
-        this.boldBtn = this.makeBtn("B", Style.EMPTY.withBold(true), 'l', bx, formatY);
-        this.italicBtn = this.makeBtn("I", Style.EMPTY.withItalic(true), 'o', bx += btnSize + gap, formatY);
-        this.underlineBtn = this.makeBtn("U", Style.EMPTY.withUnderlined(true), 'n', bx += btnSize + gap, formatY);
-        this.strikethroughBtn = this.makeBtn("S", Style.EMPTY.withStrikethrough(true), 'm', bx += btnSize + gap, formatY);
-        this.obfuscatedBtn = this.makeBtn("O", Style.EMPTY.withObfuscated(true), 'k', bx += btnSize + gap, formatY);
-        this.resetBtn = this.makeBtn("R", Style.EMPTY.withColor(0xAAAAAA), 'r', bx += btnSize + gap, formatY);
-        this.clearBtn = new FocusAwareButton(bx + btnSize + gap, formatY, 80, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.clear_format"), b -> this.clearFormatting());
-        int hexY = y + 376;
-        this.hexColorBox = new EditBox(this.font, fieldX, hexY, 50, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.hex_color"));
+
+        // 格式按钮行（B/I/U/S/O/R + 清除格式），自动换行
+        List<int[]> formatSizes = new ArrayList<>();
+        formatSizes.add(new int[]{btnSize, btnSize}); // B
+        formatSizes.add(new int[]{btnSize, btnSize}); // I
+        formatSizes.add(new int[]{btnSize, btnSize}); // U
+        formatSizes.add(new int[]{btnSize, btnSize}); // S
+        formatSizes.add(new int[]{btnSize, btnSize}); // O
+        formatSizes.add(new int[]{btnSize, btnSize}); // R
+        formatSizes.add(new int[]{80, EditorTheme.FIELD_HEIGHT}); // Clear
+        int[][] formatPos = layout.rowLayout(formatSizes, gap);
+        this.boldBtn = this.makeBtn("B", Style.EMPTY.withBold(true), 'l', formatPos[0][0], formatPos[0][1]);
+        this.italicBtn = this.makeBtn("I", Style.EMPTY.withItalic(true), 'o', formatPos[1][0], formatPos[1][1]);
+        this.underlineBtn = this.makeBtn("U", Style.EMPTY.withUnderlined(true), 'n', formatPos[2][0], formatPos[2][1]);
+        this.strikethroughBtn = this.makeBtn("S", Style.EMPTY.withStrikethrough(true), 'm', formatPos[3][0], formatPos[3][1]);
+        this.obfuscatedBtn = this.makeBtn("O", Style.EMPTY.withObfuscated(true), 'k', formatPos[4][0], formatPos[4][1]);
+        this.resetBtn = this.makeBtn("R", Style.EMPTY.withColor(0xAAAAAA), 'r', formatPos[5][0], formatPos[5][1]);
+        this.clearBtn = new FocusAwareButton(formatPos[6][0], formatPos[6][1], 80, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.clear_format"), b -> this.clearFormatting());
+
+        // 十六进制颜色输入行
+        int hexY = layout.fieldRow();
+        this.hexLabelY = hexY + 4;
+        int hexBoxW = Math.min(50, fieldW / 3);
+        this.hexColorBox = new EditBox(this.font, fieldX, hexY, hexBoxW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.hex_color"));
         this.hexColorBox.setMaxLength(7);
         this.hexColorBox.setValue("#");
-        this.applyHexBtn = new FocusAwareButton(fieldX + 52, hexY, 30, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.apply"), b -> {
+        this.applyHexBtn = new FocusAwareButton(fieldX + hexBoxW + gap, hexY, 30, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.apply"), b -> {
             String hex = this.hexColorBox.getValue().trim();
             if (hex.startsWith("#") && hex.length() == 7) {
                 this.contentBox.insertAtCursor("\u00a7x");
@@ -152,6 +196,9 @@ public class TextPropertyPage implements PropertyPage {
                 }
             }
         });
+
+        this.computedHeight = layout.getContentHeight();
+        this.updateVisibility();
     }
 
     private void toggleMode() {
@@ -216,7 +263,6 @@ public class TextPropertyPage implements PropertyPage {
         if (key.isEmpty()) {
             this.currentEntry.setText(null);
         } else {
-            // 保留已有的所有字段 (color/bold/italic/with 等)，仅更新 translate 键
             JsonElement currentText = this.currentEntry.getText();
             JsonObject json;
             if (currentText != null && currentText.isJsonObject()) {
@@ -264,7 +310,6 @@ public class TextPropertyPage implements PropertyPage {
 
     @Override
     public void unbind() {
-        // 仅在用户实际修改了文本时才保存，避免覆盖未修改的原始数据（如 text 数组）
         if (this.textModified) {
             this.saveToEntryBasedOnMode();
         }
@@ -343,45 +388,44 @@ public class TextPropertyPage implements PropertyPage {
         if (!this.visible) {
             return;
         }
-        EditorTheme.drawSectionHeader(g, this.font, this.x, this.y + 2, this.width, Component.translatable("gui.vn_edit.section.speaker"));
+        // 说话者分节
+        EditorTheme.drawSectionHeader(g, this.font, this.x, this.speakerHeaderY, this.width, Component.translatable("gui.vn_edit.section.speaker"));
+        g.drawString(this.font, Component.translatable("gui.vn_edit.speaker"), this.x + 5, this.speakerLabelY, EditorTheme.TEXT_SECONDARY);
+        this.speakerBox.render(g, mx, my, pt);
+
         if (this.currentMode == MODE_PLAIN) {
-            EditorTheme.drawSectionHeader(g, this.font, this.x, this.y + 42, this.width, Component.translatable("gui.vn_edit.section.content"));
+            // 正文分节
+            EditorTheme.drawSectionHeader(g, this.font, this.x, this.contentHeaderY, this.width, Component.translatable("gui.vn_edit.section.content"));
+            g.drawString(this.font, Component.translatable("gui.vn_edit.text"), this.x + 5, this.contentLabelY, EditorTheme.TEXT_SECONDARY);
+            this.contentBox.render(g, mx, my, pt);
+            // 格式分节
+            EditorTheme.drawSectionHeader(g, this.font, this.x, this.formatHeaderY, this.width, Component.translatable("gui.vn_edit.section.format"));
+            this.colorButtons.forEach(b -> b.render(g, mx, my, pt));
+            this.boldBtn.render(g, mx, my, pt);
+            this.italicBtn.render(g, mx, my, pt);
+            this.underlineBtn.render(g, mx, my, pt);
+            this.strikethroughBtn.render(g, mx, my, pt);
+            this.obfuscatedBtn.render(g, mx, my, pt);
+            this.resetBtn.render(g, mx, my, pt);
+            this.clearBtn.render(g, mx, my, pt);
+            g.drawString(this.font, Component.translatable("gui.vn_edit.hex_color"), this.x + 5, this.hexLabelY, EditorTheme.TEXT_SECONDARY);
+            this.hexColorBox.render(g, mx, my, pt);
+            this.applyHexBtn.render(g, mx, my, pt);
         }
+
         if (this.currentMode == MODE_TRANSLATION) {
-            EditorTheme.drawSectionHeader(g, this.font, this.x, this.y + 186, this.width, Component.translatable("gui.vn_edit.section.translation"));
-        }
-        if (this.currentMode == MODE_PLAIN) {
-            EditorTheme.drawSectionHeader(g, this.font, this.x, this.y + 302, this.width, Component.translatable("gui.vn_edit.section.format"));
-        }
-        g.drawString(this.font, Component.translatable("gui.vn_edit.speaker"), this.x + 5, this.y + 24, EditorTheme.TEXT_SECONDARY);
-        if (this.currentMode == MODE_PLAIN) {
-            g.drawString(this.font, Component.translatable("gui.vn_edit.text"), this.x + 5, this.y + 64, EditorTheme.TEXT_SECONDARY);
-        }
-        if (this.currentMode == MODE_TRANSLATION) {
+            // 翻译分节
+            EditorTheme.drawSectionHeader(g, this.font, this.x, this.translationHeaderY, this.width, Component.translatable("gui.vn_edit.section.translation"));
             g.drawString(this.font, Component.translatable("gui.vn_edit.translation_key"), this.x + 5, this.translationKeyBox.getY() + 4, EditorTheme.TEXT_SECONDARY);
             g.drawString(this.font, Component.translatable("gui.vn_edit.translation_zh_cn"), this.x + 5, this.translationZhCnBox.getY() + 4, EditorTheme.TEXT_SECONDARY);
             g.drawString(this.font, Component.translatable("gui.vn_edit.translation_en_us"), this.x + 5, this.translationEnUsBox.getY() + 4, EditorTheme.TEXT_SECONDARY);
+            this.translationKeyBox.render(g, mx, my, pt);
+            this.translationZhCnBox.render(g, mx, my, pt);
+            this.translationEnUsBox.render(g, mx, my, pt);
+            this.generateLangBtn.render(g, mx, my, pt);
         }
-        this.speakerBox.render(g, mx, my, pt);
-        this.contentBox.render(g, mx, my, pt);
+
         this.modeSwitchBtn.render(g, mx, my, pt);
-        this.translationKeyBox.render(g, mx, my, pt);
-        this.translationZhCnBox.render(g, mx, my, pt);
-        this.translationEnUsBox.render(g, mx, my, pt);
-        this.generateLangBtn.render(g, mx, my, pt);
-        this.colorButtons.forEach(b -> b.render(g, mx, my, pt));
-        this.boldBtn.render(g, mx, my, pt);
-        this.italicBtn.render(g, mx, my, pt);
-        this.underlineBtn.render(g, mx, my, pt);
-        this.strikethroughBtn.render(g, mx, my, pt);
-        this.obfuscatedBtn.render(g, mx, my, pt);
-        this.resetBtn.render(g, mx, my, pt);
-        this.clearBtn.render(g, mx, my, pt);
-        if (this.currentMode == MODE_PLAIN) {
-            g.drawString(this.font, Component.translatable("gui.vn_edit.hex_color"), this.x + 5, this.hexColorBox.getY() + 4, EditorTheme.TEXT_SECONDARY);
-        }
-        this.hexColorBox.render(g, mx, my, pt);
-        this.applyHexBtn.render(g, mx, my, pt);
     }
 
     @Override
@@ -418,7 +462,13 @@ public class TextPropertyPage implements PropertyPage {
 
     @Override
     public int getContentHeight() {
-        return 400;
+        // 根据当前模式返回实际高度
+        if (this.currentMode == MODE_TRANSLATION) {
+            // 翻译模式：说话者 + 翻译分节（4行）
+            return this.translationHeaderY - this.y + EditorTheme.SECTION_HDR_H + (EditorTheme.FIELD_HEIGHT + EditorTheme.ROW_GAP) * 4 + EditorTheme.PADDING;
+        }
+        // 纯文本模式：使用完整计算高度
+        return this.computedHeight;
     }
 
     private Button makeBtn(String text, Style style, char code, int x, int y) {
@@ -496,7 +546,6 @@ public class TextPropertyPage implements PropertyPage {
 
     private String componentToFormattingCodes(Component comp) {
         StringBuilder sb = new StringBuilder();
-        // 使用 visit 遍历所有文本段（含 siblings），避免 getString() 导致的重复
         comp.visit((style, textPart) -> {
             if (!style.isEmpty()) {
                 this.appendStyle(style, sb);
@@ -519,7 +568,6 @@ public class TextPropertyPage implements PropertyPage {
                     break;
                 }
             }
-            // 非标准颜色使用十六进制格式 §x§R§R§G§G§B§B
             if (!found) {
                 sb.append("\u00a7x");
                 String hex = String.format("%06X", rgb);
