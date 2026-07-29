@@ -201,10 +201,10 @@ public class PropertyPanel extends AbstractWidget {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         this.ensureInitialized();
+        double adjustedY = mouseY + this.scrollOffset;
         // 如果有下拉框已展开，优先处理它的点击（包括点击外部关闭）
         if (this.activeTabIndex >= 0 && this.activeTabIndex < this.tabs.size()) {
             List<DropdownWidget> dropdowns = this.tabs.get(this.activeTabIndex).page.getDropdowns();
-            double adjustedY = mouseY + this.scrollOffset;
             for (DropdownWidget dd : dropdowns) {
                 if (dd.isExpanded()) {
                     if (dd.mouseClicked(mouseX, adjustedY, button)) {
