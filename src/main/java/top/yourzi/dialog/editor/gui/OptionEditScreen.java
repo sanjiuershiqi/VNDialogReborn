@@ -28,6 +28,7 @@ public class OptionEditScreen extends Screen {
     private EditBox textBox;
     private Button targetNodeBtn;
     private Checkbox alwaysVisibleCheck;
+    private EditBox visibilityCommandBox;
     private final List<EditBox> commandBoxes = new ArrayList<>();
     private final List<Button> commandDeleteButtons = new ArrayList<>();
     private int commandListY;
@@ -67,6 +68,12 @@ public class OptionEditScreen extends Screen {
                 .build();
         this.addRenderableWidget(this.alwaysVisibleCheck);
         y += 30;
+        this.visibilityCommandBox = new EditBox(this.font, fieldX, y, fieldWidth, inputHeight, Component.translatable("gui.vn_edit.visibility_command"));
+        this.visibilityCommandBox.setMaxLength(999999999);
+        this.visibilityCommandBox.setValue(this.option.getVisibilityCommand() != null ? this.option.getVisibilityCommand() : "");
+        this.visibilityCommandBox.setVisible(!isAlwaysVisible);
+        this.addRenderableWidget(this.visibilityCommandBox);
+        y += inputHeight + 10;
         Button addCommandBtn = Button.builder(Component.translatable("gui.vn_edit.add_command"), btn -> this.addCommand(""))
                 .bounds(fieldX, y, 60, 16).build();
         this.addRenderableWidget(addCommandBtn);
@@ -81,7 +88,8 @@ public class OptionEditScreen extends Screen {
             if (this.alwaysVisibleCheck.selected()) {
                 this.option.setVisibilityCommand(null);
             } else {
-                this.option.setVisibilityCommand("execute unless true");
+                String visCmd = this.visibilityCommandBox.getValue().trim();
+                this.option.setVisibilityCommand(visCmd.isEmpty() ? null : visCmd);
             }
             ArrayList<String> cmds = new ArrayList<>();
             for (EditBox box : this.commandBoxes) {
@@ -154,6 +162,12 @@ public class OptionEditScreen extends Screen {
         graphics.drawString(this.font, Component.translatable("gui.vn_edit.option_text"), fieldX + 5, y, 0xCCCCCC);
         y += 36;
         graphics.drawString(this.font, Component.translatable("gui.vn_edit.option_target"), fieldX + 5, y, 0xCCCCCC);
+        y += 36;
+        y += 30;
+        if (!this.alwaysVisibleCheck.selected()) {
+            graphics.drawString(this.font, Component.translatable("gui.vn_edit.visibility_command"), fieldX + 5, y, 0xCCCCCC);
+        }
+        this.visibilityCommandBox.setVisible(!this.alwaysVisibleCheck.selected());
         super.render(graphics, mouseX, mouseY, partialTick);
     }
 

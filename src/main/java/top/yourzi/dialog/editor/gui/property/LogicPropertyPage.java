@@ -21,6 +21,7 @@ import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.model.DialogEntry;
 import top.yourzi.dialog.model.DialogOption;
 import top.yourzi.dialog.model.DialogSequence;
+import top.yourzi.dialog.model.DisplayItemInfo;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -45,14 +46,21 @@ public class LogicPropertyPage implements PropertyPage {
     private EditBox audioPathBox;
     private Button audioBrowseBtn;
     private Button audioPlayBtn;
+    private EditBox visibilityCommandBox;
     private DialogSequence currentSequence;
     private DialogEntry currentEntry;
     private final List<EditBox> commandEdits = new ArrayList<>();
     private final List<Button> commandDeleteBtns = new ArrayList<>();
     private final List<Button> editOptionButtons = new ArrayList<>();
     private final List<Button> deleteOptionButtons = new ArrayList<>();
+    private Button addItemBtn;
+    private final List<EditBox> itemIdEdits = new ArrayList<>();
+    private final List<EditBox> itemCountEdits = new ArrayList<>();
+    private final List<EditBox> itemNbtEdits = new ArrayList<>();
+    private final List<Button> itemDeleteBtns = new ArrayList<>();
     private int optionListStartY;
     private int commandListStartY;
+    private int displayItemsStartY;
     private boolean visible = true;
     private int x;
     private int y;
@@ -110,13 +118,26 @@ public class LogicPropertyPage implements PropertyPage {
                 AudioPreviewPlayer.play(audioFile);
             }
         }).bounds(fieldX + fieldWidth - 50, audioY, 48, 16).build();
-        int commandHeaderY = audioY + 22;
+        int visY = audioY + 22;
+        this.visibilityCommandBox = new EditBox(this.font, fieldX, visY, fieldWidth, 16, Component.translatable("gui.vn_edit.visibility_command"));
+        this.visibilityCommandBox.setMaxLength(999999999);
+        this.visibilityCommandBox.setResponder(s -> {
+            if (this.currentEntry != null) {
+                this.currentEntry.setVisibilityCommand(s.isEmpty() ? null : s);
+            }
+        });
+        int commandHeaderY = visY + 22;
         this.addCommandBtn = Button.builder(Component.translatable("gui.vn_edit.add_command"), btn -> this.onAddCommand())
                 .bounds(fieldX, commandHeaderY, 60, 16).build();
         this.commandListStartY = commandHeaderY + 16 + 4;
+        int itemHeaderY = commandHeaderY + 30;
+        this.addItemBtn = Button.builder(Component.translatable("gui.vn_edit.add_item"), btn -> this.onAddItem())
+                .bounds(fieldX, itemHeaderY, 60, 16).build();
+        this.displayItemsStartY = itemHeaderY + 16 + 4;
+        int optionHeaderY = itemHeaderY + 30;
         this.addOptionBtn = Button.builder(Component.translatable("gui.vn_edit.add_option"), btn -> this.onAddOption())
-                .bounds(fieldX, commandHeaderY + 30, 60, 16).build();
-        this.optionListStartY = commandHeaderY + 50;
+                .bounds(fieldX, optionHeaderY, 60, 16).build();
+        this.optionListStartY = optionHeaderY + 20;
     }
 
     @Override
@@ -132,7 +153,9 @@ public class LogicPropertyPage implements PropertyPage {
         setCheckboxSelectedSilent(this.endDialogCheck, false);
         setCheckboxSelectedSilent(this.allowSkipCheck, true);
         this.audioPathBox.setValue("");
+        this.visibilityCommandBox.setValue("");
         this.clearCommandWidgets();
+        this.clearItemWidgets();
         this.clearOptionWidgets();
     }
 
@@ -153,7 +176,15 @@ public class LogicPropertyPage implements PropertyPage {
                 this.currentEntry.setAudioPath(s.isEmpty() ? null : s);
             }
         });
+        this.visibilityCommandBox.setResponder(null);
+        this.visibilityCommandBox.setValue(this.currentEntry.getVisibilityCommand() != null ? this.currentEntry.getVisibilityCommand() : "");
+        this.visibilityCommandBox.setResponder(s -> {
+            if (this.currentEntry != null) {
+                this.currentEntry.setVisibilityCommand(s.isEmpty() ? null : s);
+            }
+        });
         this.rebuildCommandWidgets();
+        this.rebuildItemWidgets();
         this.rebuildOptionButtons();
     }
 
@@ -271,6 +302,97 @@ public class LogicPropertyPage implements PropertyPage {
         this.deleteOptionButtons.clear();
     }
 
+    private List<DisplayItemInfo> getItemsList() {
+        return this.currentEntry.getDisplayItems() != null ? new ArrayList<>(this.currentEntry.getDisplayItems()) : new ArrayList<>();
+    }
+
+    private void setItemsList(List<DisplayItemInfo> items) {
+        this.currentEntry.setDisplayItems(items.isEmpty() ? null : items);
+    }
+
+    private void onAddItem() {
+        if (this.currentEntry == null) {
+            return;
+        }
+        List<DisplayItemInfo> items = this.getItemsList();
+        items.add(new DisplayItemInfo("minecraft:stone", 1, ""));
+        this.setItemsList(items);
+        this.rebuildItemWidgets();
+    }
+
+    private void deleteItem(int index) {
+        if (this.currentEntry == null) {
+            return;
+        }
+        List<DisplayItemInfo> items = this.getItemsList();
+        if (index >= 0 && index < items.size()) {
+            items.remove(index);
+            this.setItemsList(items);
+            this.rebuildItemWidgets();
+        }
+    }
+
+    private void updateItem(int index, String field, String value) {
+        if (this.currentEntry == null) {
+            return;
+        }
+        List<DisplayItemInfo> items = this.getItemsList();
+        if (index < 0 || index >= items.size()) {
+            return;
+        }
+        DisplayItemInfo item = items.get(index);
+        switch (field) {
+            case "id" -> item.setItemId(value);
+            case "count" -> {
+                try {
+                    item.setCount(Math.max(1, Integer.parseInt(value.trim())));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+            case "nbt" -> item.setNbt(value.isEmpty() ? null : value);
+        }
+        this.setItemsList(items);
+    }
+
+    private void clearItemWidgets() {
+        this.itemIdEdits.clear();
+        this.itemCountEdits.clear();
+        this.itemNbtEdits.clear();
+        this.itemDeleteBtns.clear();
+    }
+
+    private void rebuildItemWidgets() {
+        this.clearItemWidgets();
+        if (this.currentEntry == null) {
+            return;
+        }
+        List<DisplayItemInfo> items = this.getItemsList();
+        int fieldX = this.x + LABEL_WIDTH + 5;
+        for (int i = 0; i < items.size(); i++) {
+            int idx = i;
+            DisplayItemInfo item = items.get(i);
+            int rowY = this.displayItemsStartY + i * COMMAND_ROW_HEIGHT;
+            EditBox idBox = new EditBox(this.font, fieldX, rowY, this.width - LABEL_WIDTH - 145, 16, Component.translatable("gui.vn_edit.item_id"));
+            idBox.setMaxLength(999999999);
+            idBox.setValue(item.getItemId() != null ? item.getItemId() : "");
+            idBox.setResponder(s -> this.updateItem(idx, "id", s));
+            this.itemIdEdits.add(idBox);
+            EditBox countBox = new EditBox(this.font, fieldX + this.width - LABEL_WIDTH - 140, rowY, 30, 16, Component.translatable("gui.vn_edit.count"));
+            countBox.setMaxLength(5);
+            countBox.setValue(String.valueOf(item.getCount()));
+            countBox.setResponder(s -> this.updateItem(idx, "count", s));
+            this.itemCountEdits.add(countBox);
+            EditBox nbtBox = new EditBox(this.font, fieldX + this.width - LABEL_WIDTH - 105, rowY, 80, 16, Component.translatable("gui.vn_edit.nbt"));
+            nbtBox.setMaxLength(999999999);
+            nbtBox.setValue(item.getNbt() != null ? item.getNbt() : "");
+            nbtBox.setResponder(s -> this.updateItem(idx, "nbt", s));
+            this.itemNbtEdits.add(nbtBox);
+            Button delBtn = Button.builder(Component.literal("X"), btn -> this.deleteItem(idx))
+                    .bounds(fieldX + this.width - LABEL_WIDTH - 20, rowY, 16, 16).build();
+            this.itemDeleteBtns.add(delBtn);
+        }
+    }
+
     private void rebuildOptionButtons() {
         this.clearOptionWidgets();
         if (this.currentEntry == null) {
@@ -339,18 +461,34 @@ public class LogicPropertyPage implements PropertyPage {
         }
         graphics.drawString(this.font, Component.translatable("gui.vn_edit.next_id"), this.x + 5, this.y + 9, 0xCCCCCC);
         graphics.drawString(this.font, Component.translatable("gui.vn_edit.audio_path"), this.x + 5, this.y + 74, 0xCCCCCC);
+        graphics.drawString(this.font, Component.translatable("gui.vn_edit.visibility_command"), this.x + 5, this.y + 96, 0xCCCCCC);
         this.nextNodeBtn.render(graphics, mouseX, mouseY, partialTick);
         this.endDialogCheck.render(graphics, mouseX, mouseY, partialTick);
         this.allowSkipCheck.render(graphics, mouseX, mouseY, partialTick);
         this.addCommandBtn.render(graphics, mouseX, mouseY, partialTick);
         this.addOptionBtn.render(graphics, mouseX, mouseY, partialTick);
+        this.addItemBtn.render(graphics, mouseX, mouseY, partialTick);
         this.audioPathBox.render(graphics, mouseX, mouseY, partialTick);
         this.audioBrowseBtn.render(graphics, mouseX, mouseY, partialTick);
         this.audioPlayBtn.render(graphics, mouseX, mouseY, partialTick);
+        this.visibilityCommandBox.render(graphics, mouseX, mouseY, partialTick);
         for (EditBox box : this.commandEdits) {
             box.render(graphics, mouseX, mouseY, partialTick);
         }
         for (Button btn : this.commandDeleteBtns) {
+            btn.render(graphics, mouseX, mouseY, partialTick);
+        }
+        graphics.drawString(this.font, Component.translatable("gui.vn_edit.display_items"), this.x + 5, this.displayItemsStartY - 12, 0xCCCCCC);
+        for (EditBox box : this.itemIdEdits) {
+            box.render(graphics, mouseX, mouseY, partialTick);
+        }
+        for (EditBox box : this.itemCountEdits) {
+            box.render(graphics, mouseX, mouseY, partialTick);
+        }
+        for (EditBox box : this.itemNbtEdits) {
+            box.render(graphics, mouseX, mouseY, partialTick);
+        }
+        for (Button btn : this.itemDeleteBtns) {
             btn.render(graphics, mouseX, mouseY, partialTick);
         }
         graphics.drawString(this.font, Component.translatable("gui.vn_edit.options"), this.x + 5, this.optionListStartY - 12, 0xCCCCCC);
@@ -374,9 +512,14 @@ public class LogicPropertyPage implements PropertyPage {
     @Override
     public List<? extends GuiEventListener> children() {
         List<GuiEventListener> list = new ArrayList<>(List.of(this.nextNodeBtn, this.endDialogCheck, this.allowSkipCheck,
-                this.addCommandBtn, this.addOptionBtn, this.audioPathBox, this.audioBrowseBtn, this.audioPlayBtn));
+                this.addCommandBtn, this.addOptionBtn, this.addItemBtn, this.audioPathBox, this.audioBrowseBtn, this.audioPlayBtn,
+                this.visibilityCommandBox));
         list.addAll(this.commandEdits);
         list.addAll(this.commandDeleteBtns);
+        list.addAll(this.itemIdEdits);
+        list.addAll(this.itemCountEdits);
+        list.addAll(this.itemNbtEdits);
+        list.addAll(this.itemDeleteBtns);
         list.addAll(this.editOptionButtons);
         list.addAll(this.deleteOptionButtons);
         return list;
@@ -390,19 +533,26 @@ public class LogicPropertyPage implements PropertyPage {
         this.allowSkipCheck.visible = visible;
         this.addCommandBtn.visible = visible;
         this.addOptionBtn.visible = visible;
+        this.addItemBtn.visible = visible;
         this.audioPathBox.setVisible(visible);
         this.audioBrowseBtn.visible = visible;
         this.audioPlayBtn.visible = visible;
+        this.visibilityCommandBox.setVisible(visible);
         this.commandEdits.forEach(b -> b.setVisible(visible));
         this.commandDeleteBtns.forEach(b -> b.visible = visible);
+        this.itemIdEdits.forEach(b -> b.setVisible(visible));
+        this.itemCountEdits.forEach(b -> b.setVisible(visible));
+        this.itemNbtEdits.forEach(b -> b.setVisible(visible));
+        this.itemDeleteBtns.forEach(b -> b.visible = visible);
         this.editOptionButtons.forEach(b -> b.visible = visible);
         this.deleteOptionButtons.forEach(b -> b.visible = visible);
     }
 
     @Override
     public int getContentHeight() {
-        int count = this.currentEntry != null ? (this.currentEntry.getOptions() != null ? this.currentEntry.getOptions().length : 0) : 0;
-        return this.optionListStartY - this.y + count * OPTION_ROW_HEIGHT + 40;
+        int optCount = this.currentEntry != null ? (this.currentEntry.getOptions() != null ? this.currentEntry.getOptions().length : 0) : 0;
+        int itemCount = this.currentEntry != null ? (this.currentEntry.getDisplayItems() != null ? this.currentEntry.getDisplayItems().size() : 0) : 0;
+        return this.optionListStartY - this.y + optCount * OPTION_ROW_HEIGHT + itemCount * COMMAND_ROW_HEIGHT + 40;
     }
 
     /**

@@ -170,5 +170,13 @@
   "gui.vn_edit.delete_confirm.title": "Delete Entry",
   "gui.vn_edit.delete_confirm.message": "Are you sure you want to delete entry '%s'?",
   "gui.vn_edit.delete_dialog.title": "Delete Dialog",
-  "gui.vn_edit.delete_dialog.message": "Are you sure you want to delete dialog '%s'? This will also remove the file."
+  "gui.vn_edit.delete_dialog.message": "Are you sure you want to delete dialog '%s'? This will also remove the file.",
+  "gui.vn_edit.size": "Size",
+  "gui.vn_edit.brightness": "Brightness",
+  "gui.vn_edit.visibility_command": "Visibility Command",
+  "gui.vn_edit.display_items": "Display Items",
+  "gui.vn_edit.add_item": "Add Item",
+  "gui.vn_edit.item_id": "Item ID",
+  "gui.vn_edit.count": "Count",
+  "gui.vn_edit.nbt": "NBT"
 }

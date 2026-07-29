@@ -5,6 +5,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.network.chat.Component;
@@ -48,6 +49,8 @@ public class PortraitListScreen extends Screen {
     private int previewH;
     private DropdownWidget posDropdown;
     private DropdownWidget animDropdown;
+    private EditBox sizeBox;
+    private EditBox brightnessBox;
     private Button delBtn;
     private Button upBtn;
     private Button downBtn;
@@ -104,6 +107,30 @@ public class PortraitListScreen extends Screen {
                 }
             }
         }));
+        this.sizeBox = this.addRenderableWidget(new EditBox(this.font, 0, 0, 80, 16, Component.translatable("gui.vn_edit.size")));
+        this.sizeBox.setMaxLength(10);
+        this.sizeBox.setResponder(s -> {
+            PortraitInfo info = this.getSelected();
+            if (info != null && !s.isEmpty()) {
+                try {
+                    float v = Float.parseFloat(s.trim());
+                    info.setSize(Math.max(0.0f, Math.min(5.0f, v)));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        });
+        this.brightnessBox = this.addRenderableWidget(new EditBox(this.font, 0, 0, 80, 16, Component.translatable("gui.vn_edit.brightness")));
+        this.brightnessBox.setMaxLength(10);
+        this.brightnessBox.setResponder(s -> {
+            PortraitInfo info = this.getSelected();
+            if (info != null && !s.isEmpty()) {
+                try {
+                    float v = Float.parseFloat(s.trim());
+                    info.setBrightness(Math.max(0.0f, Math.min(1.0f, v)));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        });
         this.delBtn = this.addRenderableWidget(Button.builder(Component.translatable("gui.vn_edit.delete"), b -> {
             if (this.selectedIndex >= 0 && this.selectedIndex < this.portraits.size()) {
                 this.portraits.remove(this.selectedIndex);
@@ -172,6 +199,8 @@ public class PortraitListScreen extends Screen {
         boolean visible = info != null;
         this.posDropdown.visible = visible;
         this.animDropdown.visible = visible;
+        this.sizeBox.visible = visible;
+        this.brightnessBox.visible = visible;
         this.delBtn.visible = visible;
         this.upBtn.visible = visible && this.selectedIndex > 0;
         this.downBtn.visible = visible && this.selectedIndex < this.portraits.size() - 1;
@@ -179,18 +208,48 @@ public class PortraitListScreen extends Screen {
             int line1Y = 40;
             int line2Y = 65;
             int line3Y = 90;
+            int line4Y = 115;
+            int line5Y = 140;
             this.posDropdown.setX(200);
             this.posDropdown.setY(line1Y);
             this.posDropdown.setSelected(this.getPositionDisplay(info.getPosition()).getString());
             this.animDropdown.setX(200);
             this.animDropdown.setY(line2Y);
             this.animDropdown.setSelected(this.getAnimationDisplay(info.getAnimationType()).getString());
+            this.sizeBox.setX(200);
+            this.sizeBox.setY(line3Y);
+            this.sizeBox.setResponder(null);
+            this.sizeBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getSize()));
+            this.sizeBox.setResponder(s -> {
+                PortraitInfo si = this.getSelected();
+                if (si != null && !s.isEmpty()) {
+                    try {
+                        float v = Float.parseFloat(s.trim());
+                        si.setSize(Math.max(0.0f, Math.min(5.0f, v)));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            });
+            this.brightnessBox.setX(200);
+            this.brightnessBox.setY(line4Y);
+            this.brightnessBox.setResponder(null);
+            this.brightnessBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getBrightness()));
+            this.brightnessBox.setResponder(s -> {
+                PortraitInfo si = this.getSelected();
+                if (si != null && !s.isEmpty()) {
+                    try {
+                        float v = Float.parseFloat(s.trim());
+                        si.setBrightness(Math.max(0.0f, Math.min(1.0f, v)));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            });
             this.delBtn.setX(145);
-            this.delBtn.setY(line3Y);
+            this.delBtn.setY(line5Y);
             this.upBtn.setX(260);
-            this.upBtn.setY(line3Y);
+            this.upBtn.setY(line5Y);
             this.downBtn.setX(285);
-            this.downBtn.setY(line3Y);
+            this.downBtn.setY(line5Y);
         }
     }
 
@@ -238,6 +297,8 @@ public class PortraitListScreen extends Screen {
         }
         g.drawString(this.font, Component.translatable("gui.vn_edit.position"), x + 5, 44, 0xCCCCCC);
         g.drawString(this.font, Component.translatable("gui.vn_edit.animation"), x + 5, 69, 0xCCCCCC);
+        g.drawString(this.font, Component.translatable("gui.vn_edit.size"), x + 5, 94, 0xCCCCCC);
+        g.drawString(this.font, Component.translatable("gui.vn_edit.brightness"), x + 5, 119, 0xCCCCCC);
     }
 
     private void renderPreview(GuiGraphics g) {

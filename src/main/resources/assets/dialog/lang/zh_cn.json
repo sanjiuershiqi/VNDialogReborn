@@ -170,5 +170,13 @@
   "gui.vn_edit.delete_confirm.title": "删除节点",
   "gui.vn_edit.delete_confirm.message": "确定要删除节点 '%s' 吗？",
   "gui.vn_edit.delete_dialog.title": "删除对话",
-  "gui.vn_edit.delete_dialog.message": "确定要删除对话 '%s' 吗？这将同时删除对应的文件。"
+  "gui.vn_edit.delete_dialog.message": "确定要删除对话 '%s' 吗？这将同时删除对应的文件。",
+  "gui.vn_edit.size": "大小",
+  "gui.vn_edit.brightness": "亮度",
+  "gui.vn_edit.visibility_command": "可见性命令",
+  "gui.vn_edit.display_items": "显示物品",
+  "gui.vn_edit.add_item": "添加物品",
+  "gui.vn_edit.item_id": "物品ID",
+  "gui.vn_edit.count": "数量",
+  "gui.vn_edit.nbt": "NBT"
 }
