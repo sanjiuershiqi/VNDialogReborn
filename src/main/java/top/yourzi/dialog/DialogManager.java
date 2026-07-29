@@ -195,8 +195,8 @@ public class DialogManager {
             return true;
         }
         try {
-            int result = server.getCommands().performPrefixedCommand(source, command);
-            return result > 0;
+            String cmd = command.startsWith("/") ? command.substring(1) : command;
+            return server.getCommands().getDispatcher().execute(cmd, source) > 0;
         } catch (Exception e) {
             Dialog.LOGGER.warn("Error executing visibility command '{}': {}", command, e.getMessage());
             return false;
