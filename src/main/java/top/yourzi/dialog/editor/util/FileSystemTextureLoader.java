@@ -48,13 +48,20 @@ public class FileSystemTextureLoader {
     }
 
     /**
-     * 解码输入流为 NativeImage，支持 PNG / JPG / JPEG / BMP / GIF / WEBP / PSD / TGA / HDR 等几乎所有格式。
+     * 解码输入流为 NativeImage，支持 PNG / JPG / JPEG / BMP / GIF / PSD / TGA / HDR / PIC / PNM 等格式。
      * - 真正的 PNG 优先走 NativeImage.read 高效路径；若失败（如 16-bit PNG、不支持的色深/颜色类型）自动回退到 STBImage。
-     * - 其它格式用 LWJGL STBImage 解码（MC 运行时自带），解决"扩展名 .png 但实际是 WebP/JPG"导致
-     *   NativeImage.read 抛 Bad PNG Signature、ImageIO 返回 null 的问题。
+     * - 其它格式用 LWJGL STBImage 解码（MC 运行时自带）。
+     * - 注意：WebP 不被 NativeImage / STBImage / JDK ImageIO 支持，需用户自行转换为 PNG/JPG。
      */
     public static NativeImage decodeToNativeImage(InputStream stream) throws IOException {
         byte[] bytes = stream.readAllBytes();
+        // 先做格式识别，对 MC 工具链无法解码的常见格式给出清晰可操作的提示，
+        // 避免用户看到一头雾水的 "STBImage failed to decode: Image not of any known type"。
+        String unsupported = detectUnsupportedFormat(bytes);
+        if (unsupported != null) {
+            Dialog.LOGGER.warn("decodeToNativeImage: 不支持的图片格式 ({} bytes): {}", bytes.length, unsupported);
+            throw new IOException(unsupported);
+        }
         // 完整 PNG 签名: 89 50 4E 47 0D 0A 1A 0A
         boolean isPng = bytes.length >= 8
                 && (bytes[0] & 0xFF) == 0x89
@@ -76,7 +83,7 @@ public class FileSystemTextureLoader {
                         bytes.length, e.toString());
             }
         }
-        // 非 PNG 或 NativeImage.read 失败：用 STBImage 解码（支持 WebP/JPG/BMP/GIF/PSD/TGA/HDR 等）
+        // 非 PNG 或 NativeImage.read 失败：用 STBImage 解码（支持 JPG/BMP/GIF/PSD/TGA/HDR 等）
         Dialog.LOGGER.info("decodeToNativeImage: decoding via STBImage ({} bytes, isPng={}, header={} {} {} {})",
                 bytes.length, isPng,
                 String.format("%02X", bytes[0] & 0xFF),
@@ -87,8 +94,37 @@ public class FileSystemTextureLoader {
     }
 
     /**
+     * 识别 MC 工具链（NativeImage / LWJGL STBImage / JDK ImageIO）均不支持的图片格式，
+     * 返回清晰可操作的错误信息；若非已知不支持的格式则返回 null（交由后续解码器尝试）。
+     * 重点处理"扩展名是 .png 但实际是 WebP"这类用户常见误用。
+     */
+    private static String detectUnsupportedFormat(byte[] bytes) {
+        if (bytes.length < 12) {
+            return null;
+        }
+        // WebP: "RIFF" (52 49 46 46) + 4 字节大小 + "WEBP" (57 45 42 50)
+        if (bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F'
+                && bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P') {
+            return "该文件实际是 WebP 格式（仅改了 .png 扩展名）。WebP 不被 Minecraft 支持，"
+                    + "请用看图软件将其另存/转换为 PNG 或 JPG 后再使用。";
+        }
+        // AVIF: "....ftyp" + "avif"/"avis" —— 同样不被支持
+        if (bytes[4] == 'f' && bytes[5] == 't' && bytes[6] == 'y' && bytes[7] == 'p'
+                && ((bytes[8] == 'a' && bytes[9] == 'v' && bytes[10] == 'i')
+                        || (bytes[8] == 'a' && bytes[9] == 'v' && bytes[10] == 'i' && bytes[11] == 's'))) {
+            return "该文件实际是 AVIF 格式。AVIF 不被 Minecraft 支持，请转换为 PNG 或 JPG 后再使用。";
+        }
+        // HEIC: "....ftyp" + "heic"/"heix"/"mif1" —— 同样不被支持
+        if (bytes[4] == 'f' && bytes[5] == 't' && bytes[6] == 'y' && bytes[7] == 'p'
+                && bytes[8] == 'h' && bytes[9] == 'e' && bytes[10] == 'i' && (bytes[11] == 'c' || bytes[11] == 'x')) {
+            return "该文件实际是 HEIC 格式。HEIC 不被 Minecraft 支持，请转换为 PNG 或 JPG 后再使用。";
+        }
+        return null;
+    }
+
+    /**
      * 用 LWJGL STBImage 解码图片字节为 NativeImage。强制 4 通道 RGBA。
-     * STBImage 支持 JPG/PNG/BMP/PSD/TGA/GIF/WEBP/PIC/PNM/HDR 等格式。
+     * STBImage 支持 JPG/PNG/BMP/PSD/TGA/GIF/PIC/PNM/HDR 等格式（不支持 WebP/AVIF/HEIC）。
      */
     private static NativeImage decodeWithSTB(byte[] bytes) throws IOException {
         ByteBuffer input = MemoryUtil.memAlloc(bytes.length);
