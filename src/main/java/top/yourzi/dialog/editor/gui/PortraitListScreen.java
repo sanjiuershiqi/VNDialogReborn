@@ -1,6 +1,7 @@
 package top.yourzi.dialog.editor.gui;
 
 import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
@@ -433,6 +434,10 @@ public class PortraitListScreen extends Screen {
         g.fill(x, y, x + 1, y + h, EditorTheme.BG_ELEVATED);
         g.fill(x + w - 1, y, x + w, y + h, EditorTheme.BG_ELEVATED);
         PortraitInfo info = this.getSelected();
+        // 调试日志：每秒输出一次预览状态，确认 previewTex 是否成功加载
+        if (info != null && (System.currentTimeMillis() / 1000) % 1 == 0 && this.previewTex == null && this.previewPath != null) {
+            Dialog.LOGGER.warn("renderPreview: previewTex is NULL but previewPath={} (加载失败?)", this.previewPath);
+        }
         if (this.previewTex != null && info != null) {
             // 模拟实际对话场景：立绘高度 = 舞台高度 * 0.68 * size，底部对齐
             float size = Mth.clamp(info.getSize(), 0.1f, 5.0f);
@@ -457,12 +462,12 @@ public class PortraitListScreen extends Screen {
             int baseY = y + h - portraitH;
             int renderX = baseX + (int) (info.getOffsetX() * w);
             int renderY = baseY + (int) (info.getOffsetY() * h);
-            // 与同代码库中可正常工作的 BuiltInTextureBrowserScreen.renderPreview 完全一致：
-            // 裸 blit 调用，不手动设置任何 RenderSystem 状态。
-            // 本屏是独立 Screen（非 widget），blit 在 super.render() 之前手动调用，
-            // GuiGraphics 的 blit 内部会通过 RenderType 自行管理纹理绑定和 shader。
-            // 手动 setShaderTexture / setShader / setShaderColor 会与托管批处理管线冲突，
-            // 导致 blit 不可见——即"能拖动但没图片"。
+            // 完全照搬 AppearancePropertyPage 背景预览的渲染方式（该方式经实测能正常显示）：
+            // 1. RenderSystem.setShaderTexture(0, tex) 手动绑定纹理
+            // 2. 8 参数 float 版 blit，且 width==textureWidth、height==textureHeight
+            //    （这是背景预览能工作的关键：让 UV (0,0)~(1,1) 归一化正确，采样整张纹理缩放绘制）
+            // 之前立绘预览传 portraitW/portraitH 作为 textureWidth/Height 导致 UV 错误采样到纹理外。
+            RenderSystem.setShaderTexture(0, this.previewTex);
             g.blit(this.previewTex, renderX, renderY, 0.0f, 0.0f, portraitW, portraitH, portraitW, portraitH);
             // 拖动提示
             if (this.draggingPortrait) {
@@ -679,10 +684,15 @@ public class PortraitListScreen extends Screen {
             this.previewW = image.getWidth();
             this.previewH = image.getHeight();
             DynamicTexture dynamicTexture = new DynamicTexture(image);
+            // 关键：显式 upload 确保纹理数据立即上传到 GPU。
+            // 虽然背景预览没显式调用也能工作（TextureManager 首次 bind 时会触发 load→upload），
+            // 但在独立 Screen 的渲染时序下，显式 upload 可消除首次帧空白的隐患。
+            dynamicTexture.upload();
             ResourceLocation rl = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "editor_preview/" + safeKey);
             Minecraft.getInstance().getTextureManager().register(rl, dynamicTexture);
             textureCache.put(safeKey, rl);
             sizeCache.put(safeKey, new int[]{this.previewW, this.previewH});
+            Dialog.LOGGER.info("Portrait preview texture registered: {} ({}x{})", rl, this.previewW, this.previewH);
             return rl;
         } catch (Exception e) {
             Dialog.LOGGER.error("Failed to load preview texture: {}", file, e);
