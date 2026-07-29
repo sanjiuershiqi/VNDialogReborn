@@ -412,8 +412,9 @@ public class PortraitListScreen extends Screen {
         File f = EditorConfig.PORTRAITS_DIR.resolve(path).toFile();
         if (!f.exists()) {
             // 配置目录没有该文件，检查是否为模组内置纹理
-            ResourceLocation builtinLoc = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/portraits/" + path);
+            // 路径含非法字符（如中文）时 ResourceLocation 构造会抛异常，需 try-catch
             try {
+                ResourceLocation builtinLoc = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/portraits/" + path);
                 java.io.InputStream stream = Minecraft.getInstance().getResourceManager()
                         .getResource(builtinLoc).orElseThrow().open();
                 NativeImage img = NativeImage.read(stream);

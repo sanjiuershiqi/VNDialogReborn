@@ -279,14 +279,25 @@ public class AppearancePropertyPage implements PropertyPage {
         File file = EditorConfig.BACKGROUNDS_DIR.resolve(path).toFile();
         if (file.exists()) {
             this.backgroundTexture = this.loadTexture(file, "background_" + path);
+            if (this.backgroundTexture == null) {
+                this.backgroundTexWidth = 0;
+                this.backgroundTexHeight = 0;
+            }
         } else {
-            ResourceLocation builtinLoc = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/backgrounds/" + path);
-            if (Minecraft.getInstance().getResourceManager().getResource(builtinLoc).isPresent()) {
-                this.backgroundTexture = builtinLoc;
-                // 内置纹理使用默认尺寸，blit 时按 256x256 作为源
-                this.backgroundTexWidth = 256;
-                this.backgroundTexHeight = 256;
-            } else {
+            // 内置纹理路径必须合法；含非法字符（如中文）时直接视为无预览
+            try {
+                ResourceLocation builtinLoc = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/backgrounds/" + path);
+                if (Minecraft.getInstance().getResourceManager().getResource(builtinLoc).isPresent()) {
+                    this.backgroundTexture = builtinLoc;
+                    // 内置纹理使用默认尺寸，blit 时按 256x256 作为源
+                    this.backgroundTexWidth = 256;
+                    this.backgroundTexHeight = 256;
+                } else {
+                    this.backgroundTexture = null;
+                    this.backgroundTexWidth = 0;
+                    this.backgroundTexHeight = 0;
+                }
+            } catch (net.minecraft.ResourceLocationException e) {
                 this.backgroundTexture = null;
                 this.backgroundTexWidth = 0;
                 this.backgroundTexHeight = 0;
