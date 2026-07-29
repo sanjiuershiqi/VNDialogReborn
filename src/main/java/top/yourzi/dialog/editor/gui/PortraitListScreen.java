@@ -38,7 +38,8 @@ public class PortraitListScreen extends Screen {
     private static final int FOOTER = 50;
     private static final int LEFT_W = 130;
     private static final int ROW_H = 12;
-    private static final int PREVIEW_SIZE = 50;
+    private static final int STAGE_X = 330;
+    private static final int STAGE_SIDE_MARGIN = 8;
 
     private final List<PortraitInfo> portraits;
     private final Consumer<List<PortraitInfo>> onSave;
@@ -49,6 +50,9 @@ public class PortraitListScreen extends Screen {
     private String previewPath = null;
     private int previewW;
     private int previewH;
+    private boolean draggingPortrait = false;
+    private double lastDragX = 0;
+    private double lastDragY = 0;
     private DropdownWidget posDropdown;
     private DropdownWidget animDropdown;
     private EditBox sizeBox;
@@ -59,6 +63,7 @@ public class PortraitListScreen extends Screen {
     private EditorButton upBtn;
     private EditorButton downBtn;
     private EditorButton folderBtn;
+    private EditorButton resetOffsetBtn;
     private static final List<String> POS_ITEMS = List.of(
             Component.translatable("gui.vn_edit.position.left").getString(),
             Component.translatable("gui.vn_edit.position.right").getString(),
@@ -171,6 +176,13 @@ public class PortraitListScreen extends Screen {
                 this.updatePreview();
             }
         }).bounds(0, 0, 60, 16).build());
+        this.resetOffsetBtn = this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.reset_offset"), b -> {
+            PortraitInfo info = this.getSelected();
+            if (info != null) {
+                info.setOffsetX(0.0f);
+                info.setOffsetY(0.0f);
+            }
+        }).bounds(0, 0, 38, 16).build());
         this.upBtn = this.addRenderableWidget(EditorButton.builder(Component.literal("\u25b2"), b -> {
             if (this.selectedIndex > 0 && this.selectedIndex < this.portraits.size()) {
                 this.portraits.add(this.selectedIndex - 1, this.portraits.remove(this.selectedIndex));
@@ -257,6 +269,7 @@ public class PortraitListScreen extends Screen {
         this.delBtn.visible = visible;
         this.upBtn.visible = visible && this.selectedIndex > 0;
         this.downBtn.visible = visible && this.selectedIndex < this.portraits.size() - 1;
+        this.resetOffsetBtn.visible = visible;
         if (visible) {
             int line1Y = 40;
             int line2Y = 65;
@@ -333,6 +346,8 @@ public class PortraitListScreen extends Screen {
             this.upBtn.setY(line7Y);
             this.downBtn.setX(285);
             this.downBtn.setY(line7Y);
+            this.resetOffsetBtn.setX(282);
+            this.resetOffsetBtn.setY(line6Y);
         }
     }
 
@@ -387,26 +402,62 @@ public class PortraitListScreen extends Screen {
     }
 
     private void renderPreview(GuiGraphics g) {
-        int x = 330;
+        int x = STAGE_X;
         int y = HEADER;
-        int size = PREVIEW_SIZE;
-        g.fill(x, y, x + size, y + size, EditorTheme.BG_SURFACE);
-        if (this.previewTex != null && this.getSelected() != null) {
-            float ratio = this.previewW > 0 && this.previewH > 0 ? (float) this.previewW / (float) this.previewH : 1.0f;
-            int dw = size;
-            int dh = size;
-            if (ratio > 1.0f) {
-                dh = (int) ((float) size / ratio);
-            } else {
-                dw = (int) ((float) size * ratio);
+        int w = Math.max(80, this.width - STAGE_X - 10);
+        int h = this.height - HEADER - FOOTER;
+        g.fill(x, y, x + w, y + h, EditorTheme.BG_SURFACE);
+        // 舞台边框
+        g.fill(x, y, x + w, y + 1, EditorTheme.BG_ELEVATED);
+        g.fill(x, y + h - 1, x + w, y + h, EditorTheme.BG_ELEVATED);
+        g.fill(x, y, x + 1, y + h, EditorTheme.BG_ELEVATED);
+        g.fill(x + w - 1, y, x + w, y + h, EditorTheme.BG_ELEVATED);
+        PortraitInfo info = this.getSelected();
+        if (this.previewTex != null && info != null && this.previewW > 0 && this.previewH > 0) {
+            // 模拟实际对话场景：立绘高度 = 舞台高度 * 0.68 * size，底部对齐
+            float size = Mth.clamp(info.getSize(), 0.1f, 5.0f);
+            int portraitH = (int) (h * 0.68f * size);
+            if (portraitH > h) {
+                portraitH = h;
             }
-            int dx = x + (size - dw) / 2;
-            int dy = y + (size - dh) / 2;
+            float ratio = (float) this.previewW / (float) this.previewH;
+            int portraitW = Math.max(1, (int) (portraitH * ratio));
+            if (portraitW > w) {
+                portraitW = w;
+                portraitH = (int) (portraitW / ratio);
+            }
+            int baseX = switch (info.getPosition() == null ? PortraitPosition.RIGHT : info.getPosition()) {
+                case LEFT -> x + STAGE_SIDE_MARGIN;
+                case CENTER -> x + (w - portraitW) / 2;
+                case RIGHT -> x + w - portraitW - STAGE_SIDE_MARGIN;
+            };
+            int baseY = y + h - portraitH;
+            int renderX = baseX + (int) (info.getOffsetX() * w);
+            int renderY = baseY + (int) (info.getOffsetY() * h);
+            // 用归一化 UV 采样整张纹理并缩放绘制
             RenderSystem.setShaderTexture(0, this.previewTex);
-            g.blit(this.previewTex, dx, dy, 0.0f, 0.0f, dw, dh, dw, dh);
+            RenderSystem.enableBlend();
+            g.blit(this.previewTex, renderX, renderY, portraitW, portraitH, 0, 0, portraitW, portraitH, portraitW, portraitH);
+            RenderSystem.disableBlend();
+            // 拖动提示
+            if (this.draggingPortrait) {
+                g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.drag_hint"), x + w / 2, y + 4, EditorTheme.ACCENT);
+            } else {
+                g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.drag_to_adjust"), x + w / 2, y + 4, EditorTheme.TEXT_MUTED);
+            }
+        } else if (info == null) {
+            g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.no_portrait_selected"), x + w / 2, y + h / 2 - 4, EditorTheme.TEXT_MUTED);
         } else {
-            g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.no_preview"), x + size / 2, y + size / 2 - 4, EditorTheme.TEXT_MUTED);
+            g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.no_preview"), x + w / 2, y + h / 2 - 4, EditorTheme.TEXT_MUTED);
         }
+    }
+
+    private boolean isMouseInStage(double mx, double my) {
+        int x = STAGE_X;
+        int y = HEADER;
+        int w = Math.max(80, this.width - STAGE_X - 10);
+        int h = this.height - HEADER - FOOTER;
+        return mx >= x && mx <= x + w && my >= y && my <= y + h;
     }
 
     @Override
@@ -438,7 +489,65 @@ public class PortraitListScreen extends Screen {
                 return true;
             }
         }
+        // 在舞台内按下：开始拖动立绘调整偏移
+        if (button == 0 && this.isMouseInStage(mouseX, mouseY) && this.getSelected() != null && this.previewTex != null) {
+            this.draggingPortrait = true;
+            this.lastDragX = mouseX;
+            this.lastDragY = mouseY;
+            return true;
+        }
         return false;
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (this.draggingPortrait && button == 0) {
+            PortraitInfo info = this.getSelected();
+            if (info != null) {
+                int stageW = Math.max(1, this.width - STAGE_X - 10);
+                int stageH = Math.max(1, this.height - HEADER - FOOTER);
+                double dx = mouseX - this.lastDragX;
+                double dy = mouseY - this.lastDragY;
+                info.setOffsetX(info.getOffsetX() + (float) (dx / stageW));
+                info.setOffsetY(info.getOffsetY() + (float) (dy / stageH));
+                this.lastDragX = mouseX;
+                this.lastDragY = mouseY;
+                // 同步输入框显示
+                this.offsetXBox.setResponder(null);
+                this.offsetXBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getOffsetX()));
+                this.offsetXBox.setResponder(s -> {
+                    PortraitInfo si = this.getSelected();
+                    if (si != null && !s.isEmpty()) {
+                        try {
+                            si.setOffsetX(Float.parseFloat(s.trim()));
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
+                });
+                this.offsetYBox.setResponder(null);
+                this.offsetYBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getOffsetY()));
+                this.offsetYBox.setResponder(s -> {
+                    PortraitInfo si = this.getSelected();
+                    if (si != null && !s.isEmpty()) {
+                        try {
+                            si.setOffsetY(Float.parseFloat(s.trim()));
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
+                });
+            }
+            return true;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (this.draggingPortrait && button == 0) {
+            this.draggingPortrait = false;
+            return true;
+        }
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
@@ -483,7 +592,9 @@ public class PortraitListScreen extends Screen {
                 img.close();
                 stream.close();
                 this.previewTex = builtinLoc;
+                Dialog.LOGGER.info("Portrait preview loaded from builtin: {} ({}x{})", path, this.previewW, this.previewH);
             } catch (Exception e) {
+                Dialog.LOGGER.warn("Portrait preview not found in config dir or builtin: {}", path, e);
                 this.previewTex = null;
             }
             return;
@@ -496,8 +607,9 @@ public class PortraitListScreen extends Screen {
             ResourceLocation loc = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "editor_preview/portrait_" + UUID.randomUUID().toString().toLowerCase(Locale.ROOT));
             Minecraft.getInstance().getTextureManager().register(loc, dyn);
             this.previewTex = loc;
-        } catch (IOException e) {
-            Dialog.LOGGER.warn("Failed to load portrait preview: {}", path, e);
+            Dialog.LOGGER.info("Portrait preview loaded from file: {} ({}x{})", f.getAbsolutePath(), this.previewW, this.previewH);
+        } catch (Exception e) {
+            Dialog.LOGGER.warn("Failed to load portrait preview from file: {}", f.getAbsolutePath(), e);
             this.previewTex = null;
         }
     }

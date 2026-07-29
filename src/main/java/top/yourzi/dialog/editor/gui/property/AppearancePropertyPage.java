@@ -282,6 +282,8 @@ public class AppearancePropertyPage implements PropertyPage {
             if (this.backgroundTexture == null) {
                 this.backgroundTexWidth = 0;
                 this.backgroundTexHeight = 0;
+            } else {
+                Dialog.LOGGER.info("Background preview loaded: {} ({}x{})", path, this.backgroundTexWidth, this.backgroundTexHeight);
             }
         } else {
             // 内置纹理路径必须合法；含非法字符（如中文）时直接视为无预览
@@ -292,12 +294,15 @@ public class AppearancePropertyPage implements PropertyPage {
                     // 内置纹理使用默认尺寸，blit 时按 256x256 作为源
                     this.backgroundTexWidth = 256;
                     this.backgroundTexHeight = 256;
+                    Dialog.LOGGER.info("Background preview loaded from builtin: {}", path);
                 } else {
+                    Dialog.LOGGER.warn("Background preview not found in config dir or builtin: {}", path);
                     this.backgroundTexture = null;
                     this.backgroundTexWidth = 0;
                     this.backgroundTexHeight = 0;
                 }
             } catch (net.minecraft.ResourceLocationException e) {
+                Dialog.LOGGER.warn("Background preview path invalid: {}", path, e);
                 this.backgroundTexture = null;
                 this.backgroundTexWidth = 0;
                 this.backgroundTexHeight = 0;
@@ -361,16 +366,13 @@ public class AppearancePropertyPage implements PropertyPage {
         this.backgroundBuiltInBtn.render(graphics, mouseX, mouseY, partialTick);
         this.backgroundFolderBtn.render(graphics, mouseX, mouseY, partialTick);
         // 背景预览
-        if (this.backgroundTexture != null && this.backgroundTexWidth > 0 && this.backgroundTexHeight > 0) {
+        if (this.backgroundTexture != null) {
             RenderSystem.setShaderTexture(0, this.backgroundTexture);
-            // 使用完整纹理尺寸作为源，将整张图缩放绘制到预览区域内
-            graphics.blit(this.backgroundTexture, this.backgroundPreviewX, this.backgroundPreviewY, 0.0f, 0.0f,
-                    this.backgroundPreviewWidth, this.backgroundPreviewHeight, this.backgroundTexWidth, this.backgroundTexHeight);
-        } else if (this.backgroundTexture != null) {
-            // 纹理尺寸未知时，使用默认 256x256 作为源尺寸
-            RenderSystem.setShaderTexture(0, this.backgroundTexture);
-            graphics.blit(this.backgroundTexture, this.backgroundPreviewX, this.backgroundPreviewY, 0.0f, 0.0f,
-                    this.backgroundPreviewWidth, this.backgroundPreviewHeight, 256, 256);
+            // 用归一化 UV 采样整张纹理并缩放绘制到预览区域（textureWidth/Height 传绘制尺寸使 UV 归一化到 0~1）
+            graphics.blit(this.backgroundTexture, this.backgroundPreviewX, this.backgroundPreviewY,
+                    this.backgroundPreviewWidth, this.backgroundPreviewHeight, 0, 0,
+                    this.backgroundPreviewWidth, this.backgroundPreviewHeight,
+                    this.backgroundPreviewWidth, this.backgroundPreviewHeight);
         } else {
             graphics.fill(this.backgroundPreviewX, this.backgroundPreviewY,
                     this.backgroundPreviewX + this.backgroundPreviewWidth, this.backgroundPreviewY + this.backgroundPreviewHeight, EditorTheme.BG_SURFACE);
