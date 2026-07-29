@@ -1,7 +1,6 @@
 package top.yourzi.dialog.editor.gui;
 
 import com.mojang.blaze3d.platform.NativeImage;
-import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
@@ -39,22 +38,21 @@ public class PortraitListScreen extends Screen {
     private static final int ROW_H = 12;
     private static final int STAGE_X = 330;
     private static final int STAGE_SIDE_MARGIN = 8;
+    private static final int MAX_CACHE_SIZE = 30;
 
-    private static final int MAX_PREVIEW_CACHE_SIZE = 30;
-    // 预览纹理静态缓存：与 AppearancePropertyPage.loadTexture 完全一致的机制，
-    // 复用已加载的纹理，避免每次选择都重建 DynamicTexture。
-    private static final java.util.Map<String, ResourceLocation> previewTextureCache = new java.util.LinkedHashMap<String, ResourceLocation>() {
+    // 预览纹理缓存：与 AppearancePropertyPage 完全一致的机制（静态 LRU + sizeCache）。
+    private static final java.util.Map<String, ResourceLocation> textureCache = new java.util.LinkedHashMap<String, ResourceLocation>() {
         @Override
         protected boolean removeEldestEntry(java.util.Map.Entry<String, ResourceLocation> eldest) {
-            if (this.size() > MAX_PREVIEW_CACHE_SIZE) {
+            if (this.size() > MAX_CACHE_SIZE) {
                 Minecraft.getInstance().getTextureManager().release(eldest.getValue());
-                previewSizeCache.remove(eldest.getKey());
+                sizeCache.remove(eldest.getKey());
                 return true;
             }
             return false;
         }
     };
-    private static final java.util.Map<String, int[]> previewSizeCache = new java.util.LinkedHashMap<>();
+    private static final java.util.Map<String, int[]> sizeCache = new java.util.LinkedHashMap<>();
 
     private final List<PortraitInfo> portraits;
     private final Consumer<List<PortraitInfo>> onSave;
@@ -256,12 +254,12 @@ public class PortraitListScreen extends Screen {
     /**
      * 释放所有静态缓存的预览纹理。编辑器关闭时调用。
      */
-    public static void releaseAllPreviewTextures() {
-        for (ResourceLocation rl : previewTextureCache.values()) {
+    public static void releaseTextures() {
+        for (ResourceLocation rl : textureCache.values()) {
             Minecraft.getInstance().getTextureManager().release(rl);
         }
-        previewTextureCache.clear();
-        previewSizeCache.clear();
+        textureCache.clear();
+        sizeCache.clear();
     }
 
     @Override
@@ -459,10 +457,12 @@ public class PortraitListScreen extends Screen {
             int baseY = y + h - portraitH;
             int renderX = baseX + (int) (info.getOffsetX() * w);
             int renderY = baseY + (int) (info.getOffsetY() * h);
-            // 与背景预览 / 原版编辑器模组完全一致的渲染方式：
-            // 仅手动绑定纹理 + 8 参数 float 版 blit（UV 0..1 采样整张纹理缩放绘制）。
-            // 不设置 setShader/setShaderColor/enableBlend，这些会与 GuiGraphics 托管批处理管线冲突。
-            RenderSystem.setShaderTexture(0, this.previewTex);
+            // 与同代码库中可正常工作的 BuiltInTextureBrowserScreen.renderPreview 完全一致：
+            // 裸 blit 调用，不手动设置任何 RenderSystem 状态。
+            // 本屏是独立 Screen（非 widget），blit 在 super.render() 之前手动调用，
+            // GuiGraphics 的 blit 内部会通过 RenderType 自行管理纹理绑定和 shader。
+            // 手动 setShaderTexture / setShader / setShaderColor 会与托管批处理管线冲突，
+            // 导致 blit 不可见——即"能拖动但没图片"。
             g.blit(this.previewTex, renderX, renderY, 0.0f, 0.0f, portraitW, portraitH, portraitW, portraitH);
             // 拖动提示
             if (this.draggingPortrait) {
@@ -594,8 +594,15 @@ public class PortraitListScreen extends Screen {
         }
     }
 
+    /**
+     * 加载立绘预览。结构与 AppearancePropertyPage.loadBackgroundPreview 完全一致：
+     * 先尝试配置目录文件，再回退内置纹理资源。
+     */
     private void loadPreview(String path) {
-        if (path == null) {
+        if (path == null || path.isEmpty()) {
+            this.previewTex = null;
+            this.previewW = 0;
+            this.previewH = 0;
             return;
         }
         if (path.equals(this.previewPath)) {
@@ -603,52 +610,53 @@ public class PortraitListScreen extends Screen {
         }
         this.releasePreviewTexture();
         this.previewPath = path;
-        File f = EditorConfig.PORTRAITS_DIR.resolve(path).toFile();
-        if (!f.exists()) {
-            // 配置目录没有该文件，检查是否为模组内置纹理
-            // 路径含非法字符（如中文）时 ResourceLocation 构造会抛异常，需 try-catch
+        File file = EditorConfig.PORTRAITS_DIR.resolve(path).toFile();
+        if (file.exists()) {
+            this.previewTex = this.loadTexture(file, "portrait_" + path);
+            if (this.previewTex == null) {
+                this.previewW = 0;
+                this.previewH = 0;
+            } else {
+                Dialog.LOGGER.info("Portrait preview loaded: {} ({}x{})", path, this.previewW, this.previewH);
+            }
+        } else {
+            // 内置纹理路径必须合法；含非法字符（如中文）时直接视为无预览
             try {
                 ResourceLocation builtinLoc = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/portraits/" + path);
                 if (Minecraft.getInstance().getResourceManager().getResource(builtinLoc).isPresent()) {
-                    // 内置纹理使用默认尺寸，blit 时按 UV 0..1 采样整张纹理缩放绘制
+                    this.previewTex = builtinLoc;
+                    // 内置纹理使用默认尺寸，blit 时按 256x256 作为源
                     this.previewW = 256;
                     this.previewH = 256;
-                    this.previewTex = builtinLoc;
                     Dialog.LOGGER.info("Portrait preview loaded from builtin: {}", path);
                 } else {
                     Dialog.LOGGER.warn("Portrait preview not found in config dir or builtin: {}", path);
                     this.previewTex = null;
+                    this.previewW = 0;
+                    this.previewH = 0;
                 }
             } catch (net.minecraft.ResourceLocationException e) {
                 Dialog.LOGGER.warn("Portrait preview path invalid: {}", path, e);
                 this.previewTex = null;
+                this.previewW = 0;
+                this.previewH = 0;
             }
-            return;
-        }
-        // 与 AppearancePropertyPage.loadTexture 完全一致的加载逻辑：
-        // 用 safeKey 缓存，命中直接返回；未命中则解码 + DynamicTexture + register。
-        ResourceLocation loaded = this.loadPreviewTexture(f, "portrait_" + path);
-        if (loaded != null) {
-            this.previewTex = loaded;
-            Dialog.LOGGER.info("Portrait preview loaded from file: {} ({}x{})", f.getAbsolutePath(), this.previewW, this.previewH);
-        } else {
-            this.previewTex = null;
         }
     }
 
     /**
-     * 加载预览纹理：与 AppearancePropertyPage.loadTexture 完全一致的实现。
-     * 使用静态缓存复用纹理，命中时恢复尺寸，未命中时解码并注册。
+     * 加载纹理：与 AppearancePropertyPage.loadTexture 逐行一致的实现。
+     * 静态缓存复用，命中时恢复尺寸，未命中时解码并注册。
      */
-    private ResourceLocation loadPreviewTexture(File file, String cacheKey) {
+    private ResourceLocation loadTexture(File file, String cacheKey) {
         String safeKey = cacheKey.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9/._-]", "_");
-        if (previewTextureCache.containsKey(safeKey)) {
-            int[] size = previewSizeCache.get(safeKey);
+        if (textureCache.containsKey(safeKey)) {
+            int[] size = sizeCache.get(safeKey);
             if (size != null) {
                 this.previewW = size[0];
                 this.previewH = size[1];
             }
-            return previewTextureCache.get(safeKey);
+            return textureCache.get(safeKey);
         }
         if (!file.exists()) {
             File parent = file.getParentFile();
@@ -673,8 +681,8 @@ public class PortraitListScreen extends Screen {
             DynamicTexture dynamicTexture = new DynamicTexture(image);
             ResourceLocation rl = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "editor_preview/" + safeKey);
             Minecraft.getInstance().getTextureManager().register(rl, dynamicTexture);
-            previewTextureCache.put(safeKey, rl);
-            previewSizeCache.put(safeKey, new int[]{this.previewW, this.previewH});
+            textureCache.put(safeKey, rl);
+            sizeCache.put(safeKey, new int[]{this.previewW, this.previewH});
             return rl;
         } catch (Exception e) {
             Dialog.LOGGER.error("Failed to load preview texture: {}", file, e);
