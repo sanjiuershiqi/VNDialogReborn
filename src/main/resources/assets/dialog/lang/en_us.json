@@ -203,6 +203,7 @@
   "gui.vn_edit.offset_y": "Offset Y",
   "gui.vn_edit.drag_to_adjust": "Drag portrait in preview to adjust position",
   "gui.vn_edit.drag_hint": "Dragging...",
+  "gui.vn_edit.dialog_box_preview": "Dialog Box",
   "gui.vn_edit.reset_offset": "Reset Offset",
   "gui.vn_edit.visibility_command": "Visibility Command",
   "gui.vn_edit.display_items": "Display Items",

@@ -309,11 +309,46 @@ public class PortraitListScreen extends Screen {
         g.fill(x, y + h - 1, x + w, y + h, EditorTheme.BG_ELEVATED);
         g.fill(x, y, x + 1, y + h, EditorTheme.BG_ELEVATED);
         g.fill(x + w - 1, y, x + w, y + h, EditorTheme.BG_ELEVATED);
+        // 对话框位置参考框：按实际演出比例在舞台内绘制
+        renderDialogBoxGuide(g, x, y, w, h);
+    }
+
+    /**
+     * 在舞台内按实际演出比例绘制对话框参考框。
+     * 实际演出中对话框位置：宽=min(DIALOG_BOX_WIDTH, width-20)，高=DIALOG_BOX_HEIGHT，
+     * X=(width-boxW)/2，Y=height-boxH-20。这里把实际屏幕尺寸映射到舞台区域。
+     */
+    private void renderDialogBoxGuide(GuiGraphics g, int stageX, int stageY, int stageW, int stageH) {
+        // 取实际配置的对话框尺寸
+        int cfgBoxW = top.yourzi.dialog.config.ClientConfig.DIALOG_BOX_WIDTH.get();
+        int cfgBoxH = top.yourzi.dialog.config.ClientConfig.DIALOG_BOX_HEIGHT.get();
+        // 实际屏幕对应的对话框宽高（按比例）
+        int realBoxW = Math.min(cfgBoxW, this.width - 20);
+        int realBoxH = cfgBoxH;
+        // 映射到舞台坐标：实际屏幕宽 this.width -> 舞台宽 stageW；实际屏幕高 this.height -> 舞台高 stageH
+        float scaleX = (float) stageW / this.width;
+        float scaleY = (float) stageH / this.height;
+        int boxW = (int) (realBoxW * scaleX);
+        int boxH = (int) (realBoxH * scaleY);
+        int boxX = stageX + (int) ((this.width - realBoxW) / 2 * scaleX);
+        // 实际 Y = height - boxH - 20，映射到舞台
+        int boxY = stageY + (int) ((this.height - realBoxH - 20) * scaleY);
+        // 半透明边框表示对话框区域
+        g.fill(boxX, boxY, boxX + boxW, boxY + boxH, 0x33444444);
+        g.fill(boxX, boxY, boxX + boxW, boxY + 1, 0x88AAAAAA);
+        g.fill(boxX, boxY + boxH - 1, boxX + boxW, boxY + boxH, 0x88AAAAAA);
+        g.fill(boxX, boxY, boxX + 1, boxY + boxH, 0x88AAAAAA);
+        g.fill(boxX + boxW - 1, boxY, boxX + boxW, boxY + boxH, 0x88AAAAAA);
+        g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.dialog_box_preview"), boxX + boxW / 2, boxY + boxH / 2 - 4, 0x88AAAAAA);
     }
 
     /**
      * 绘制立绘 blit 与提示文字（在所有 widget 之后）。
-     * 立绘始终居中显示，方便拖动微调 offset。
+     * 立绘渲染逻辑与 DialogScreen.renderPortraits 完全对齐：
+     * - 高度 = 屏幕高 * 0.68 * size（映射到舞台）
+     * - X 按 position（LEFT/CENTER/RIGHT）定位，侧边距 20px（映射到舞台）
+     * - Y 底部对齐（立绘站在屏幕底部，映射到舞台底部）
+     * - offset 相对屏幕尺寸（映射到舞台）
      */
     private void renderPortraitBlit(GuiGraphics g) {
         int x = STAGE_X;
@@ -323,8 +358,11 @@ public class PortraitListScreen extends Screen {
         PortraitInfo info = this.getSelected();
         if (this.previewTex != null && info != null) {
             float size = Mth.clamp(info.getSize(), 0.1f, 5.0f);
-            // 立绘高度按舞台高度 * size 缩放，最大不超过舞台高度
-            int portraitH = (int) (h * 0.8f * size);
+            // 映射比例：实际屏幕尺寸 -> 舞台尺寸
+            float scaleX = (float) w / this.width;
+            float scaleY = (float) h / this.height;
+            // 立绘高度 = 实际屏幕高 * 0.68 * size，映射到舞台
+            int portraitH = (int) (this.height * 0.68f * size * scaleY);
             if (portraitH > h) {
                 portraitH = h;
             }
@@ -336,14 +374,24 @@ public class PortraitListScreen extends Screen {
                 portraitW = w;
                 portraitH = (int) (portraitW / ratio);
             }
-            // 始终居中（水平+垂直），offset 微调以居中为基准
-            int baseX = x + (w - portraitW) / 2;
-            int baseY = y + (h - portraitH) / 2;
-            int renderX = baseX + (int) (info.getOffsetX() * w);
-            int renderY = baseY + (int) (info.getOffsetY() * h);
-            // 与背景预览完全一致的渲染方式：setShaderTexture + 8 参数 float blit (width==textureWidth)
+            // X 基准按 position 定位，侧边距 20px 映射到舞台
+            int sideMargin = (int) (20 * scaleX);
+            int baseX = switch (info.getPosition()) {
+                case LEFT -> x + sideMargin;
+                case CENTER -> x + (w - portraitW) / 2;
+                case RIGHT -> x + w - portraitW - sideMargin;
+            };
+            // Y 底部对齐：立绘站在舞台底部（对应实际屏幕底部）
+            int baseY = y + h - portraitH;
+            // offset 相对实际屏幕尺寸，映射到舞台
+            int renderX = baseX + (int) (info.getOffsetX() * this.width * scaleX);
+            int renderY = baseY + (int) (info.getOffsetY() * this.height * scaleY);
+            // 与实际演出完全一致的渲染方式
             RenderSystem.setShaderTexture(0, this.previewTex);
+            RenderSystem.enableBlend();
+            RenderSystem.defaultBlendFunc();
             g.blit(this.previewTex, renderX, renderY, 0.0f, 0.0f, portraitW, portraitH, portraitW, portraitH);
+            RenderSystem.disableBlend();
             if (this.draggingPortrait) {
                 g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.drag_hint"), x + w / 2, y + 4, EditorTheme.ACCENT);
                 // 拖动时在舞台底部显示当前 offset 值，方便精确微调
@@ -514,10 +562,10 @@ public class PortraitListScreen extends Screen {
         if (this.draggingPortrait && button == 0) {
             PortraitInfo info = this.getSelected();
             if (info != null) {
-                int stageW = Math.max(1, stageWidth());
-                int stageH = Math.max(1, this.height - HEADER - FOOTER);
-                info.setOffsetX(info.getOffsetX() + (float) ((mouseX - this.lastDragX) / stageW));
-                info.setOffsetY(info.getOffsetY() + (float) ((mouseY - this.lastDragY) / stageH));
+                // offset 相对实际屏幕尺寸（与 DialogScreen 演出一致），故拖动量除以屏幕尺寸
+                // 像素拖动量 / 屏幕尺寸 = offset 变化量；舞台是屏幕的缩放映射，拖动同一个像素对应的 offset 一致
+                info.setOffsetX(info.getOffsetX() + (float) ((mouseX - this.lastDragX) / this.width));
+                info.setOffsetY(info.getOffsetY() + (float) ((mouseY - this.lastDragY) / this.height));
                 this.lastDragX = mouseX;
                 this.lastDragY = mouseY;
                 // 拖动时同步输入框显示（仅当输入框未聚焦时，避免打断用户输入）

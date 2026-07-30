@@ -203,6 +203,7 @@
   "gui.vn_edit.offset_y": "纵向偏移",
   "gui.vn_edit.drag_to_adjust": "在预览区拖动立绘可微调位置",
   "gui.vn_edit.drag_hint": "拖动中…",
+  "gui.vn_edit.dialog_box_preview": "对话框位置",
   "gui.vn_edit.reset_offset": "重置偏移",
   "gui.vn_edit.visibility_command": "可见性命令",
   "gui.vn_edit.display_items": "显示物品",
