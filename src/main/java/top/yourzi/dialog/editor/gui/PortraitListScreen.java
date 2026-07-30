@@ -386,7 +386,7 @@ public class PortraitListScreen extends Screen {
     /**
      * 设置浮点输入框的值与 responder（先置 null 避免 setValue 触发回写）。
      */
-    private void setFloatBox(EditBox box, int y, float value, java.util.function.FloatConsumer setter) {
+    private void setFloatBox(EditBox box, int y, float value, java.util.function.Consumer<Float> setter) {
         box.setX(200);
         box.setY(y);
         box.setResponder(null);
