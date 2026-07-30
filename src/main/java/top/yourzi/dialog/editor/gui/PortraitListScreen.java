@@ -38,7 +38,6 @@ public class PortraitListScreen extends Screen {
     private static final int LEFT_W = 130;
     private static final int ROW_H = 12;
     private static final int STAGE_X = 330;
-    private static final int STAGE_SIDE_MARGIN = 8;
     private static final int MAX_CACHE_SIZE = 30;
 
     // 预览纹理缓存：与 AppearancePropertyPage 完全一致的机制（静态 LRU + sizeCache）。
@@ -245,11 +244,12 @@ public class PortraitListScreen extends Screen {
         }, Minecraft.getInstance().screen));
     }
 
-    private void releasePreviewTexture() {
-        // 预览纹理由静态缓存管理（与 AppearancePropertyPage 一致），切换选中项时不释放，
-        // 交由缓存 LRU 淘汰时统一 release。
+    /** 清空当前预览引用（纹理由静态缓存管理，切换/关闭时不释放）。 */
+    private void clearPreviewRef() {
         this.previewTex = null;
         this.previewPath = null;
+        this.previewW = 0;
+        this.previewH = 0;
     }
 
     /**
@@ -270,20 +270,22 @@ public class PortraitListScreen extends Screen {
         int contentH = this.height - HEADER - FOOTER;
         this.renderLeftList(g, mx, my, contentH);
         this.renderMiddlePanel(g, mx, my, contentH);
-        // 舞台背景与边框在 widget 之前绘制（作为底层背景）
+        // 舞台背景在 widget 之前绘制（作为底层背景）
         this.renderStageBackground(g);
         this.updateDynamicButtons();
         super.render(g, mx, my, pt);
-        // 立绘 blit 在所有 widget 渲染之后再绘制。
-        // 之前在 super.render() 之前调用，blit 命令被缓冲，随后 super.render() 渲染 widget 时
-        // 批量 flush 会把 DynamicTexture 的纹理绑定与其它 RenderType 混在一起，导致立绘不可见。
-        // 背景预览能工作正是因为它在 widget 管线内(super.render→PropertyPanel.renderWidget→
-        // AppearancePropertyPage.render)，flush 时机由 widget 管线控制。
-        // 现在移到 super.render() 之后，立绘在所有 widget 之后绘制，与背景预览的渲染时机对齐。
+        // 立绘 blit 必须在 super.render() 之后绘制：本屏是独立 Screen，
+        // 立绘 blit 若在 super.render() 之前调用会被 GuiGraphics 缓冲，随后渲染 widget 时
+        // 批量 flush 会把 DynamicTexture 纹理绑定与其它 RenderType 混在一起导致不可见。
         this.renderPortraitBlit(g);
-        // 在所有控件之后渲染展开的下拉弹出列表，确保不被遮挡
+        // 下拉弹出列表最后渲染，确保不被遮挡
         this.posDropdown.renderPopup(g, mx, my, pt);
         this.animDropdown.renderPopup(g, mx, my, pt);
+    }
+
+    /** 舞台宽度（右侧预览区）。 */
+    private int stageWidth() {
+        return Math.max(80, this.width - STAGE_X - 10);
     }
 
     /**
@@ -292,7 +294,7 @@ public class PortraitListScreen extends Screen {
     private void renderStageBackground(GuiGraphics g) {
         int x = STAGE_X;
         int y = HEADER;
-        int w = Math.max(80, this.width - STAGE_X - 10);
+        int w = stageWidth();
         int h = this.height - HEADER - FOOTER;
         g.fill(x, y, x + w, y + h, EditorTheme.BG_SURFACE);
         g.fill(x, y, x + w, y + 1, EditorTheme.BG_ELEVATED);
@@ -303,16 +305,18 @@ public class PortraitListScreen extends Screen {
 
     /**
      * 绘制立绘 blit 与提示文字（在所有 widget 之后）。
+     * 立绘始终居中显示，方便拖动微调 offset。
      */
     private void renderPortraitBlit(GuiGraphics g) {
         int x = STAGE_X;
         int y = HEADER;
-        int w = Math.max(80, this.width - STAGE_X - 10);
+        int w = stageWidth();
         int h = this.height - HEADER - FOOTER;
         PortraitInfo info = this.getSelected();
         if (this.previewTex != null && info != null) {
             float size = Mth.clamp(info.getSize(), 0.1f, 5.0f);
-            int portraitH = (int) (h * 0.68f * size);
+            // 立绘高度按舞台高度 * size 缩放，最大不超过舞台高度
+            int portraitH = (int) (h * 0.8f * size);
             if (portraitH > h) {
                 portraitH = h;
             }
@@ -324,12 +328,9 @@ public class PortraitListScreen extends Screen {
                 portraitW = w;
                 portraitH = (int) (portraitW / ratio);
             }
-            int baseX = switch (info.getPosition() == null ? PortraitPosition.RIGHT : info.getPosition()) {
-                case LEFT -> x + STAGE_SIDE_MARGIN;
-                case CENTER -> x + (w - portraitW) / 2;
-                case RIGHT -> x + w - portraitW - STAGE_SIDE_MARGIN;
-            };
-            int baseY = y + h - portraitH;
+            // 始终居中（水平+垂直），offset 微调以居中为基准
+            int baseX = x + (w - portraitW) / 2;
+            int baseY = y + (h - portraitH) / 2;
             int renderX = baseX + (int) (info.getOffsetX() * w);
             int renderY = baseY + (int) (info.getOffsetY() * h);
             // 与背景预览完全一致的渲染方式：setShaderTexture + 8 参数 float blit (width==textureWidth)
@@ -361,84 +362,44 @@ public class PortraitListScreen extends Screen {
         this.downBtn.visible = visible && this.selectedIndex < this.portraits.size() - 1;
         this.resetOffsetBtn.visible = visible;
         if (visible) {
-            int line1Y = 40;
-            int line2Y = 65;
-            int line3Y = 90;
-            int line4Y = 115;
-            int line5Y = 140;
-            int line6Y = 165;
-            int line7Y = 190;
             this.posDropdown.setX(200);
-            this.posDropdown.setY(line1Y);
+            this.posDropdown.setY(40);
             this.posDropdown.setSelected(this.getPositionDisplay(info.getPosition()).getString());
             this.animDropdown.setX(200);
-            this.animDropdown.setY(line2Y);
+            this.animDropdown.setY(65);
             this.animDropdown.setSelected(this.getAnimationDisplay(info.getAnimationType()).getString());
-            this.sizeBox.setX(200);
-            this.sizeBox.setY(line3Y);
-            this.sizeBox.setResponder(null);
-            this.sizeBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getSize()));
-            this.sizeBox.setResponder(s -> {
-                PortraitInfo si = this.getSelected();
-                if (si != null && !s.isEmpty()) {
-                    try {
-                        float v = Float.parseFloat(s.trim());
-                        si.setSize(Math.max(0.0f, Math.min(5.0f, v)));
-                    } catch (NumberFormatException ignored) {
-                    }
-                }
-            });
-            this.brightnessBox.setX(200);
-            this.brightnessBox.setY(line4Y);
-            this.brightnessBox.setResponder(null);
-            this.brightnessBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getBrightness()));
-            this.brightnessBox.setResponder(s -> {
-                PortraitInfo si = this.getSelected();
-                if (si != null && !s.isEmpty()) {
-                    try {
-                        float v = Float.parseFloat(s.trim());
-                        si.setBrightness(Math.max(0.0f, Math.min(1.0f, v)));
-                    } catch (NumberFormatException ignored) {
-                    }
-                }
-            });
-            this.offsetXBox.setX(200);
-            this.offsetXBox.setY(line5Y);
-            this.offsetXBox.setResponder(null);
-            this.offsetXBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getOffsetX()));
-            this.offsetXBox.setResponder(s -> {
-                PortraitInfo si = this.getSelected();
-                if (si != null && !s.isEmpty()) {
-                    try {
-                        float v = Float.parseFloat(s.trim());
-                        si.setOffsetX(v);
-                    } catch (NumberFormatException ignored) {
-                    }
-                }
-            });
-            this.offsetYBox.setX(200);
-            this.offsetYBox.setY(line6Y);
-            this.offsetYBox.setResponder(null);
-            this.offsetYBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getOffsetY()));
-            this.offsetYBox.setResponder(s -> {
-                PortraitInfo si = this.getSelected();
-                if (si != null && !s.isEmpty()) {
-                    try {
-                        float v = Float.parseFloat(s.trim());
-                        si.setOffsetY(v);
-                    } catch (NumberFormatException ignored) {
-                    }
-                }
-            });
+            setFloatBox(this.sizeBox, 90, info.getSize(), v -> info.setSize(Mth.clamp(v, 0.0f, 5.0f)));
+            setFloatBox(this.brightnessBox, 115, info.getBrightness(), v -> info.setBrightness(Mth.clamp(v, 0.0f, 1.0f)));
+            setFloatBox(this.offsetXBox, 140, info.getOffsetX(), info::setOffsetX);
+            setFloatBox(this.offsetYBox, 165, info.getOffsetY(), info::setOffsetY);
             this.delBtn.setX(145);
-            this.delBtn.setY(line7Y);
+            this.delBtn.setY(190);
             this.upBtn.setX(260);
-            this.upBtn.setY(line7Y);
+            this.upBtn.setY(190);
             this.downBtn.setX(285);
-            this.downBtn.setY(line7Y);
+            this.downBtn.setY(190);
             this.resetOffsetBtn.setX(282);
-            this.resetOffsetBtn.setY(line6Y);
+            this.resetOffsetBtn.setY(165);
         }
+    }
+
+    /**
+     * 设置浮点输入框的值与 responder（先置 null 避免 setValue 触发回写）。
+     */
+    private void setFloatBox(EditBox box, int y, float value, java.util.function.FloatConsumer setter) {
+        box.setX(200);
+        box.setY(y);
+        box.setResponder(null);
+        box.setValue(String.format(java.util.Locale.ROOT, "%.2f", value));
+        box.setResponder(s -> {
+            PortraitInfo si = this.getSelected();
+            if (si != null && !s.isEmpty()) {
+                try {
+                    setter.accept(Float.parseFloat(s.trim()));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        });
     }
 
     private void renderLeftList(GuiGraphics g, int mx, int my, int contentH) {
@@ -494,7 +455,7 @@ public class PortraitListScreen extends Screen {
     private boolean isMouseInStage(double mx, double my) {
         int x = STAGE_X;
         int y = HEADER;
-        int w = Math.max(80, this.width - STAGE_X - 10);
+        int w = stageWidth();
         int h = this.height - HEADER - FOOTER;
         return mx >= x && mx <= x + w && my >= y && my <= y + h;
     }
@@ -543,37 +504,15 @@ public class PortraitListScreen extends Screen {
         if (this.draggingPortrait && button == 0) {
             PortraitInfo info = this.getSelected();
             if (info != null) {
-                int stageW = Math.max(1, this.width - STAGE_X - 10);
+                int stageW = Math.max(1, stageWidth());
                 int stageH = Math.max(1, this.height - HEADER - FOOTER);
-                double dx = mouseX - this.lastDragX;
-                double dy = mouseY - this.lastDragY;
-                info.setOffsetX(info.getOffsetX() + (float) (dx / stageW));
-                info.setOffsetY(info.getOffsetY() + (float) (dy / stageH));
+                info.setOffsetX(info.getOffsetX() + (float) ((mouseX - this.lastDragX) / stageW));
+                info.setOffsetY(info.getOffsetY() + (float) ((mouseY - this.lastDragY) / stageH));
                 this.lastDragX = mouseX;
                 this.lastDragY = mouseY;
                 // 同步输入框显示
-                this.offsetXBox.setResponder(null);
-                this.offsetXBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getOffsetX()));
-                this.offsetXBox.setResponder(s -> {
-                    PortraitInfo si = this.getSelected();
-                    if (si != null && !s.isEmpty()) {
-                        try {
-                            si.setOffsetX(Float.parseFloat(s.trim()));
-                        } catch (NumberFormatException ignored) {
-                        }
-                    }
-                });
-                this.offsetYBox.setResponder(null);
-                this.offsetYBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getOffsetY()));
-                this.offsetYBox.setResponder(s -> {
-                    PortraitInfo si = this.getSelected();
-                    if (si != null && !s.isEmpty()) {
-                        try {
-                            si.setOffsetY(Float.parseFloat(s.trim()));
-                        } catch (NumberFormatException ignored) {
-                        }
-                    }
-                });
+                setFloatBox(this.offsetXBox, 140, info.getOffsetX(), info::setOffsetX);
+                setFloatBox(this.offsetYBox, 165, info.getOffsetY(), info::setOffsetY);
             }
             return true;
         }
@@ -603,64 +542,49 @@ public class PortraitListScreen extends Screen {
         if (info != null) {
             this.loadPreview(info.getPath());
         } else {
-            this.previewTex = null;
-            this.previewPath = null;
+            this.clearPreviewRef();
         }
     }
 
     /**
-     * 加载立绘预览。结构与 AppearancePropertyPage.loadBackgroundPreview 完全一致：
-     * 先尝试配置目录文件，再回退内置纹理资源。
+     * 加载立绘预览。先尝试配置目录文件，再回退内置纹理资源。
      */
     private void loadPreview(String path) {
         if (path == null || path.isEmpty()) {
-            this.previewTex = null;
-            this.previewW = 0;
-            this.previewH = 0;
+            this.clearPreviewRef();
             return;
         }
         if (path.equals(this.previewPath)) {
             return;
         }
-        this.releasePreviewTexture();
+        this.clearPreviewRef();
         this.previewPath = path;
         File file = EditorConfig.PORTRAITS_DIR.resolve(path).toFile();
         if (file.exists()) {
             this.previewTex = this.loadTexture(file, "portrait_" + path);
-            if (this.previewTex == null) {
-                this.previewW = 0;
-                this.previewH = 0;
-            } else {
+            if (this.previewTex != null) {
                 Dialog.LOGGER.info("Portrait preview loaded: {} ({}x{})", path, this.previewW, this.previewH);
             }
-        } else {
-            // 内置纹理路径必须合法；含非法字符（如中文）时直接视为无预览
-            try {
-                ResourceLocation builtinLoc = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/portraits/" + path);
-                if (Minecraft.getInstance().getResourceManager().getResource(builtinLoc).isPresent()) {
-                    this.previewTex = builtinLoc;
-                    // 内置纹理使用默认尺寸，blit 时按 256x256 作为源
-                    this.previewW = 256;
-                    this.previewH = 256;
-                    Dialog.LOGGER.info("Portrait preview loaded from builtin: {}", path);
-                } else {
-                    Dialog.LOGGER.warn("Portrait preview not found in config dir or builtin: {}", path);
-                    this.previewTex = null;
-                    this.previewW = 0;
-                    this.previewH = 0;
-                }
-            } catch (net.minecraft.ResourceLocationException e) {
-                Dialog.LOGGER.warn("Portrait preview path invalid: {}", path, e);
-                this.previewTex = null;
-                this.previewW = 0;
-                this.previewH = 0;
+            return;
+        }
+        // 内置纹理路径必须合法；含非法字符（如中文）时直接视为无预览
+        try {
+            ResourceLocation builtinLoc = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "textures/portraits/" + path);
+            if (Minecraft.getInstance().getResourceManager().getResource(builtinLoc).isPresent()) {
+                this.previewTex = builtinLoc;
+                this.previewW = 256;
+                this.previewH = 256;
+                Dialog.LOGGER.info("Portrait preview loaded from builtin: {}", path);
+            } else {
+                Dialog.LOGGER.warn("Portrait preview not found in config dir or builtin: {}", path);
             }
+        } catch (net.minecraft.ResourceLocationException e) {
+            Dialog.LOGGER.warn("Portrait preview path invalid: {}", path, e);
         }
     }
 
     /**
-     * 加载纹理：与 AppearancePropertyPage.loadTexture 逐行一致的实现。
-     * 静态缓存复用，命中时恢复尺寸，未命中时解码并注册。
+     * 加载纹理：静态缓存复用，命中时恢复尺寸，未命中时解码并注册。
      */
     private ResourceLocation loadTexture(File file, String cacheKey) {
         String safeKey = cacheKey.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9/._-]", "_");
@@ -693,15 +617,11 @@ public class PortraitListScreen extends Screen {
             this.previewW = image.getWidth();
             this.previewH = image.getHeight();
             DynamicTexture dynamicTexture = new DynamicTexture(image);
-            // 关键：显式 upload 确保纹理数据立即上传到 GPU。
-            // 虽然背景预览没显式调用也能工作（TextureManager 首次 bind 时会触发 load→upload），
-            // 但在独立 Screen 的渲染时序下，显式 upload 可消除首次帧空白的隐患。
             dynamicTexture.upload();
             ResourceLocation rl = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "editor_preview/" + safeKey);
             Minecraft.getInstance().getTextureManager().register(rl, dynamicTexture);
             textureCache.put(safeKey, rl);
             sizeCache.put(safeKey, new int[]{this.previewW, this.previewH});
-            Dialog.LOGGER.info("Portrait preview texture registered: {} ({}x{})", rl, this.previewW, this.previewH);
             return rl;
         } catch (Exception e) {
             Dialog.LOGGER.error("Failed to load preview texture: {}", file, e);
@@ -745,7 +665,7 @@ public class PortraitListScreen extends Screen {
 
     @Override
     public void onClose() {
-        this.releasePreviewTexture();
+        this.clearPreviewRef();
         if (this.onSave != null) {
             this.onSave.accept(this.portraits);
         }
