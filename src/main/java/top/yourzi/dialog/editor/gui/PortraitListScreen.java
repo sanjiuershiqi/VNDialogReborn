@@ -58,6 +58,7 @@ public class PortraitListScreen extends Screen {
     private final Consumer<List<PortraitInfo>> onSave;
     private final Screen parent;
     private int selectedIndex = -1;
+    private int lastSyncedIndex = -2;
     private int scrollOffset = 0;
     private ResourceLocation previewTex = null;
     private String previewPath = null;
@@ -186,6 +187,7 @@ public class PortraitListScreen extends Screen {
                 if (this.selectedIndex >= this.portraits.size()) {
                     this.selectedIndex = this.portraits.size() - 1;
                 }
+                this.lastSyncedIndex = -2; // 强制下一帧刷新输入框
                 this.updatePreview();
             }
         }).bounds(0, 0, 60, 16).build());
@@ -194,6 +196,8 @@ public class PortraitListScreen extends Screen {
             if (info != null) {
                 info.setOffsetX(0.0f);
                 info.setOffsetY(0.0f);
+                syncBoxIfNotFocused(this.offsetXBox, 0.0f);
+                syncBoxIfNotFocused(this.offsetYBox, 0.0f);
             }
         }).bounds(0, 0, 38, 16).build());
         this.upBtn = this.addRenderableWidget(EditorButton.builder(Component.literal("\u25b2"), b -> {
@@ -368,10 +372,11 @@ public class PortraitListScreen extends Screen {
             this.animDropdown.setX(200);
             this.animDropdown.setY(65);
             this.animDropdown.setSelected(this.getAnimationDisplay(info.getAnimationType()).getString());
-            setFloatBox(this.sizeBox, 90, info.getSize(), v -> info.setSize(Mth.clamp(v, 0.0f, 5.0f)));
-            setFloatBox(this.brightnessBox, 115, info.getBrightness(), v -> info.setBrightness(Mth.clamp(v, 0.0f, 1.0f)));
-            setFloatBox(this.offsetXBox, 140, info.getOffsetX(), info::setOffsetX);
-            setFloatBox(this.offsetYBox, 165, info.getOffsetY(), info::setOffsetY);
+            // 输入框位置每帧设置（布局），但值只在选中项变化时刷新，避免打断用户输入
+            layoutFloatBox(this.sizeBox, 90);
+            layoutFloatBox(this.brightnessBox, 115);
+            layoutFloatBox(this.offsetXBox, 140);
+            layoutFloatBox(this.offsetYBox, 165);
             this.delBtn.setX(145);
             this.delBtn.setY(190);
             this.upBtn.setX(260);
@@ -380,26 +385,21 @@ public class PortraitListScreen extends Screen {
             this.downBtn.setY(190);
             this.resetOffsetBtn.setX(282);
             this.resetOffsetBtn.setY(165);
+            // 选中项变化时同步输入框值
+            if (this.lastSyncedIndex != this.selectedIndex) {
+                this.lastSyncedIndex = this.selectedIndex;
+                this.sizeBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getSize()));
+                this.brightnessBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getBrightness()));
+                this.offsetXBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getOffsetX()));
+                this.offsetYBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getOffsetY()));
+            }
         }
     }
 
-    /**
-     * 设置浮点输入框的值与 responder（先置 null 避免 setValue 触发回写）。
-     */
-    private void setFloatBox(EditBox box, int y, float value, java.util.function.Consumer<Float> setter) {
+    /** 仅设置输入框位置，不动值与 responder。 */
+    private void layoutFloatBox(EditBox box, int y) {
         box.setX(200);
         box.setY(y);
-        box.setResponder(null);
-        box.setValue(String.format(java.util.Locale.ROOT, "%.2f", value));
-        box.setResponder(s -> {
-            PortraitInfo si = this.getSelected();
-            if (si != null && !s.isEmpty()) {
-                try {
-                    setter.accept(Float.parseFloat(s.trim()));
-                } catch (NumberFormatException ignored) {
-                }
-            }
-        });
     }
 
     private void renderLeftList(GuiGraphics g, int mx, int my, int contentH) {
@@ -510,13 +510,20 @@ public class PortraitListScreen extends Screen {
                 info.setOffsetY(info.getOffsetY() + (float) ((mouseY - this.lastDragY) / stageH));
                 this.lastDragX = mouseX;
                 this.lastDragY = mouseY;
-                // 同步输入框显示
-                setFloatBox(this.offsetXBox, 140, info.getOffsetX(), info::setOffsetX);
-                setFloatBox(this.offsetYBox, 165, info.getOffsetY(), info::setOffsetY);
+                // 拖动时同步输入框显示（仅当输入框未聚焦时，避免打断用户输入）
+                syncBoxIfNotFocused(this.offsetXBox, info.getOffsetX());
+                syncBoxIfNotFocused(this.offsetYBox, info.getOffsetY());
             }
             return true;
         }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    }
+
+    /** 当输入框未聚焦时同步值（避免覆盖用户正在输入的内容）。 */
+    private void syncBoxIfNotFocused(EditBox box, float value) {
+        if (!box.isFocused()) {
+            box.setValue(String.format(java.util.Locale.ROOT, "%.2f", value));
+        }
     }
 
     @Override
@@ -535,6 +542,32 @@ public class PortraitListScreen extends Screen {
             return true;
         }
         return super.mouseScrolled(mx, my, scrollX, scrollY);
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        // 输入框聚焦时交给父类处理（正常输入），不拦截方向键微调
+        if (anyBoxFocused()) {
+            return super.keyPressed(keyCode, scanCode, modifiers);
+        }
+        PortraitInfo info = this.getSelected();
+        if (info != null) {
+            // 方向键微调立绘 offset；Shift 组合更精细
+            float step = hasShiftDown() ? 0.005f : 0.02f;
+            switch (keyCode) {
+                case org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT -> { info.setOffsetX(info.getOffsetX() - step); syncBoxIfNotFocused(this.offsetXBox, info.getOffsetX()); return true; }
+                case org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT -> { info.setOffsetX(info.getOffsetX() + step); syncBoxIfNotFocused(this.offsetXBox, info.getOffsetX()); return true; }
+                case org.lwjgl.glfw.GLFW.GLFW_KEY_UP -> { info.setOffsetY(info.getOffsetY() - step); syncBoxIfNotFocused(this.offsetYBox, info.getOffsetY()); return true; }
+                case org.lwjgl.glfw.GLFW.GLFW_KEY_DOWN -> { info.setOffsetY(info.getOffsetY() + step); syncBoxIfNotFocused(this.offsetYBox, info.getOffsetY()); return true; }
+            }
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    /** 是否有输入框正被聚焦（聚焦时不拦截键盘事件）。 */
+    private boolean anyBoxFocused() {
+        return this.sizeBox.isFocused() || this.brightnessBox.isFocused()
+                || this.offsetXBox.isFocused() || this.offsetYBox.isFocused();
     }
 
     private void updatePreview() {
