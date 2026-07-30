@@ -434,10 +434,6 @@ public class PortraitListScreen extends Screen {
         g.fill(x, y, x + 1, y + h, EditorTheme.BG_ELEVATED);
         g.fill(x + w - 1, y, x + w, y + h, EditorTheme.BG_ELEVATED);
         PortraitInfo info = this.getSelected();
-        // 调试日志：每秒输出一次预览状态，确认 previewTex 是否成功加载
-        if (info != null && (System.currentTimeMillis() / 1000) % 1 == 0 && this.previewTex == null && this.previewPath != null) {
-            Dialog.LOGGER.warn("renderPreview: previewTex is NULL but previewPath={} (加载失败?)", this.previewPath);
-        }
         if (this.previewTex != null && info != null) {
             // 模拟实际对话场景：立绘高度 = 舞台高度 * 0.68 * size，底部对齐
             float size = Mth.clamp(info.getSize(), 0.1f, 5.0f);
@@ -462,13 +458,16 @@ public class PortraitListScreen extends Screen {
             int baseY = y + h - portraitH;
             int renderX = baseX + (int) (info.getOffsetX() * w);
             int renderY = baseY + (int) (info.getOffsetY() * h);
-            // 完全照搬 AppearancePropertyPage 背景预览的渲染方式（该方式经实测能正常显示）：
-            // 1. RenderSystem.setShaderTexture(0, tex) 手动绑定纹理
-            // 2. 8 参数 float 版 blit，且 width==textureWidth、height==textureHeight
-            //    （这是背景预览能工作的关键：让 UV (0,0)~(1,1) 归一化正确，采样整张纹理缩放绘制）
-            // 之前立绘预览传 portraitW/portraitH 作为 textureWidth/Height 导致 UV 错误采样到纹理外。
+            // 关键修复：在 blit 前后显式 flush GuiGraphics。
+            // 本屏是独立 Screen，renderPreview 在 super.render() 之前手动调用，blit 命令被缓冲。
+            // 随后 super.render() 渲染 widget 时会 flush 所有缓冲命令，但 DynamicTexture 的纹理绑定
+            // 在批量 flush 时可能被其它 RenderType 的纹理覆盖，导致立绘 blit 不可见。
+            // 显式 flush 强制立绘在独立 draw call 中立即绘制，不受后续 widget 渲染干扰。
+            // （背景预览能工作是因为它在 widget 渲染管线内，flush 时机不同）
+            g.flush();
             RenderSystem.setShaderTexture(0, this.previewTex);
             g.blit(this.previewTex, renderX, renderY, 0.0f, 0.0f, portraitW, portraitH, portraitW, portraitH);
+            g.flush();
             // 拖动提示
             if (this.draggingPortrait) {
                 g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.drag_hint"), x + w / 2, y + 4, EditorTheme.ACCENT);
