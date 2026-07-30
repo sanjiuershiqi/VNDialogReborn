@@ -10,6 +10,7 @@ import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import top.yourzi.dialog.editor.gui.FileBrowserScreen;
+import top.yourzi.dialog.editor.gui.InventoryItemPickerScreen;
 import top.yourzi.dialog.editor.gui.NodePickerScreen;
 import top.yourzi.dialog.editor.gui.OptionEditScreen;
 import top.yourzi.dialog.editor.gui.VNDialogEditorScreen;
@@ -57,6 +58,7 @@ public class LogicPropertyPage implements PropertyPage {
     private final List<EditorButton> editOptionButtons = new ArrayList<>();
     private final List<EditorButton> deleteOptionButtons = new ArrayList<>();
     private EditorButton addItemBtn;
+    private EditorButton pickFromInventoryBtn;
     private final List<EditBox> itemIdEdits = new ArrayList<>();
     private final List<EditBox> itemCountEdits = new ArrayList<>();
     private final List<EditBox> itemNbtEdits = new ArrayList<>();
@@ -182,8 +184,14 @@ public class LogicPropertyPage implements PropertyPage {
         this.addCommandBtn = EditorButton.builder(Component.translatable("gui.vn_edit.add_command"), btn -> this.onAddCommand())
                 .bounds(fieldX, this.commandListStartY - EditorTheme.FIELD_HEIGHT - EditorTheme.ROW_GAP, 60, EditorTheme.FIELD_HEIGHT).build();
         int itemHeaderY = this.commandListStartY + DYNAMIC_SECTION_OVERHEAD;
+        // 物品分节头部两个按钮并排：[添加物品] [从背包选择]
+        int addItemW = 60;
+        int pickBtnW = 90;
+        int itemBtnY = itemHeaderY - EditorTheme.FIELD_HEIGHT - EditorTheme.ROW_GAP;
         this.addItemBtn = EditorButton.builder(Component.translatable("gui.vn_edit.add_item"), btn -> this.onAddItem())
-                .bounds(fieldX, itemHeaderY - EditorTheme.FIELD_HEIGHT - EditorTheme.ROW_GAP, 60, EditorTheme.FIELD_HEIGHT).build();
+                .bounds(fieldX, itemBtnY, addItemW, EditorTheme.FIELD_HEIGHT).build();
+        this.pickFromInventoryBtn = EditorButton.builder(Component.translatable("gui.vn_edit.pick_from_inventory"), btn -> this.onPickFromInventory())
+                .bounds(fieldX + addItemW + EditorTheme.GAP, itemBtnY, pickBtnW, EditorTheme.FIELD_HEIGHT).build();
         this.displayItemsStartY = itemHeaderY;
         int optionHeaderY = this.displayItemsStartY + DYNAMIC_SECTION_OVERHEAD;
         this.addOptionBtn = EditorButton.builder(Component.translatable("gui.vn_edit.add_option"), btn -> this.onAddOption())
@@ -256,6 +264,7 @@ public class LogicPropertyPage implements PropertyPage {
         int itemHeaderY = this.commandListStartY + itemsContentH + EditorTheme.SECTION_GAP;
         this.displayItemsStartY = itemHeaderY + EditorTheme.SECTION_HDR_H + EditorTheme.ROW_GAP + EditorTheme.FIELD_HEIGHT + EditorTheme.ROW_GAP;
         this.addItemBtn.setY(itemHeaderY + EditorTheme.SECTION_HDR_H + EditorTheme.ROW_GAP);
+        this.pickFromInventoryBtn.setY(itemHeaderY + EditorTheme.SECTION_HDR_H + EditorTheme.ROW_GAP);
 
         // Options section starts after items
         int optionsContentH = itemCount * (COMMAND_ROW_HEIGHT + EditorTheme.ROW_GAP);
@@ -402,6 +411,24 @@ public class LogicPropertyPage implements PropertyPage {
         items.add(new DisplayItemInfo("minecraft:stone", 1, ""));
         this.setItemsList(items);
         this.relayoutSections();
+    }
+
+    /**
+     * 打开玩家物品栏选择屏幕，选择后添加对应物品到列表。
+     * 物品 ID 取自注册表（如 minecraft:diamond_sword），数量取自该格物品堆叠数；
+     * NBT 字段留空（1.21 已迁移到 DataComponents，旧 NBT 字符串格式不再适用）。
+     */
+    private void onPickFromInventory() {
+        if (this.currentEntry == null) {
+            return;
+        }
+        Minecraft.getInstance().setScreen(new InventoryItemPickerScreen(info -> {
+            List<DisplayItemInfo> items = this.getItemsList();
+            items.add(info);
+            this.setItemsList(items);
+            this.relayoutSections();
+            this.recoverLogicTab();
+        }, Minecraft.getInstance().screen));
     }
 
     private void deleteItem(int index) {
@@ -591,6 +618,7 @@ public class LogicPropertyPage implements PropertyPage {
         int itemHeaderY = this.commandListStartY + itemsContentH + EditorTheme.SECTION_GAP;
         EditorTheme.drawSectionHeader(graphics, this.font, this.x, itemHeaderY, this.width, Component.translatable("gui.vn_edit.section.items"));
         this.addItemBtn.render(graphics, mouseX, mouseY, partialTick);
+        this.pickFromInventoryBtn.render(graphics, mouseX, mouseY, partialTick);
         for (EditBox box : this.itemIdEdits) {
             box.render(graphics, mouseX, mouseY, partialTick);
         }
@@ -636,7 +664,8 @@ public class LogicPropertyPage implements PropertyPage {
     @Override
     public List<? extends GuiEventListener> children() {
         List<GuiEventListener> list = new ArrayList<>(List.of(this.nextNodeBtn, this.endDialogCheck, this.allowSkipCheck,
-                this.addCommandBtn, this.addOptionBtn, this.addItemBtn, this.audioPathBox, this.audioBrowseBtn, this.audioPlayBtn,
+                this.addCommandBtn, this.addOptionBtn, this.addItemBtn, this.pickFromInventoryBtn,
+                this.audioPathBox, this.audioBrowseBtn, this.audioPlayBtn,
                 this.audioFolderBtn, this.visibilityCommandBox));
         list.addAll(this.commandEdits);
         list.addAll(this.commandDeleteBtns);
@@ -658,6 +687,7 @@ public class LogicPropertyPage implements PropertyPage {
         this.addCommandBtn.visible = visible;
         this.addOptionBtn.visible = visible;
         this.addItemBtn.visible = visible;
+        this.pickFromInventoryBtn.visible = visible;
         this.audioPathBox.setVisible(visible);
         this.audioBrowseBtn.visible = visible;
         this.audioPlayBtn.visible = visible;
