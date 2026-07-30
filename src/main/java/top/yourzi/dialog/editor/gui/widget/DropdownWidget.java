@@ -27,12 +27,19 @@ public class DropdownWidget extends AbstractWidget {
     private static final int MAX_VISIBLE = 8;
     private int scrollOffset = 0;
     private static final int ITEM_HEIGHT = 12;
+    /** 弹出列表是否向上展开（用于避免覆盖下方的输入框等控件）。 */
+    private boolean popupAbove = false;
 
     public DropdownWidget(Font font, int x, int y, int width, int height, List<String> items, Consumer<String> onSelected) {
         super(x, y, width, height, Component.empty());
         this.font = font;
         this.items = items;
         this.onSelected = onSelected;
+    }
+
+    /** 设置弹出方向：true=向上展开（适合下方有其他控件的场景），false=向下展开（默认）。 */
+    public void setPopupAbove(boolean above) {
+        this.popupAbove = above;
     }
 
     public void setItems(List<String> items) {
@@ -63,6 +70,20 @@ public class DropdownWidget extends AbstractWidget {
         this.expanded = false;
     }
 
+    /** 弹出列表顶部 Y 坐标（含边框）。向下展开=按钮底部；向上展开=按钮顶部-列表高度。 */
+    private int getPopupTop() {
+        int visibleCount = Math.min(MAX_VISIBLE, this.items.size());
+        int totalHeight = visibleCount * ITEM_HEIGHT + 2;
+        return this.popupAbove ? this.getY() - totalHeight : this.getY() + this.getHeight();
+    }
+
+    /** 弹出列表底部 Y 坐标（含边框）。 */
+    private int getPopupBottom() {
+        int visibleCount = Math.min(MAX_VISIBLE, this.items.size());
+        int totalHeight = visibleCount * ITEM_HEIGHT + 2;
+        return this.getPopupTop() + totalHeight;
+    }
+
     /**
      * 只渲染按钮条（折叠状态）。展开的列表由 renderPopup 单独渲染。
      */
@@ -87,22 +108,23 @@ public class DropdownWidget extends AbstractWidget {
         if (!this.expanded || !this.visible || this.items.isEmpty()) {
             return;
         }
-        int dropY = this.getY() + this.getHeight();
+        int dropY = this.getPopupTop();
+        int dropBottom = this.getPopupBottom();
         int visibleCount = Math.min(MAX_VISIBLE, this.items.size());
         int totalHeight = visibleCount * ITEM_HEIGHT;
         // 不透明背景，确保文字清晰
-        graphics.fill(this.getX(), dropY, this.getX() + this.getWidth(), dropY + totalHeight + 2, 0xF0181818);
+        graphics.fill(this.getX(), dropY, this.getX() + this.getWidth(), dropBottom, 0xF0181818);
         // 边框
         graphics.fill(this.getX(), dropY, this.getX() + this.getWidth(), dropY + 1, EditorTheme.BORDER);
-        graphics.fill(this.getX(), dropY + totalHeight + 1, this.getX() + this.getWidth(), dropY + totalHeight + 2, EditorTheme.BORDER);
-        graphics.fill(this.getX(), dropY, this.getX() + 1, dropY + totalHeight + 2, EditorTheme.BORDER);
-        graphics.fill(this.getX() + this.getWidth() - 1, dropY, this.getX() + this.getWidth(), dropY + totalHeight + 2, EditorTheme.BORDER);
+        graphics.fill(this.getX(), dropBottom - 1, this.getX() + this.getWidth(), dropBottom, EditorTheme.BORDER);
+        graphics.fill(this.getX(), dropY, this.getX() + 1, dropBottom, EditorTheme.BORDER);
+        graphics.fill(this.getX() + this.getWidth() - 1, dropY, this.getX() + this.getWidth(), dropBottom, EditorTheme.BORDER);
 
-        graphics.enableScissor(this.getX(), dropY, this.getX() + this.getWidth(), dropY + totalHeight + 2);
+        graphics.enableScissor(this.getX(), dropY, this.getX() + this.getWidth(), dropBottom);
         try {
             for (int i = 0; i < this.items.size(); i++) {
                 int rowY = dropY + 1 + (i - this.scrollOffset) * ITEM_HEIGHT;
-                if (rowY + ITEM_HEIGHT < dropY || rowY > dropY + totalHeight) {
+                if (rowY + ITEM_HEIGHT < dropY || rowY > dropBottom) {
                     continue;
                 }
                 boolean hovered = mouseX >= this.getX() && mouseX <= this.getX() + this.getWidth() && mouseY >= rowY && mouseY <= rowY + ITEM_HEIGHT;
@@ -132,12 +154,11 @@ public class DropdownWidget extends AbstractWidget {
         boolean onButton = mouseX >= this.getX() && mouseX <= this.getX() + this.getWidth()
                 && mouseY >= this.getY() && mouseY <= this.getY() + this.getHeight();
         if (this.expanded) {
-            int dropY = this.getY() + this.getHeight();
-            int visibleCount = Math.min(MAX_VISIBLE, this.items.size());
-            int totalHeight = visibleCount * ITEM_HEIGHT;
+            int dropY = this.getPopupTop();
+            int dropBottom = this.getPopupBottom();
             // 检查是否点击在弹出列表区域
             boolean onPopup = mouseX >= this.getX() && mouseX <= this.getX() + this.getWidth()
-                    && mouseY >= dropY && mouseY <= dropY + totalHeight + 2;
+                    && mouseY >= dropY && mouseY <= dropBottom;
             if (onPopup) {
                 int relY = (int) (mouseY - dropY - 1);
                 int index = relY / ITEM_HEIGHT + this.scrollOffset;
