@@ -270,12 +270,81 @@ public class PortraitListScreen extends Screen {
         int contentH = this.height - HEADER - FOOTER;
         this.renderLeftList(g, mx, my, contentH);
         this.renderMiddlePanel(g, mx, my, contentH);
-        this.renderPreview(g);
+        // 舞台背景与边框在 widget 之前绘制（作为底层背景）
+        this.renderStageBackground(g);
         this.updateDynamicButtons();
         super.render(g, mx, my, pt);
+        // 立绘 blit 在所有 widget 渲染之后再绘制。
+        // 之前在 super.render() 之前调用，blit 命令被缓冲，随后 super.render() 渲染 widget 时
+        // 批量 flush 会把 DynamicTexture 的纹理绑定与其它 RenderType 混在一起，导致立绘不可见。
+        // 背景预览能工作正是因为它在 widget 管线内(super.render→PropertyPanel.renderWidget→
+        // AppearancePropertyPage.render)，flush 时机由 widget 管线控制。
+        // 现在移到 super.render() 之后，立绘在所有 widget 之后绘制，与背景预览的渲染时机对齐。
+        this.renderPortraitBlit(g);
         // 在所有控件之后渲染展开的下拉弹出列表，确保不被遮挡
         this.posDropdown.renderPopup(g, mx, my, pt);
         this.animDropdown.renderPopup(g, mx, my, pt);
+    }
+
+    /**
+     * 绘制舞台背景与边框（底层，在 widget 之前）。
+     */
+    private void renderStageBackground(GuiGraphics g) {
+        int x = STAGE_X;
+        int y = HEADER;
+        int w = Math.max(80, this.width - STAGE_X - 10);
+        int h = this.height - HEADER - FOOTER;
+        g.fill(x, y, x + w, y + h, EditorTheme.BG_SURFACE);
+        g.fill(x, y, x + w, y + 1, EditorTheme.BG_ELEVATED);
+        g.fill(x, y + h - 1, x + w, y + h, EditorTheme.BG_ELEVATED);
+        g.fill(x, y, x + 1, y + h, EditorTheme.BG_ELEVATED);
+        g.fill(x + w - 1, y, x + w, y + h, EditorTheme.BG_ELEVATED);
+    }
+
+    /**
+     * 绘制立绘 blit 与提示文字（在所有 widget 之后）。
+     */
+    private void renderPortraitBlit(GuiGraphics g) {
+        int x = STAGE_X;
+        int y = HEADER;
+        int w = Math.max(80, this.width - STAGE_X - 10);
+        int h = this.height - HEADER - FOOTER;
+        PortraitInfo info = this.getSelected();
+        if (this.previewTex != null && info != null) {
+            float size = Mth.clamp(info.getSize(), 0.1f, 5.0f);
+            int portraitH = (int) (h * 0.68f * size);
+            if (portraitH > h) {
+                portraitH = h;
+            }
+            float ratio = (this.previewW > 0 && this.previewH > 0)
+                    ? (float) this.previewW / (float) this.previewH
+                    : 1.0f;
+            int portraitW = Math.max(1, (int) (portraitH * ratio));
+            if (portraitW > w) {
+                portraitW = w;
+                portraitH = (int) (portraitW / ratio);
+            }
+            int baseX = switch (info.getPosition() == null ? PortraitPosition.RIGHT : info.getPosition()) {
+                case LEFT -> x + STAGE_SIDE_MARGIN;
+                case CENTER -> x + (w - portraitW) / 2;
+                case RIGHT -> x + w - portraitW - STAGE_SIDE_MARGIN;
+            };
+            int baseY = y + h - portraitH;
+            int renderX = baseX + (int) (info.getOffsetX() * w);
+            int renderY = baseY + (int) (info.getOffsetY() * h);
+            // 与背景预览完全一致的渲染方式：setShaderTexture + 8 参数 float blit (width==textureWidth)
+            RenderSystem.setShaderTexture(0, this.previewTex);
+            g.blit(this.previewTex, renderX, renderY, 0.0f, 0.0f, portraitW, portraitH, portraitW, portraitH);
+            if (this.draggingPortrait) {
+                g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.drag_hint"), x + w / 2, y + 4, EditorTheme.ACCENT);
+            } else {
+                g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.drag_to_adjust"), x + w / 2, y + 4, EditorTheme.TEXT_MUTED);
+            }
+        } else if (info == null) {
+            g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.no_portrait_selected"), x + w / 2, y + h / 2 - 4, EditorTheme.TEXT_MUTED);
+        } else {
+            g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.no_preview"), x + w / 2, y + h / 2 - 4, EditorTheme.TEXT_MUTED);
+        }
     }
 
     private void updateDynamicButtons() {
@@ -420,65 +489,6 @@ public class PortraitListScreen extends Screen {
         g.drawString(this.font, Component.translatable("gui.vn_edit.brightness"), x + 5, 119, EditorTheme.TEXT_SECONDARY);
         g.drawString(this.font, Component.translatable("gui.vn_edit.offset_x"), x + 5, 144, EditorTheme.TEXT_SECONDARY);
         g.drawString(this.font, Component.translatable("gui.vn_edit.offset_y"), x + 5, 169, EditorTheme.TEXT_SECONDARY);
-    }
-
-    private void renderPreview(GuiGraphics g) {
-        int x = STAGE_X;
-        int y = HEADER;
-        int w = Math.max(80, this.width - STAGE_X - 10);
-        int h = this.height - HEADER - FOOTER;
-        g.fill(x, y, x + w, y + h, EditorTheme.BG_SURFACE);
-        // 舞台边框
-        g.fill(x, y, x + w, y + 1, EditorTheme.BG_ELEVATED);
-        g.fill(x, y + h - 1, x + w, y + h, EditorTheme.BG_ELEVATED);
-        g.fill(x, y, x + 1, y + h, EditorTheme.BG_ELEVATED);
-        g.fill(x + w - 1, y, x + w, y + h, EditorTheme.BG_ELEVATED);
-        PortraitInfo info = this.getSelected();
-        if (this.previewTex != null && info != null) {
-            // 模拟实际对话场景：立绘高度 = 舞台高度 * 0.68 * size，底部对齐
-            float size = Mth.clamp(info.getSize(), 0.1f, 5.0f);
-            int portraitH = (int) (h * 0.68f * size);
-            if (portraitH > h) {
-                portraitH = h;
-            }
-            // 宽高比：previewW/H 为 0（内置纹理未读取尺寸）时默认 1:1
-            float ratio = (this.previewW > 0 && this.previewH > 0)
-                    ? (float) this.previewW / (float) this.previewH
-                    : 1.0f;
-            int portraitW = Math.max(1, (int) (portraitH * ratio));
-            if (portraitW > w) {
-                portraitW = w;
-                portraitH = (int) (portraitW / ratio);
-            }
-            int baseX = switch (info.getPosition() == null ? PortraitPosition.RIGHT : info.getPosition()) {
-                case LEFT -> x + STAGE_SIDE_MARGIN;
-                case CENTER -> x + (w - portraitW) / 2;
-                case RIGHT -> x + w - portraitW - STAGE_SIDE_MARGIN;
-            };
-            int baseY = y + h - portraitH;
-            int renderX = baseX + (int) (info.getOffsetX() * w);
-            int renderY = baseY + (int) (info.getOffsetY() * h);
-            // 关键修复：在 blit 前后显式 flush GuiGraphics。
-            // 本屏是独立 Screen，renderPreview 在 super.render() 之前手动调用，blit 命令被缓冲。
-            // 随后 super.render() 渲染 widget 时会 flush 所有缓冲命令，但 DynamicTexture 的纹理绑定
-            // 在批量 flush 时可能被其它 RenderType 的纹理覆盖，导致立绘 blit 不可见。
-            // 显式 flush 强制立绘在独立 draw call 中立即绘制，不受后续 widget 渲染干扰。
-            // （背景预览能工作是因为它在 widget 渲染管线内，flush 时机不同）
-            g.flush();
-            RenderSystem.setShaderTexture(0, this.previewTex);
-            g.blit(this.previewTex, renderX, renderY, 0.0f, 0.0f, portraitW, portraitH, portraitW, portraitH);
-            g.flush();
-            // 拖动提示
-            if (this.draggingPortrait) {
-                g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.drag_hint"), x + w / 2, y + 4, EditorTheme.ACCENT);
-            } else {
-                g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.drag_to_adjust"), x + w / 2, y + 4, EditorTheme.TEXT_MUTED);
-            }
-        } else if (info == null) {
-            g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.no_portrait_selected"), x + w / 2, y + h / 2 - 4, EditorTheme.TEXT_MUTED);
-        } else {
-            g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.no_preview"), x + w / 2, y + h / 2 - 4, EditorTheme.TEXT_MUTED);
-        }
     }
 
     private boolean isMouseInStage(double mx, double my) {
