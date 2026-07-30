@@ -98,6 +98,7 @@
   "gui.vn_edit.new_node.title": "New Node ID",
   "gui.vn_edit.file_browser.title": "File Browser",
   "gui.vn_edit.node_picker.title": "Select Target Node",
+  "gui.vn_edit.clear_selection": "Clear",
   "gui.vn_edit.option_edit.title": "Edit Option",
   "gui.vn_edit.option_text": "Option Text",
   "gui.vn_edit.option_target": "Target Node",

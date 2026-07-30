@@ -58,6 +58,8 @@ public class DialogScreen extends Screen {
     private final DialogEntry dialogEntry;
     private final String playerName;
     private final net.minecraft.world.entity.Entity speakerEntity;
+    /** 对话关闭后返回的屏幕；非空时 onClose 返回此屏幕（用于编辑器测试后回到编辑界面）。 */
+    private Screen returnScreen = null;
     private final List<PortraitRenderInfo> portraits = new ArrayList<>();
     private final List<ItemStack> displayItemStacks = new ArrayList<>();
     private final List<Button> optionButtons = new ArrayList<>();
@@ -82,6 +84,11 @@ public class DialogScreen extends Screen {
 
     public DialogScreen(DialogSequence dialogSequence, DialogEntry dialogEntry, String playerName) {
         this(dialogSequence, dialogEntry, playerName, null);
+    }
+
+    /** 设置对话关闭后要返回的屏幕（仅编辑器测试使用）。 */
+    public void setReturnScreen(Screen screen) {
+        this.returnScreen = screen;
     }
 
     public DialogScreen(DialogSequence dialogSequence, DialogEntry dialogEntry, String playerName, net.minecraft.world.entity.Entity speakerEntity) {
@@ -798,7 +805,12 @@ public class DialogScreen extends Screen {
             Minecraft.getInstance().getTextureManager().release(tex);
         }
         dynamicTextures.clear();
-        super.onClose();
+        if (this.returnScreen != null) {
+            Minecraft.getInstance().setScreen(this.returnScreen);
+            this.returnScreen = null;
+        } else {
+            super.onClose();
+        }
     }
 
     private void toggleAutoPlay() {

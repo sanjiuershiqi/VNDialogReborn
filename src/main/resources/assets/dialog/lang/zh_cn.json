@@ -98,6 +98,7 @@
   "gui.vn_edit.new_node.title": "新节点 ID",
   "gui.vn_edit.file_browser.title": "文件浏览",
   "gui.vn_edit.node_picker.title": "选择目标节点",
+  "gui.vn_edit.clear_selection": "清空选择",
   "gui.vn_edit.option_edit.title": "编辑选项",
   "gui.vn_edit.option_text": "选项文本",
   "gui.vn_edit.option_target": "目标节点",

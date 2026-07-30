@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
@@ -46,6 +47,8 @@ public class DialogManager {
     private DialogSequence currentSequence;
     private DialogEntry currentEntry;
     private String currentDialogPlayerName = "";
+    /** 测试用返回屏幕：编辑器测试对话时设置，对话关闭后返回编辑器界面。 */
+    private Screen testReturnScreen = null;
     private static boolean isFastForwardingNext;
     private static boolean isAutoPlaying;
     private static SimpleSoundInstance currentAudioInstance;
@@ -283,7 +286,21 @@ public class DialogManager {
         if (Minecraft.getInstance().player != null && Minecraft.getInstance().player.getGameProfile() != null) {
             currentDialogPlayerName = Minecraft.getInstance().player.getGameProfile().getName();
         }
-        Minecraft.getInstance().setScreen(new DialogScreen(currentSequence, currentEntry, currentDialogPlayerName, speakerEntity));
+        showDialogScreen(speakerEntity);
+    }
+
+    /** 创建并显示 DialogScreen，自动注入测试返回屏幕（若有）。 */
+    private void showDialogScreen(net.minecraft.world.entity.Entity speakerEntity) {
+        DialogScreen screen = new DialogScreen(currentSequence, currentEntry, currentDialogPlayerName, speakerEntity);
+        if (this.testReturnScreen != null) {
+            screen.setReturnScreen(this.testReturnScreen);
+        }
+        Minecraft.getInstance().setScreen(screen);
+    }
+
+    /** 设置测试返回屏幕，对话关闭后返回此屏幕。 */
+    public void setTestReturnScreen(Screen screen) {
+        this.testReturnScreen = screen;
     }
 
     public void showNextDialog() {
@@ -302,7 +319,7 @@ public class DialogManager {
         currentEntry = nextEntry;
         addDialogToHistory(currentEntry);
         stopCurrentAudio();
-        Minecraft.getInstance().setScreen(new DialogScreen(currentSequence, currentEntry, currentDialogPlayerName));
+        showDialogScreen(null);
     }
 
     public void jumpToDialog(String targetId) {
@@ -317,10 +334,20 @@ public class DialogManager {
         currentEntry = targetEntry;
         addDialogToHistory(currentEntry);
         stopCurrentAudio();
-        Minecraft.getInstance().setScreen(new DialogScreen(currentSequence, currentEntry, currentDialogPlayerName));
+        showDialogScreen(null);
     }
 
     private void closeCurrentDialog() {
+        // 测试模式下返回编辑器界面，否则回到游戏
+        if (this.testReturnScreen != null) {
+            Screen returnTo = this.testReturnScreen;
+            this.testReturnScreen = null;
+            stopCurrentAudio();
+            currentSequence = null;
+            currentEntry = null;
+            Minecraft.getInstance().setScreen(returnTo);
+            return;
+        }
         Minecraft.getInstance().setScreen(null);
         stopCurrentAudio();
         currentSequence = null;

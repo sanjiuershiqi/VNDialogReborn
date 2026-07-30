@@ -42,6 +42,11 @@ public class NodePickerScreen extends Screen {
                 this.nodeIds.add(e.getId());
             }
         }
+        // 顶部右侧"清空选择"按钮：用于把已设置的下一节点清回 None
+        this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.clear_selection"), btn -> {
+            this.onSelected.accept("");
+            this.onClose();
+        }).bounds(this.width - 90, 8, 80, 18).build());
         this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.cancel"), btn -> this.onClose())
                 .bounds(this.width / 2 - 50, this.height - 30, 100, 20).build());
     }

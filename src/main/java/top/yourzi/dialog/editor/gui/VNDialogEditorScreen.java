@@ -439,6 +439,8 @@ public class VNDialogEditorScreen extends Screen {
         }
         this.saveCurrentSequenceToFile();
         this.saveSession();
+        // 设置测试返回屏幕：对话关闭后回到编辑器界面，无需重新打开
+        DialogManager.getInstance().setTestReturnScreen(this);
         String json = DialogManager.GSON.toJson(this.currentSequence);
         DialogManager.getInstance().receiveAndShowPlayerSpecificDialog(this.currentSequence.getId(), json);
     }
