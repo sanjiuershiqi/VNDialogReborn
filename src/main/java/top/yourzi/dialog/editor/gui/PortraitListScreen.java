@@ -58,7 +58,7 @@ public class PortraitListScreen extends Screen {
     private final Consumer<List<PortraitInfo>> onSave;
     private final Screen parent;
     private int selectedIndex = -1;
-    private int lastSyncedIndex = -2;
+    private boolean needsLayoutRefresh = true;
     private int scrollOffset = 0;
     private ResourceLocation previewTex = null;
     private String previewPath = null;
@@ -187,7 +187,7 @@ public class PortraitListScreen extends Screen {
                 if (this.selectedIndex >= this.portraits.size()) {
                     this.selectedIndex = this.portraits.size() - 1;
                 }
-                this.lastSyncedIndex = -2; // 强制下一帧刷新输入框
+                this.needsLayoutRefresh = true;
                 this.updatePreview();
             }
         }).bounds(0, 0, 60, 16).build());
@@ -204,12 +204,14 @@ public class PortraitListScreen extends Screen {
             if (this.selectedIndex > 0 && this.selectedIndex < this.portraits.size()) {
                 this.portraits.add(this.selectedIndex - 1, this.portraits.remove(this.selectedIndex));
                 this.selectedIndex--;
+                this.needsLayoutRefresh = true;
             }
         }).bounds(0, 0, 20, 16).build());
         this.downBtn = this.addRenderableWidget(EditorButton.builder(Component.literal("\u25bc"), b -> {
             if (this.selectedIndex >= 0 && this.selectedIndex < this.portraits.size() - 1) {
                 this.portraits.add(this.selectedIndex + 1, this.portraits.remove(this.selectedIndex));
                 this.selectedIndex++;
+                this.needsLayoutRefresh = true;
             }
         }).bounds(0, 0, 20, 16).build());
         this.folderBtn = this.addRenderableWidget(EditorButton.builder(Component.literal("\uD83D\uDCC2"), b -> EditorConfig.openFolder(EditorConfig.PORTRAITS_DIR))
@@ -231,6 +233,7 @@ public class PortraitListScreen extends Screen {
             if (!exists) {
                 this.portraits.add(new PortraitInfo(lower, PortraitPosition.RIGHT, 1.0f, PortraitAnimationType.NONE));
                 this.selectedIndex = this.portraits.size() - 1;
+                this.needsLayoutRefresh = true;
                 this.updatePreview();
             }
         }, this);
@@ -243,6 +246,7 @@ public class PortraitListScreen extends Screen {
             if (!exists) {
                 this.portraits.add(new PortraitInfo(lower, PortraitPosition.RIGHT, 1.0f, PortraitAnimationType.NONE));
                 this.selectedIndex = this.portraits.size() - 1;
+                this.needsLayoutRefresh = true;
                 this.updatePreview();
             }
         }, Minecraft.getInstance().screen));
@@ -342,6 +346,9 @@ public class PortraitListScreen extends Screen {
             g.blit(this.previewTex, renderX, renderY, 0.0f, 0.0f, portraitW, portraitH, portraitW, portraitH);
             if (this.draggingPortrait) {
                 g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.drag_hint"), x + w / 2, y + 4, EditorTheme.ACCENT);
+                // 拖动时在舞台底部显示当前 offset 值，方便精确微调
+                String offsetText = String.format(java.util.Locale.ROOT, "X: %.2f  Y: %.2f", info.getOffsetX(), info.getOffsetY());
+                g.drawCenteredString(this.font, Component.literal(offsetText), x + w / 2, y + h - 12, EditorTheme.ACCENT);
             } else {
                 g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.drag_to_adjust"), x + w / 2, y + 4, EditorTheme.TEXT_MUTED);
             }
@@ -355,6 +362,7 @@ public class PortraitListScreen extends Screen {
     private void updateDynamicButtons() {
         PortraitInfo info = this.getSelected();
         boolean visible = info != null;
+        // 可见性每帧更新（开销极小，且列表增删时需及时响应）
         this.posDropdown.visible = visible;
         this.animDropdown.visible = visible;
         this.sizeBox.visible = visible;
@@ -365,14 +373,15 @@ public class PortraitListScreen extends Screen {
         this.upBtn.visible = visible && this.selectedIndex > 0;
         this.downBtn.visible = visible && this.selectedIndex < this.portraits.size() - 1;
         this.resetOffsetBtn.visible = visible;
-        if (visible) {
+        // 仅在选中项变化时刷新布局和值，避免每帧覆盖用户输入
+        if (visible && this.needsLayoutRefresh) {
+            this.needsLayoutRefresh = false;
             this.posDropdown.setX(200);
             this.posDropdown.setY(40);
             this.posDropdown.setSelected(this.getPositionDisplay(info.getPosition()).getString());
             this.animDropdown.setX(200);
             this.animDropdown.setY(65);
             this.animDropdown.setSelected(this.getAnimationDisplay(info.getAnimationType()).getString());
-            // 输入框位置每帧设置（布局），但值只在选中项变化时刷新，避免打断用户输入
             layoutFloatBox(this.sizeBox, 90);
             layoutFloatBox(this.brightnessBox, 115);
             layoutFloatBox(this.offsetXBox, 140);
@@ -385,14 +394,10 @@ public class PortraitListScreen extends Screen {
             this.downBtn.setY(190);
             this.resetOffsetBtn.setX(282);
             this.resetOffsetBtn.setY(165);
-            // 选中项变化时同步输入框值
-            if (this.lastSyncedIndex != this.selectedIndex) {
-                this.lastSyncedIndex = this.selectedIndex;
-                this.sizeBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getSize()));
-                this.brightnessBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getBrightness()));
-                this.offsetXBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getOffsetX()));
-                this.offsetYBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getOffsetY()));
-            }
+            this.sizeBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getSize()));
+            this.brightnessBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getBrightness()));
+            this.offsetXBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getOffsetX()));
+            this.offsetYBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getOffsetY()));
         }
     }
 
@@ -485,12 +490,15 @@ public class PortraitListScreen extends Screen {
             int idx = ((int) mouseY - HEADER + this.scrollOffset) / ROW_H;
             if (idx >= 0 && idx < this.portraits.size()) {
                 this.selectedIndex = idx;
+                this.needsLayoutRefresh = true;
                 this.updatePreview();
                 return true;
             }
         }
         // 在舞台内按下：开始拖动立绘调整偏移
         if (button == 0 && this.isMouseInStage(mouseX, mouseY) && this.getSelected() != null && this.previewTex != null) {
+            // 点击舞台时取消输入框聚焦，使方向键微调可用
+            clearAllBoxFocus();
             this.draggingPortrait = true;
             this.lastDragX = mouseX;
             this.lastDragY = mouseY;
@@ -545,14 +553,32 @@ public class PortraitListScreen extends Screen {
     }
 
     @Override
+    public boolean charTyped(char codePoint, int modifiers) {
+        // 显式转发字符输入到聚焦的输入框，不依赖 Screen.getFocused()
+        if (this.sizeBox.isFocused()) return this.sizeBox.charTyped(codePoint, modifiers);
+        if (this.brightnessBox.isFocused()) return this.brightnessBox.charTyped(codePoint, modifiers);
+        if (this.offsetXBox.isFocused()) return this.offsetXBox.charTyped(codePoint, modifiers);
+        if (this.offsetYBox.isFocused()) return this.offsetYBox.charTyped(codePoint, modifiers);
+        return super.charTyped(codePoint, modifiers);
+    }
+
+    @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        // 输入框聚焦时交给父类处理（正常输入），不拦截方向键微调
-        if (anyBoxFocused()) {
+        // ESC：先取消输入框聚焦，再交给父类（关闭屏幕）
+        if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
+            if (clearAllBoxFocus()) {
+                return true;
+            }
             return super.keyPressed(keyCode, scanCode, modifiers);
         }
+        // 输入框聚焦时，直接转发键盘事件给输入框（包括退格、方向键移动光标等）
+        if (this.sizeBox.isFocused()) return this.sizeBox.keyPressed(keyCode, scanCode, modifiers);
+        if (this.brightnessBox.isFocused()) return this.brightnessBox.keyPressed(keyCode, scanCode, modifiers);
+        if (this.offsetXBox.isFocused()) return this.offsetXBox.keyPressed(keyCode, scanCode, modifiers);
+        if (this.offsetYBox.isFocused()) return this.offsetYBox.keyPressed(keyCode, scanCode, modifiers);
+        // 无输入框聚焦时，方向键微调立绘 offset；Shift 组合更精细
         PortraitInfo info = this.getSelected();
         if (info != null) {
-            // 方向键微调立绘 offset；Shift 组合更精细
             float step = hasShiftDown() ? 0.005f : 0.02f;
             switch (keyCode) {
                 case org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT -> { info.setOffsetX(info.getOffsetX() - step); syncBoxIfNotFocused(this.offsetXBox, info.getOffsetX()); return true; }
@@ -564,10 +590,14 @@ public class PortraitListScreen extends Screen {
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
-    /** 是否有输入框正被聚焦（聚焦时不拦截键盘事件）。 */
-    private boolean anyBoxFocused() {
-        return this.sizeBox.isFocused() || this.brightnessBox.isFocused()
-                || this.offsetXBox.isFocused() || this.offsetYBox.isFocused();
+    /** 取消所有输入框聚焦，返回是否有输入框曾被聚焦。 */
+    private boolean clearAllBoxFocus() {
+        boolean any = false;
+        if (this.sizeBox.isFocused()) { this.sizeBox.setFocused(false); any = true; }
+        if (this.brightnessBox.isFocused()) { this.brightnessBox.setFocused(false); any = true; }
+        if (this.offsetXBox.isFocused()) { this.offsetXBox.setFocused(false); any = true; }
+        if (this.offsetYBox.isFocused()) { this.offsetYBox.setFocused(false); any = true; }
+        return any;
     }
 
     private void updatePreview() {
