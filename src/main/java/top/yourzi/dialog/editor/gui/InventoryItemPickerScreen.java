@@ -89,15 +89,16 @@ public class InventoryItemPickerScreen extends Screen {
         // Tooltip 在最上层渲染，避免被格子遮挡
         ItemStack hovered = getHoveredStack(inv, mx, my);
         if (hovered != null && !hovered.isEmpty()) {
-            List<Component> tooltipLines = new ArrayList<>();
-            tooltipLines.add(hovered.getHoverName());
+            List<net.minecraft.util.FormattedCharSequence> lines = new ArrayList<>();
+            lines.add(hovered.getHoverName().getVisualOrderText());
             ResourceLocation key = BuiltInRegistries.ITEM.getKey(hovered.getItem());
             if (key != null) {
-                tooltipLines.add(Component.literal(key.toString()).withStyle(s -> s.withColor(EditorTheme.TEXT_MUTED)));
-                tooltipLines.add(Component.translatable("gui.vn_edit.inventory_picker.count", hovered.getCount())
-                        .withStyle(s -> s.withColor(EditorTheme.TEXT_SECONDARY)));
+                lines.add(Component.literal(key.toString())
+                        .withStyle(s -> s.withColor(EditorTheme.TEXT_MUTED)).getVisualOrderText());
+                lines.add(Component.translatable("gui.vn_edit.inventory_picker.count", hovered.getCount())
+                        .withStyle(s -> s.withColor(EditorTheme.TEXT_SECONDARY)).getVisualOrderText());
             }
-            g.renderTooltip(this.font, tooltipLines, mx, my);
+            g.renderTooltip(this.font, lines, mx, my);
         }
     }
 
