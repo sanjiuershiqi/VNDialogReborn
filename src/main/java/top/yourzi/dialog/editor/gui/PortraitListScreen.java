@@ -790,6 +790,11 @@ public class PortraitListScreen extends Screen {
             String trimmed = this.font.plainSubstrByWidth(name, w - 10);
             g.drawString(this.font, trimmed, x + 4, rowY + 2, EditorTheme.TEXT_PRIMARY);
         }
+        // 空状态：无立绘时居中提示（借鉴 Sparkle 三态列表）
+        if (this.portraits.isEmpty()) {
+            g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.portrait.empty"),
+                    x + w / 2, y + h / 2 - 4, EditorTheme.TEXT_MUTED);
+        }
         g.disableScissor();
         if (maxScroll > 0) {
             int sbH = Math.max(10, h * h / (this.portraits.size() * ROW_H));

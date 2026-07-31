@@ -32,6 +32,8 @@ public class NodePickerScreen extends Screen {
     private final List<String> filteredIds = new ArrayList<>();
     private EditBox searchBox;
     private int scrollOffset = 0;
+    /** 键盘焦点行索引（与鼠标 hover 区分）。UP/DOWN 移动，Enter 确认。 */
+    private int focusedIndex = -1;
 
     public NodePickerScreen(DialogSequence sequence, Consumer<String> onSelected, Screen parent) {
         super(Component.translatable("gui.vn_edit.node_picker.title"));
@@ -79,6 +81,8 @@ public class NodePickerScreen extends Screen {
             }
         }
         this.scrollOffset = 0;
+        // 过滤后列表变化，清空键盘焦点避免索引错位
+        this.focusedIndex = -1;
     }
 
     @Override
@@ -94,6 +98,11 @@ public class NodePickerScreen extends Screen {
                 continue;
             }
             boolean hovered = mouseX >= 20 && mouseX <= this.width - 20 && mouseY >= rowY && mouseY <= rowY + ROW_HEIGHT;
+            // 键盘焦点行：画选中背景 + 左侧 ACCENT 竖条（与 DialogTreeWidget 选中风格一致）
+            if (!hovered && i == this.focusedIndex) {
+                graphics.fill(20, rowY, this.width - 20, rowY + ROW_HEIGHT, EditorTheme.BG_SELECTED);
+                graphics.fill(20, rowY, 22, rowY + ROW_HEIGHT, EditorTheme.ACCENT);
+            }
             int color = hovered ? EditorTheme.ACCENT : EditorTheme.TEXT_PRIMARY;
             if (hovered) {
                 graphics.fill(20, rowY, this.width - 20, rowY + ROW_HEIGHT, EditorTheme.BG_HOVER);
@@ -133,6 +142,51 @@ public class NodePickerScreen extends Screen {
             this.scrollOffset = maxScroll;
         }
         return true;
+    }
+
+    /**
+     * 键盘导航：UP/DOWN 移动焦点行并滚动可见，Enter 确认选择，Esc 关闭。
+     * 单行 EditBox 不消费 UP/DOWN，故即便搜索框聚焦也能导航列表，搜索框保持聚焦可继续输入。
+     */
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
+            this.onClose();
+            return true;
+        }
+        if (this.filteredIds.isEmpty()) {
+            return super.keyPressed(keyCode, scanCode, modifiers);
+        }
+        if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_UP || keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_DOWN) {
+            if (this.focusedIndex < 0) {
+                this.focusedIndex = 0;
+            } else {
+                int dir = keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_UP ? -1 : 1;
+                this.focusedIndex = Math.max(0, Math.min(this.filteredIds.size() - 1, this.focusedIndex + dir));
+            }
+            this.scrollFocusedIntoView();
+            return true;
+        }
+        if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER && this.focusedIndex >= 0 && this.focusedIndex < this.filteredIds.size()) {
+            this.onSelected.accept(this.filteredIds.get(this.focusedIndex));
+            this.onClose();
+            return true;
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    /** 滚动使 focusedIndex 行可见。 */
+    private void scrollFocusedIntoView() {
+        int listHeight = this.height - LIST_TOP - LIST_BOTTOM;
+        int rowTop = LIST_TOP + this.focusedIndex * ROW_HEIGHT - this.scrollOffset;
+        int rowBottom = rowTop + ROW_HEIGHT;
+        if (rowTop < LIST_TOP) {
+            this.scrollOffset -= (LIST_TOP - rowTop);
+        } else if (rowBottom > LIST_TOP + listHeight) {
+            this.scrollOffset += (rowBottom - (LIST_TOP + listHeight));
+        }
+        int maxScroll = Math.max(0, this.filteredIds.size() * ROW_HEIGHT - listHeight);
+        this.scrollOffset = Math.max(0, Math.min(maxScroll, this.scrollOffset));
     }
 
     @Override

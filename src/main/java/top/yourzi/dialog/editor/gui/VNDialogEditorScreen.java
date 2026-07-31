@@ -73,6 +73,10 @@ public class VNDialogEditorScreen extends Screen {
     /** 状态消息自动清除时间（纳秒时间戳），0 表示常驻（错误消息）不自动清除。 */
     private long statusClearTime = 0L;
     private boolean isInitialized = false;
+    /** F1 帮助浮层是否展开。展开时拦截除 F1/Esc 外的按键与所有鼠标点击（点击遮罩关闭）。 */
+    private boolean showHelpOverlay = false;
+    /** 节点剪贴板（静态，跨屏保持）。Ctrl+C 复制选中节点的深拷贝，Ctrl+V 粘贴为新 ID 节点。 */
+    private static DialogEntry clipboard = null;
 
     /**
      * 状态消息语义级别。借鉴 Sparkle setStatus(Component, ChatFormatting) 的分色思路，
@@ -840,8 +844,68 @@ public class VNDialogEditorScreen extends Screen {
             graphics.disableScissor();
         }
         super.render(graphics, mouseX, mouseY, partialTick);
+        EditorRenderHelper.drawFocusedEditBoxBorders(graphics, this.children());
         // 工具栏按钮 tooltip：悬停时显示功能说明
         this.renderToolbarTooltips(graphics, mouseX, mouseY);
+        // F1 帮助浮层：画在所有内容之上，拦截交互由 keyPressed/mouseClicked 处理
+        if (this.showHelpOverlay) {
+            this.renderHelpOverlay(graphics);
+        }
+    }
+
+    /**
+     * 渲染 F1 帮助浮层：半透明遮罩 + 居中面板，分组列出全部快捷键。
+     * 借鉴 Sparkle SecondaryPanel 的遮罩+玻璃面板思路，但内容为静态快捷键说明。
+     * 面板尺寸根据内容动态计算，确保不溢出屏幕。
+     */
+    private void renderHelpOverlay(GuiGraphics graphics) {
+        // 全屏半透明遮罩
+        graphics.fill(0, 0, this.width, this.height, EditorRenderHelper.withAlphaRatio(EditorTheme.BG_DEEPEST, 0.6f));
+        // 快捷键分组定义：{组标题, {快捷键, 说明}}
+        String[][][] groups = {
+            {{"gui.vn_edit.help.group_file"}, {"Ctrl+S", "gui.vn_edit.help.save"}, {"Ctrl+N", "gui.vn_edit.help.new"}},
+            {{"gui.vn_edit.help.group_node"}, {"Insert", "gui.vn_edit.help.add_node"}, {"Delete", "gui.vn_edit.help.delete"}, {"F2", "gui.vn_edit.help.rename"}, {"Ctrl+C", "gui.vn_edit.help.copy"}, {"Ctrl+V", "gui.vn_edit.help.paste"}, {"Ctrl+D", "gui.vn_edit.help.duplicate"}},
+            {{"gui.vn_edit.help.group_sequence"}, {"Ctrl+Tab", "gui.vn_edit.help.next_seq"}, {"Ctrl+Shift+Tab", "gui.vn_edit.help.prev_seq"}},
+            {{"gui.vn_edit.help.group_test"}, {"Ctrl+Enter", "gui.vn_edit.help.test"}},
+            {{"gui.vn_edit.help.group_nav"}, {"\u2191/\u2193", "gui.vn_edit.help.tree_nav"}, {"\u2190/\u2192", "gui.vn_edit.help.tree_fold"}, {"Enter", "gui.vn_edit.help.tree_open"}},
+            {{"gui.vn_edit.help.group_help"}, {"F1", "gui.vn_edit.help.toggle"}, {"Esc", "gui.vn_edit.help.close"}}
+        };
+        // 计算面板尺寸
+        int panelPad = 10;
+        int keyWidth = 90;
+        int descGap = 12;
+        int rowHeight = 12;
+        int groupGap = 6;
+        int titleHeight = 14;
+        int panelWidth = 300;
+        int contentHeight = titleHeight + 8;
+        for (String[][] group : groups) {
+            contentHeight += titleHeight + (group.length - 1) * rowHeight + groupGap;
+        }
+        int panelHeight = contentHeight + panelPad * 2;
+        int panelX = (this.width - panelWidth) / 2;
+        int panelY = (this.height - panelHeight) / 2;
+        // 面板背景 + 边框
+        EditorRenderHelper.fillWithBorder(graphics, panelX, panelY, panelWidth, panelHeight, EditorTheme.BG_ELEVATED, EditorTheme.ACCENT);
+        // 标题
+        graphics.drawCenteredString(this.font, Component.translatable("gui.vn_edit.help.title"), panelX + panelWidth / 2, panelY + panelPad, EditorTheme.TEXT_PRIMARY);
+        int y = panelY + panelPad + titleHeight + 8;
+        int keyX = panelX + panelPad;
+        int descX = keyX + keyWidth + descGap;
+        for (String[][] group : groups) {
+            // 组标题
+            graphics.drawString(this.font, Component.translatable(group[0][0]), keyX, y, EditorTheme.ACCENT);
+            y += titleHeight;
+            // 组内条目
+            for (int i = 1; i < group.length; i++) {
+                graphics.drawString(this.font, group[i][0], keyX, y, EditorTheme.TEXT_SECONDARY);
+                graphics.drawString(this.font, Component.translatable(group[i][1]), descX, y, EditorTheme.TEXT_PRIMARY);
+                y += rowHeight;
+            }
+            y += groupGap;
+        }
+        // 底部提示
+        graphics.drawCenteredString(this.font, Component.translatable("gui.vn_edit.help.footer"), panelX + panelWidth / 2, panelY + panelHeight - panelPad - 4, EditorTheme.TEXT_MUTED);
     }
 
     /**
@@ -898,6 +962,11 @@ public class VNDialogEditorScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        // 帮助浮层展开时，任意点击关闭浮层并消费事件，不穿透到下层控件
+        if (this.showHelpOverlay) {
+            this.showHelpOverlay = false;
+            return true;
+        }
         if (this.tabLeftArrow.isMouseOver(mouseX, mouseY)) {
             this.tabLeftArrow.mouseClicked(mouseX, mouseY, button);
             return true;
@@ -918,6 +987,19 @@ public class VNDialogEditorScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        // F1 切换帮助浮层：任何情况都拦截（即便 EditBox 聚焦也响应，作为快捷键可发现性入口）
+        if (keyCode == GLFW.GLFW_KEY_F1) {
+            this.showHelpOverlay = !this.showHelpOverlay;
+            return true;
+        }
+        // 帮助浮层展开时，仅放行 F1（上面已处理）与 Esc，其余按键一律拦截避免误操作
+        if (this.showHelpOverlay) {
+            if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+                this.showHelpOverlay = false;
+                return true;
+            }
+            return true;
+        }
         // Ctrl 组合键任何情况都拦截（Ctrl+S/N/Enter/Tab 不用于文本编辑）
         if (Screen.hasControlDown()) {
             if (keyCode == GLFW.GLFW_KEY_S) { this.onSave(); return true; }
@@ -935,6 +1017,12 @@ public class VNDialogEditorScreen extends Screen {
         }
         // 功能键仅在 EditBox 未聚焦时拦截，避免与文本编辑冲突
         if (!(this.getFocused() instanceof EditBox)) {
+            // Ctrl+C/V/D 复制/粘贴/复制并粘贴节点（EditBox 聚焦时让文本编辑优先）
+            if (Screen.hasControlDown()) {
+                if (keyCode == GLFW.GLFW_KEY_C) { this.copySelectedNode(); return true; }
+                if (keyCode == GLFW.GLFW_KEY_V) { this.pasteNode(); return true; }
+                if (keyCode == GLFW.GLFW_KEY_D) { this.duplicateSelectedNode(); return true; }
+            }
             if (keyCode == GLFW.GLFW_KEY_DELETE) {
                 DialogEntry sel = this.treeWidget.getSelectedEntry();
                 if (sel != null) { this.onEntryDelete(sel); return true; }
@@ -947,8 +1035,85 @@ public class VNDialogEditorScreen extends Screen {
                 this.onAddNode();
                 return true;
             }
+            // 树键盘导航：方向键移动选中、左右折叠展开、Enter 打开属性面板
+            if (keyCode == GLFW.GLFW_KEY_UP || keyCode == GLFW.GLFW_KEY_DOWN
+                    || keyCode == GLFW.GLFW_KEY_LEFT || keyCode == GLFW.GLFW_KEY_RIGHT
+                    || keyCode == GLFW.GLFW_KEY_ENTER) {
+                if (this.treeWidget != null && this.treeWidget.keyPressed(keyCode)) {
+                    return true;
+                }
+            }
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    /** Ctrl+C：复制选中节点的深拷贝到静态剪贴板。 */
+    private void copySelectedNode() {
+        DialogEntry sel = this.treeWidget.getSelectedEntry();
+        if (sel == null) {
+            this.setStatus(Component.translatable("gui.vn_edit.status.copy_no_selection").getString(), StatusLevel.WARNING);
+            return;
+        }
+        clipboard = sel.deepCopy();
+        this.setStatus(Component.translatable("gui.vn_edit.status.node_copied", sel.getId()).getString(), StatusLevel.SUCCESS);
+    }
+
+    /** Ctrl+V：粘贴剪贴板节点为新 ID 节点，选中新节点并打开属性面板。 */
+    private void pasteNode() {
+        if (this.currentSequence == null) {
+            this.setStatus(Component.translatable("gui.vn_edit.status.copy_no_selection").getString(), StatusLevel.WARNING);
+            return;
+        }
+        if (clipboard == null) {
+            this.setStatus(Component.translatable("gui.vn_edit.status.paste_empty").getString(), StatusLevel.WARNING);
+            return;
+        }
+        DialogEntry copy = clipboard.deepCopy();
+        String newId = this.generateUniqueNodeId(clipboard.getId());
+        copy.setId(newId);
+        DialogEntry[] entries = this.currentSequence.getEntries();
+        ArrayList<DialogEntry> list = entries != null ? new ArrayList<>(List.of(entries)) : new ArrayList<>();
+        list.add(copy);
+        this.currentSequence.setEntries(list.toArray(new DialogEntry[0]));
+        this.treeWidget.setSequence(this.currentSequence);
+        this.propertyPanel.setSequence(this.currentSequence);
+        // selectEntryById 内部会触发 onEntrySelected 回调（设 editingEntry + bindTo）并滚动到可见
+        this.treeWidget.selectEntryById(newId);
+        this.markDirty(this.currentSequence);
+        this.setStatus(Component.translatable("gui.vn_edit.status.node_pasted", newId).getString(), StatusLevel.SUCCESS);
+    }
+
+    /** Ctrl+D：复制并立即粘贴选中节点（一步完成）。 */
+    private void duplicateSelectedNode() {
+        DialogEntry sel = this.treeWidget.getSelectedEntry();
+        if (sel == null) {
+            this.setStatus(Component.translatable("gui.vn_edit.status.copy_no_selection").getString(), StatusLevel.WARNING);
+            return;
+        }
+        clipboard = sel.deepCopy();
+        this.pasteNode();
+    }
+
+    /**
+     * 生成不冲突的副本 ID：原 ID → 原 ID_copy → 原 ID_copy2 → 原 ID_copy3 ...
+     * 用于粘贴节点时避免 ID 冲突。
+     */
+    private String generateUniqueNodeId(String baseId) {
+        if (baseId == null || baseId.isEmpty()) {
+            baseId = "node";
+        }
+        if (this.currentSequence.findEntryById(baseId) == null) {
+            return baseId;
+        }
+        String prefix = baseId + "_copy";
+        if (this.currentSequence.findEntryById(prefix) == null) {
+            return prefix;
+        }
+        int n = 2;
+        while (this.currentSequence.findEntryById(prefix + n) != null) {
+            n++;
+        }
+        return prefix + n;
     }
 
     /**

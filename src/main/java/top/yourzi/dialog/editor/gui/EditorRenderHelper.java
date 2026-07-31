@@ -1,8 +1,12 @@
 package top.yourzi.dialog.editor.gui;
 
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.util.Mth;
 import top.yourzi.dialog.editor.util.EditorTheme;
+
+import java.util.List;
 
 /**
  * 编辑器渲染辅助工具类（纯静态）。
@@ -24,6 +28,20 @@ public final class EditorRenderHelper {
         g.fill(x, y + h - 1, x + w, y + h, color);     // bottom
         g.fill(x, y, x + 1, y + h, color);             // left
         g.fill(x + w - 1, y, x + w, y + h, color);     // right
+    }
+
+    /**
+     * 为列表中聚焦的 EditBox 画 ACCENT 1px 描边。
+     * 原生 EditBox 在暗色主题下聚焦仅靠光标闪烁，对比度不足；此方法在 render 末尾叠加描边，
+     * 让键盘/高缩放用户清晰辨认焦点落点。与 EditorButton/DropdownWidget 聚焦描边风格统一。
+     * 各 Screen render 末尾传入 this.children() 调用一次即可。
+     */
+    public static void drawFocusedEditBoxBorders(GuiGraphics g, List<? extends GuiEventListener> children) {
+        for (GuiEventListener child : children) {
+            if (child instanceof EditBox box && box.isFocused() && box.isVisible()) {
+                drawBorder(g, box.getX(), box.getY(), box.getWidth(), box.getHeight(), EditorTheme.ACCENT);
+            }
+        }
     }
 
     /**

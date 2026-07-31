@@ -52,6 +52,7 @@ public class InputDialogScreen extends Screen {
         this.renderBackground(graphics, mouseX, mouseY, partialTick);
         graphics.drawCenteredString(this.font, this.title, this.width / 2, 20, EditorTheme.TEXT_PRIMARY);
         super.render(graphics, mouseX, mouseY, partialTick);
+        EditorRenderHelper.drawFocusedEditBoxBorders(graphics, this.children());
     }
 
     @Override

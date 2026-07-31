@@ -53,8 +53,14 @@ public class LogicPropertyPage extends AbstractPropertyPage {
     private DialogSequence currentSequence;
     private final List<EditBox> commandEdits = new ArrayList<>();
     private final List<EditorButton> commandDeleteBtns = new ArrayList<>();
+    /** 命令行上移/下移按钮，顺序对应 commandEdits。借鉴 PortraitListScreen 的 swap 排序模式。 */
+    private final List<EditorButton> commandUpBtns = new ArrayList<>();
+    private final List<EditorButton> commandDownBtns = new ArrayList<>();
     private final List<EditorButton> editOptionButtons = new ArrayList<>();
     private final List<EditorButton> deleteOptionButtons = new ArrayList<>();
+    /** 选项行上移/下移按钮，顺序对应 editOptionButtons。选项呈现顺序 = 玩家看到顺序，排序刚需。 */
+    private final List<EditorButton> optionUpBtns = new ArrayList<>();
+    private final List<EditorButton> optionDownBtns = new ArrayList<>();
     private EditorButton addItemBtn;
     private EditorButton pickFromInventoryBtn;
     private final List<EditBox> itemIdEdits = new ArrayList<>();
@@ -306,6 +312,8 @@ public class LogicPropertyPage extends AbstractPropertyPage {
     private void clearCommandWidgets() {
         this.commandEdits.clear();
         this.commandDeleteBtns.clear();
+        this.commandUpBtns.clear();
+        this.commandDownBtns.clear();
     }
 
     private void rebuildCommandWidgets() {
@@ -316,19 +324,51 @@ public class LogicPropertyPage extends AbstractPropertyPage {
         List<String> cmds = this.getCommandsList();
         int fieldX = this.x + LABEL_WIDTH + EditorTheme.GAP;
         int fieldW = Math.max(40, this.width - LABEL_WIDTH - EditorTheme.GAP * 2);
+        // 按钮区：▲(14) + GAP + ▼(14) + GAP + ✕(20) + GAP，boxW 扣除后余量给输入框
+        int sortBtnW = 14;
+        int delBtnW = 20;
+        int boxW = Math.max(40, fieldW - sortBtnW * 2 - delBtnW - EditorTheme.GAP * 3);
         for (int i = 0; i < cmds.size(); i++) {
             int idx = i;
             int rowY = this.commandListStartY + i * (COMMAND_ROW_HEIGHT + EditorTheme.ROW_GAP);
-            int boxW = Math.max(40, fieldW - 30);
             EditBox box = new EditBox(this.font, fieldX, rowY, boxW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.command"));
             box.setMaxLength(999999999);
             box.setValue(cmds.get(i));
             box.setResponder(s -> { this.updateCommand(idx, s); this.notifyDirty(); });
             this.commandEdits.add(box);
+            // 从右往左排：✕ → ▼ → ▲
+            int delX = fieldX + fieldW - delBtnW;
+            int downX = delX - EditorTheme.GAP - sortBtnW;
+            int upX = downX - EditorTheme.GAP - sortBtnW;
             EditorButton delBtn = EditorButton.builder(Component.literal("X"), btn -> this.deleteCommand(idx))
-                    .bounds(fieldX + boxW + EditorTheme.GAP, rowY, 20, EditorTheme.FIELD_HEIGHT).build();
+                    .bounds(delX, rowY, delBtnW, EditorTheme.FIELD_HEIGHT).build();
             this.commandDeleteBtns.add(delBtn);
+            EditorButton upBtn = EditorButton.builder(Component.literal("\u25b2"), btn -> this.swapCommand(idx, idx - 1))
+                    .bounds(upX, rowY, sortBtnW, EditorTheme.FIELD_HEIGHT).build();
+            upBtn.active = idx > 0;
+            this.commandUpBtns.add(upBtn);
+            EditorButton downBtn = EditorButton.builder(Component.literal("\u25bc"), btn -> this.swapCommand(idx, idx + 1))
+                    .bounds(downX, rowY, sortBtnW, EditorTheme.FIELD_HEIGHT).build();
+            downBtn.active = idx < cmds.size() - 1;
+            this.commandDownBtns.add(downBtn);
         }
+    }
+
+    /** 交换命令列表中 i、j 两个位置，重建控件并标记 dirty。 */
+    private void swapCommand(int i, int j) {
+        if (this.currentEntry == null) {
+            return;
+        }
+        List<String> cmds = this.getCommandsList();
+        if (i < 0 || j < 0 || i >= cmds.size() || j >= cmds.size() || i == j) {
+            return;
+        }
+        String tmp = cmds.get(i);
+        cmds.set(i, cmds.get(j));
+        cmds.set(j, tmp);
+        this.setCommandsList(cmds);
+        this.relayoutSections();
+        this.notifyDirty();
     }
 
     private void onAddOption() {
@@ -376,6 +416,8 @@ public class LogicPropertyPage extends AbstractPropertyPage {
     private void clearOptionWidgets() {
         this.editOptionButtons.clear();
         this.deleteOptionButtons.clear();
+        this.optionUpBtns.clear();
+        this.optionDownBtns.clear();
     }
 
     private List<DisplayItemInfo> getItemsList() {
@@ -504,21 +546,50 @@ public class LogicPropertyPage extends AbstractPropertyPage {
         List<DialogOption> options = this.getOptionsList();
         int fieldX = this.x + LABEL_WIDTH + EditorTheme.GAP;
         int fieldW = Math.max(40, this.width - LABEL_WIDTH - EditorTheme.GAP * 2);
-        // 按钮宽度按比例分配，确保不溢出
-        int editBtnW = Math.min(50, fieldW / 3);
+        // 按钮区从右到左：delete → ▼ → ▲ → edit，editBtnW 缩小为 fieldW/4 给 ▲▼ 腾空间
+        int sortBtnW = 14;
+        int editBtnW = Math.min(50, fieldW / 4);
         int deleteBtnW = Math.min(30, fieldW / 5);
         for (int i = 0; i < options.size(); i++) {
             DialogOption opt = options.get(i);
+            int idx = i;
             int btnY = this.optionListStartY + i * (OPTION_ROW_HEIGHT + EditorTheme.ROW_GAP);
-            int editX = fieldX + fieldW - editBtnW - deleteBtnW - EditorTheme.GAP;
-            int deleteX = editX + editBtnW + EditorTheme.GAP;
+            int deleteX = fieldX + fieldW - deleteBtnW;
+            int downX = deleteX - EditorTheme.GAP - sortBtnW;
+            int upX = downX - EditorTheme.GAP - sortBtnW;
+            int editX = upX - EditorTheme.GAP - editBtnW;
             EditorButton editBtn = EditorButton.builder(Component.translatable("gui.vn_edit.edit"), btn -> this.openOptionEditor(opt))
                     .bounds(editX, btnY, editBtnW, EditorTheme.FIELD_HEIGHT).build();
             this.editOptionButtons.add(editBtn);
             EditorButton deleteBtn = EditorButton.builder(Component.translatable("gui.vn_edit.delete"), btn -> this.deleteOption(opt))
                     .bounds(deleteX, btnY, deleteBtnW, EditorTheme.FIELD_HEIGHT).build();
             this.deleteOptionButtons.add(deleteBtn);
+            EditorButton upBtn = EditorButton.builder(Component.literal("\u25b2"), btn -> this.swapOption(idx, idx - 1))
+                    .bounds(upX, btnY, sortBtnW, EditorTheme.FIELD_HEIGHT).build();
+            upBtn.active = idx > 0;
+            this.optionUpBtns.add(upBtn);
+            EditorButton downBtn = EditorButton.builder(Component.literal("\u25bc"), btn -> this.swapOption(idx, idx + 1))
+                    .bounds(downX, btnY, sortBtnW, EditorTheme.FIELD_HEIGHT).build();
+            downBtn.active = idx < options.size() - 1;
+            this.optionDownBtns.add(downBtn);
         }
+    }
+
+    /** 交换选项列表中 i、j 两个位置，重建控件并标记 dirty。选项顺序即玩家可见顺序。 */
+    private void swapOption(int i, int j) {
+        if (this.currentEntry == null) {
+            return;
+        }
+        List<DialogOption> options = this.getOptionsList();
+        if (i < 0 || j < 0 || i >= options.size() || j >= options.size() || i == j) {
+            return;
+        }
+        DialogOption tmp = options.get(i);
+        options.set(i, options.get(j));
+        options.set(j, tmp);
+        this.setOptionsList(options);
+        this.relayoutSections();
+        this.notifyDirty();
     }
 
     private void openOptionEditor(DialogOption option) {
@@ -589,6 +660,12 @@ public class LogicPropertyPage extends AbstractPropertyPage {
         for (EditorButton btn : this.commandDeleteBtns) {
             btn.render(graphics, mouseX, mouseY, partialTick);
         }
+        for (EditorButton btn : this.commandUpBtns) {
+            btn.render(graphics, mouseX, mouseY, partialTick);
+        }
+        for (EditorButton btn : this.commandDownBtns) {
+            btn.render(graphics, mouseX, mouseY, partialTick);
+        }
 
         int cmdCount = this.currentEntry != null ? this.getCommandsList().size() : 0;
         int itemsContentH = cmdCount * (COMMAND_ROW_HEIGHT + EditorTheme.ROW_GAP);
@@ -618,9 +695,10 @@ public class LogicPropertyPage extends AbstractPropertyPage {
         if (this.currentEntry != null && (opts = this.currentEntry.getOptions()) != null) {
             int fieldX = this.x + LABEL_WIDTH + EditorTheme.GAP;
             int fieldW = Math.max(40, this.width - LABEL_WIDTH - EditorTheme.GAP * 2);
-            int editBtnW = Math.min(50, fieldW / 3);
+            int editBtnW = Math.min(50, fieldW / 4);
             int deleteBtnW = Math.min(30, fieldW / 5);
-            int textMaxW = fieldW - editBtnW - deleteBtnW - EditorTheme.GAP * 2 - 10;
+            // 文本宽度扣除 edit/delete/▲/▼ 四按钮及间距，与 rebuildOptionButtons 布局一致
+            int textMaxW = fieldW - editBtnW - deleteBtnW - 14 * 2 - EditorTheme.GAP * 4 - 10;
             for (int i = 0; i < opts.length; i++) {
                 DialogOption opt = opts[i];
                 int yPos = this.optionListStartY + i * (OPTION_ROW_HEIGHT + EditorTheme.ROW_GAP);
@@ -636,6 +714,12 @@ public class LogicPropertyPage extends AbstractPropertyPage {
         for (EditorButton btn : this.deleteOptionButtons) {
             btn.render(graphics, mouseX, mouseY, partialTick);
         }
+        for (EditorButton btn : this.optionUpBtns) {
+            btn.render(graphics, mouseX, mouseY, partialTick);
+        }
+        for (EditorButton btn : this.optionDownBtns) {
+            btn.render(graphics, mouseX, mouseY, partialTick);
+        }
     }
 
     @Override
@@ -646,12 +730,16 @@ public class LogicPropertyPage extends AbstractPropertyPage {
                 this.audioFolderBtn, this.visibilityCommandBox));
         list.addAll(this.commandEdits);
         list.addAll(this.commandDeleteBtns);
+        list.addAll(this.commandUpBtns);
+        list.addAll(this.commandDownBtns);
         list.addAll(this.itemIdEdits);
         list.addAll(this.itemCountEdits);
         list.addAll(this.itemNbtEdits);
         list.addAll(this.itemDeleteBtns);
         list.addAll(this.editOptionButtons);
         list.addAll(this.deleteOptionButtons);
+        list.addAll(this.optionUpBtns);
+        list.addAll(this.optionDownBtns);
         return list;
     }
 
@@ -672,12 +760,16 @@ public class LogicPropertyPage extends AbstractPropertyPage {
         this.visibilityCommandBox.setVisible(visible);
         this.commandEdits.forEach(b -> b.setVisible(visible));
         this.commandDeleteBtns.forEach(b -> b.visible = visible);
+        this.commandUpBtns.forEach(b -> b.visible = visible);
+        this.commandDownBtns.forEach(b -> b.visible = visible);
         this.itemIdEdits.forEach(b -> b.setVisible(visible));
         this.itemCountEdits.forEach(b -> b.setVisible(visible));
         this.itemNbtEdits.forEach(b -> b.setVisible(visible));
         this.itemDeleteBtns.forEach(b -> b.visible = visible);
         this.editOptionButtons.forEach(b -> b.visible = visible);
         this.deleteOptionButtons.forEach(b -> b.visible = visible);
+        this.optionUpBtns.forEach(b -> b.visible = visible);
+        this.optionDownBtns.forEach(b -> b.visible = visible);
     }
 
     @Override

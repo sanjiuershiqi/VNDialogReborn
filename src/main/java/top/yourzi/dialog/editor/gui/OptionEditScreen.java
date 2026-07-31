@@ -21,6 +21,10 @@ import java.util.function.Consumer;
  */
 public class OptionEditScreen extends Screen {
     private static final int COMMAND_ROW_HEIGHT = 16;
+    private static final int FIELD_WIDTH = 200;
+    private static final int INPUT_HEIGHT = 16;
+    private static final int LABEL_GAP = 11;
+    private static final int ROW_GAP = 6;
 
     private final DialogOption option;
     private final Consumer<DialogOption> onSave;
@@ -37,6 +41,16 @@ public class OptionEditScreen extends Screen {
     private EditBox visibilityCommandBox;
     private final List<EditBox> commandBoxes = new ArrayList<>();
     private final List<EditorButton> commandDeleteButtons = new ArrayList<>();
+    /** 共享 Y 坐标字段：init() 和 render() 共用，消除双套游标漂移导致的标签/输入框错位。 */
+    private int fieldX;
+    private int textLabelY;
+    private int textBoxY;
+    private int targetLabelY;
+    private int targetBtnY;
+    private int checkboxY;
+    private int visibilityLabelY;
+    private int visibilityBoxY;
+    private int addCommandBtnY;
     private int commandListY;
 
     public OptionEditScreen(DialogOption option, Consumer<DialogOption> onSave, Screen parent, DialogSequence sequence) {
@@ -57,41 +71,53 @@ public class OptionEditScreen extends Screen {
         super.init();
         this.commandBoxes.clear();
         this.commandDeleteButtons.clear();
-        int fieldWidth = 200;
-        int fieldX = (this.width - fieldWidth) / 2;
-        int y = 25;
-        int inputHeight = 16;
-        this.textBox = new EditBox(this.font, fieldX, y + 10, fieldWidth, inputHeight, Component.translatable("gui.vn_edit.option_text"));
+        this.fieldX = (this.width - FIELD_WIDTH) / 2;
+        int cursorY = 25;
+        // 选项文本：标签在输入框上方 LABEL_GAP
+        this.textLabelY = cursorY;
+        this.textBoxY = cursorY + LABEL_GAP;
+        this.textBox = new EditBox(this.font, fieldX, textBoxY, FIELD_WIDTH, INPUT_HEIGHT, Component.translatable("gui.vn_edit.option_text"));
         this.textBox.setMaxLength(999999999);
         this.textBox.setValue(this.draftText);
         this.addRenderableWidget(this.textBox);
-        String currentTarget = this.draftTargetId != null ? this.draftTargetId : "None";
-        y += inputHeight + 20;
+        cursorY = this.textBoxY + INPUT_HEIGHT + ROW_GAP;
+        // 目标节点：标签在按钮上方
+        this.targetLabelY = cursorY;
+        this.targetBtnY = cursorY + LABEL_GAP;
+        String currentTarget = this.draftTargetId != null && !this.draftTargetId.isEmpty() ? this.draftTargetId : Component.translatable("gui.vn_edit.none").getString();
         this.targetNodeBtn = EditorButton.builder(Component.literal(currentTarget), btn -> this.openNodePicker())
-                .bounds(fieldX, y + 10, fieldWidth, inputHeight).build();
+                .bounds(fieldX, targetBtnY, FIELD_WIDTH, INPUT_HEIGHT).build();
         this.addRenderableWidget(this.targetNodeBtn);
+        cursorY = this.targetBtnY + INPUT_HEIGHT + ROW_GAP;
+        // 始终可见 checkbox
         boolean isAlwaysVisible = this.draftVisibilityCommand == null || this.draftVisibilityCommand.isEmpty();
-        y += inputHeight + 20;
+        this.checkboxY = cursorY;
         this.alwaysVisibleCheck = Checkbox.builder(Component.translatable("gui.vn_edit.always_visible"), this.font)
-                .pos(fieldX, y + 10)
-                .maxWidth(fieldWidth)
+                .pos(fieldX, checkboxY)
+                .maxWidth(FIELD_WIDTH)
                 .selected(isAlwaysVisible)
                 .build();
         this.addRenderableWidget(this.alwaysVisibleCheck);
-        y += 30;
-        this.visibilityCommandBox = new EditBox(this.font, fieldX, y, fieldWidth, inputHeight, Component.translatable("gui.vn_edit.visibility_command"));
+        cursorY = this.checkboxY + 20 + ROW_GAP;
+        // 可见性命令：标签在输入框上方
+        this.visibilityLabelY = cursorY;
+        this.visibilityBoxY = cursorY + LABEL_GAP;
+        this.visibilityCommandBox = new EditBox(this.font, fieldX, visibilityBoxY, FIELD_WIDTH, INPUT_HEIGHT, Component.translatable("gui.vn_edit.visibility_command"));
         this.visibilityCommandBox.setMaxLength(999999999);
         this.visibilityCommandBox.setValue(this.draftVisibilityCommand != null ? this.draftVisibilityCommand : "");
         this.visibilityCommandBox.setVisible(!isAlwaysVisible);
         this.addRenderableWidget(this.visibilityCommandBox);
-        y += inputHeight + 10;
+        cursorY = this.visibilityBoxY + INPUT_HEIGHT + ROW_GAP;
+        // 添加命令按钮 + 命令列表
+        this.addCommandBtnY = cursorY;
         EditorButton addCommandBtn = EditorButton.builder(Component.translatable("gui.vn_edit.add_command"), btn -> this.addCommand(""))
-                .bounds(fieldX, y, 60, 16).build();
+                .bounds(fieldX, addCommandBtnY, 60, 16).build();
         this.addRenderableWidget(addCommandBtn);
-        this.commandListY = y + 18;
+        this.commandListY = cursorY + 18;
         for (String cmd : this.draftCommands) {
             this.addCommand(cmd);
         }
+        // 底部保存/取消按钮
         int bottomY = this.height - 30;
         EditorButton saveBtn = EditorButton.builder(Component.translatable("gui.vn_edit.save"), btn -> {
             // 保存时才将草稿写回原 option
@@ -131,7 +157,7 @@ public class OptionEditScreen extends Screen {
         }
         Minecraft.getInstance().setScreen(new NodePickerScreen(this.sequence, selectedId -> {
             this.draftTargetId = selectedId.isEmpty() ? null : selectedId;
-            this.targetNodeBtn.setMessage(Component.literal(selectedId.isEmpty() ? "None" : selectedId));
+            this.targetNodeBtn.setMessage(Component.literal(selectedId.isEmpty() ? Component.translatable("gui.vn_edit.none").getString() : selectedId));
         }, Minecraft.getInstance().screen));
     }
 
@@ -143,7 +169,7 @@ public class OptionEditScreen extends Screen {
         box.setValue(initialValue);
         this.commandBoxes.add(box);
         this.addRenderableWidget(box);
-        EditorButton delBtn = EditorButton.builder(Component.literal("X"), btn -> {
+        EditorButton delBtn = EditorButton.builder(Component.literal("\u2715"), btn -> {
             int i = this.commandDeleteButtons.indexOf(btn);
             if (i >= 0) {
                 this.removeCommand(i);
@@ -172,18 +198,15 @@ public class OptionEditScreen extends Screen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics, mouseX, mouseY, partialTick);
         graphics.drawCenteredString(this.font, this.title, this.width / 2, 10, EditorTheme.TEXT_PRIMARY);
-        int fieldX = (this.width - 200) / 2;
-        int y = 25;
-        graphics.drawString(this.font, Component.translatable("gui.vn_edit.option_text"), fieldX + 5, y, EditorTheme.TEXT_SECONDARY);
-        y += 36;
-        graphics.drawString(this.font, Component.translatable("gui.vn_edit.option_target"), fieldX + 5, y, EditorTheme.TEXT_SECONDARY);
-        y += 36;
-        y += 30;
+        // 用 init() 共享的 Y 字段绘制标签，消除双套游标错位
+        graphics.drawString(this.font, Component.translatable("gui.vn_edit.option_text"), this.fieldX, this.textLabelY, EditorTheme.TEXT_SECONDARY);
+        graphics.drawString(this.font, Component.translatable("gui.vn_edit.option_target"), this.fieldX, this.targetLabelY, EditorTheme.TEXT_SECONDARY);
         if (!this.alwaysVisibleCheck.selected()) {
-            graphics.drawString(this.font, Component.translatable("gui.vn_edit.visibility_command"), fieldX + 5, y, EditorTheme.TEXT_SECONDARY);
+            graphics.drawString(this.font, Component.translatable("gui.vn_edit.visibility_command"), this.fieldX, this.visibilityLabelY, EditorTheme.TEXT_SECONDARY);
         }
         this.visibilityCommandBox.setVisible(!this.alwaysVisibleCheck.selected());
         super.render(graphics, mouseX, mouseY, partialTick);
+        EditorRenderHelper.drawFocusedEditBoxBorders(graphics, this.children());
     }
 
     @Override

@@ -142,6 +142,13 @@ public class DropdownWidget extends AbstractWidget {
         }
         graphics.drawString(this.font, text, this.getX() + 3, this.getY() + (this.getHeight() - 8) / 2, EditorTheme.TEXT_PRIMARY);
         graphics.drawString(this.font, this.expanded ? "\u25b2" : "\u25bc", this.getX() + this.getWidth() - 10, this.getY() + (this.getHeight() - 8) / 2, EditorTheme.TEXT_MUTED);
+        // 聚焦时 ACCENT 描边（与 EditorButton 一致），未展开时显示，展开时浮层已有边框
+        if (this.isFocused() && !this.expanded) {
+            graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + 1, EditorTheme.ACCENT);
+            graphics.fill(this.getX(), this.getY() + this.getHeight() - 1, this.getX() + this.getWidth(), this.getY() + this.getHeight(), EditorTheme.ACCENT);
+            graphics.fill(this.getX(), this.getY(), this.getX() + 1, this.getY() + this.getHeight(), EditorTheme.ACCENT);
+            graphics.fill(this.getX() + this.getWidth() - 1, this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), EditorTheme.ACCENT);
+        }
 
         // 展开时自渲染浮层（父容器已通过 onPopupToggle 跳过 scissor）
         if (this.expanded && this.visible && !this.items.isEmpty()) {

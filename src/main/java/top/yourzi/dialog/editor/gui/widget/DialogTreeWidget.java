@@ -190,6 +190,115 @@ public class DialogTreeWidget extends AbstractWidget {
     }
 
     /**
+     * 按 ID 选中节点并滚动到可见。供粘贴/复制后选中新节点使用。
+     * 在 setSequence 重建后调用，会复用 selectIndex 的选中+滚动+回调逻辑。
+     * @return true 表示找到并选中
+     */
+    public boolean selectEntryById(String id) {
+        if (id == null) {
+            return false;
+        }
+        for (int i = 0; i < this.visibleNodes.size(); i++) {
+            if (id.equals(this.visibleNodes.get(i).entry.getId())) {
+                this.selectIndex(i);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 键盘导航：由宿主 Screen 在 EditBox 未聚焦时转发 UP/DOWN/LEFT/RIGHT/Enter。
+     * AbstractWidget 不自带 keyPressed，故公开由外部调用。
+     * - UP/DOWN：移动选中并滚动到可见，触发 onEntrySelected（与单击语义一致）
+     * - LEFT：当前节点有子节点且展开 → 折叠
+     * - RIGHT：当前节点有子节点且折叠 → 展开
+     * - Enter：触发 onEntrySelected 打开属性面板
+     * @return true 表示按键被消费
+     */
+    public boolean keyPressed(int keyCode) {
+        if (this.visibleNodes.isEmpty()) {
+            return false;
+        }
+        // UP/DOWN：移动选中
+        if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_UP || keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_DOWN) {
+            if (this.selectedIndex < 0) {
+                this.selectIndex(0);
+                return true;
+            }
+            int dir = keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_UP ? -1 : 1;
+            int next = Mth.clamp(this.selectedIndex + dir, 0, this.visibleNodes.size() - 1);
+            if (next != this.selectedIndex) {
+                this.selectIndex(next);
+            }
+            return true;
+        }
+        if (this.selectedIndex < 0 || this.selectedIndex >= this.visibleNodes.size()) {
+            return false;
+        }
+        TreeNode node = this.visibleNodes.get(this.selectedIndex);
+        // LEFT：折叠当前节点（有子节点且展开时）
+        if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT) {
+            if (!node.children.isEmpty() && node.expanded) {
+                node.expanded = false;
+                this.flattenTree();
+                return true;
+            }
+            return false;
+        }
+        // RIGHT：展开当前节点（有子节点且折叠时）
+        if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT) {
+            if (!node.children.isEmpty() && !node.expanded) {
+                node.expanded = true;
+                this.flattenTree();
+                return true;
+            }
+            return false;
+        }
+        // Enter：触发选中回调（打开属性面板），与单击语义一致
+        if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER) {
+            if (this.onEntrySelected != null) {
+                this.onEntrySelected.accept(node.entry);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 设置选中索引并同步状态/回调/滚动。抽出自 mouseClicked 与 keyPressed 共用。
+     */
+    private void selectIndex(int index) {
+        if (index < 0 || index >= this.visibleNodes.size()) {
+            return;
+        }
+        this.selectedIndex = index;
+        EditorScreenState.get().setSelectedNodeId(this.visibleNodes.get(index).entry.getId());
+        this.scrollIntoView(index);
+        if (this.onEntrySelected != null) {
+            this.onEntrySelected.accept(this.visibleNodes.get(index).entry);
+        }
+    }
+
+    /**
+     * 滚动到使 index 对应行可见。若行在视口上方，上调 scrollOffset；若在下方，下调。
+     */
+    private void scrollIntoView(int index) {
+        int rowTop = index * ROW_HEIGHT;
+        int rowBottom = rowTop + ROW_HEIGHT;
+        int viewTop = this.scrollOffset;
+        int viewBottom = this.scrollOffset + this.getHeight();
+        int maxScroll = Math.max(0, this.visibleNodes.size() * ROW_HEIGHT - this.getHeight());
+        if (rowTop < viewTop) {
+            this.scrollOffset = rowTop;
+        } else if (rowBottom > viewBottom) {
+            this.scrollOffset = rowBottom - this.getHeight();
+        }
+        this.scrollOffset = Mth.clamp(this.scrollOffset, 0, maxScroll);
+        EditorScreenState.get().setTreeScrollOffset(this.scrollOffset);
+    }
+
+    /**
      * 重命名当前选中节点。由双击重命名和 F2 快捷键共用。
      * 含 ID 唯一性校验、引用更新（nextId/options.targetId）、重建树、恢复选中。
      * @return true 表示成功（含新旧 ID 相同的无变化情况）；false 表示 ID 冲突或无选中
@@ -408,6 +517,14 @@ public class DialogTreeWidget extends AbstractWidget {
             int infoWidth = this.font.width(connectionInfo);
             int infoX = this.getX() + this.getWidth() - infoWidth - 6;
             graphics.drawString(this.font, connectionInfo, infoX, rowY + 2, EditorTheme.TEXT_MUTED);
+        }
+        // 空状态：序列未加载或无节点时显示引导（借鉴 Sparkle 三态列表，但不引入加载/错误态避免过度设计）
+        if (this.sequence == null) {
+            graphics.drawCenteredString(this.font, Component.translatable("gui.vn_edit.tree.no_sequence"),
+                    this.getX() + this.getWidth() / 2, this.getY() + this.getHeight() / 2 - 4, EditorTheme.TEXT_MUTED);
+        } else if (this.visibleNodes.isEmpty() && !this.isSearching()) {
+            graphics.drawCenteredString(this.font, Component.translatable("gui.vn_edit.tree.empty"),
+                    this.getX() + this.getWidth() / 2, this.getY() + this.getHeight() / 2 - 4, EditorTheme.TEXT_MUTED);
         }
         // 搜索无匹配：居中显示提示（借鉴 Sparkle 三态列表的 no_results）
         if (this.isSearching() && this.visibleNodes.isEmpty()) {

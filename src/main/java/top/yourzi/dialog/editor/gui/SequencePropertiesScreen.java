@@ -164,6 +164,7 @@ public class SequencePropertiesScreen extends Screen {
         graphics.drawString(this.font, Component.translatable("gui.vn_edit.sequence_effect"), fieldX, this.effectLabelY, EditorTheme.TEXT_SECONDARY);
         graphics.drawString(this.font, Component.translatable("gui.vn_edit.sequence_start"), fieldX, this.startLabelY, EditorTheme.TEXT_SECONDARY);
         super.render(graphics, mouseX, mouseY, partialTick);
+        EditorRenderHelper.drawFocusedEditBoxBorders(graphics, this.children());
     }
 
     @Override

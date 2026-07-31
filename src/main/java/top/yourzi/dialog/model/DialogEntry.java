@@ -1,5 +1,6 @@
 package top.yourzi.dialog.model;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -161,6 +162,18 @@ public class DialogEntry {
 
     public boolean isEndDialog() {
         return endDialog != null && endDialog;
+    }
+
+    /** Gson 实例用于 deepCopy，复用避免重复创建。 */
+    private static final Gson DEEP_COPY_GSON = new Gson();
+
+    /**
+     * 深拷贝节点：通过 Gson 序列化-反序列化实现，递归拷贝所有字段（含 JsonElement/列表/数组）。
+     * transient 字段（selectedOptionText）被 Gson 默认忽略，副本不含运行态选中状态。
+     * 供编辑器复制/粘贴节点功能使用。
+     */
+    public DialogEntry deepCopy() {
+        return DEEP_COPY_GSON.fromJson(DEEP_COPY_GSON.toJson(this), DialogEntry.class);
     }
 
     public void setCommand(String command) {
