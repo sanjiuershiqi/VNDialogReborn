@@ -95,6 +95,26 @@ public class PropertyPanel extends AbstractWidget {
         }
     }
 
+    /**
+     * 转发字段变脏回调到所有属性页，页内 Option 变脏时触发（用于主屏 markDirty 序列）。
+     */
+    public void setDirtyListener(Runnable listener) {
+        this.ensureInitialized();
+        for (Tab tab : this.tabs) {
+            tab.page.setDirtyListener(listener);
+        }
+    }
+
+    /**
+     * 序列保存成功后转发到所有属性页，各页重置字段 dirty 基线（snapshot）。
+     */
+    public void onSequenceSaved() {
+        this.ensureInitialized();
+        for (Tab tab : this.tabs) {
+            tab.page.onSequenceSaved();
+        }
+    }
+
     private void initializePages() {
         int pageX = this.getX() + 4;
         int pageY = this.getY() + TAB_HEIGHT + 3;

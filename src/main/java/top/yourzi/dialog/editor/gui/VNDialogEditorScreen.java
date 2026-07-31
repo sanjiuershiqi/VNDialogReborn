@@ -189,6 +189,8 @@ public class VNDialogEditorScreen extends Screen {
         int propWidth = this.width - propX;
         this.propertyPanel = new PropertyPanel(propX, treeContentY, propWidth, contentHeight, this.font);
         this.addRenderableWidget(this.propertyPanel);
+        // 注入字段变脏回调：属性页内 Option 变脏时标记当前序列为未保存，使字段编辑联动标签页 * 标记
+        this.propertyPanel.setDirtyListener(() -> this.markDirty(this.currentSequence));
     }
 
     private void scrollTabs(int delta) {
@@ -356,6 +358,8 @@ public class VNDialogEditorScreen extends Screen {
         }
         this.saveSession();
         this.markClean(this.currentSequence);
+        // 保存成功后重置属性页字段 dirty 基线，清除行级 dirty 视觉
+        this.propertyPanel.onSequenceSaved();
         if (dangling.isEmpty()) {
             this.setStatus(Component.translatable("gui.vn_edit.status.saved", this.currentSequence.getId()).getString(), StatusLevel.SUCCESS);
         } else {

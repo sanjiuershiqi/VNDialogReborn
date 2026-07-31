@@ -37,4 +37,18 @@ public interface PropertyPage {
     default List<DropdownWidget> getDropdowns() {
         return List.of();
     }
+
+    /**
+     * 设置字段变更回调，字段变脏时触发（用于主屏 markDirty 序列）。
+     * 默认空实现，由使用 Option 值模型的属性页覆写使用。
+     */
+    default void setDirtyListener(Runnable listener) {
+    }
+
+    /**
+     * 序列保存成功后调用，各页重置字段 dirty 基线（snapshot）。
+     * 默认空实现，由使用 Option 值模型的属性页覆写使用。
+     */
+    default void onSequenceSaved() {
+    }
 }

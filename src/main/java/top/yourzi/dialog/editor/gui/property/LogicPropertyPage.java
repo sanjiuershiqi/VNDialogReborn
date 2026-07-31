@@ -4,7 +4,6 @@ import com.google.gson.JsonPrimitive;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Checkbox;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.network.chat.Component;
@@ -12,6 +11,7 @@ import top.yourzi.dialog.editor.gui.FileBrowserScreen;
 import top.yourzi.dialog.editor.gui.InventoryItemPickerScreen;
 import top.yourzi.dialog.editor.gui.NodePickerScreen;
 import top.yourzi.dialog.editor.gui.OptionEditScreen;
+import top.yourzi.dialog.editor.gui.widget.BooleanOptionRow;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import top.yourzi.dialog.editor.util.AudioPreviewPlayer;
 import top.yourzi.dialog.editor.util.EditorConfig;
@@ -39,8 +39,10 @@ public class LogicPropertyPage extends AbstractPropertyPage {
     private static final int DYNAMIC_SECTION_OVERHEAD = EditorTheme.SECTION_GAP + EditorTheme.SECTION_HDR_H + EditorTheme.ROW_GAP + EditorTheme.FIELD_HEIGHT + EditorTheme.ROW_GAP;
 
     private EditorButton nextNodeBtn;
-    private Checkbox endDialogCheck;
-    private Checkbox allowSkipCheck;
+    private Option<Boolean> endDialogOption;
+    private Option<Boolean> allowSkipOption;
+    private BooleanOptionRow endDialogRow;
+    private BooleanOptionRow allowSkipRow;
     private EditorButton addCommandBtn;
     private EditorButton addOptionBtn;
     private EditBox audioPathBox;
@@ -63,13 +65,6 @@ public class LogicPropertyPage extends AbstractPropertyPage {
     private int commandListStartY;
     private int displayItemsStartY;
     private int dynamicStartY;
-    /** 两个 Checkbox 的位置缓存，重建时复用（替代 suppressCallback 标志方案）。 */
-    private int endDialogCheckX;
-    private int endDialogCheckY;
-    private int endDialogCheckW;
-    private int allowSkipCheckX;
-    private int allowSkipCheckY;
-    private int allowSkipCheckW;
 
     // 渲染位置缓存
     private int flowHeaderY;
@@ -101,15 +96,19 @@ public class LogicPropertyPage extends AbstractPropertyPage {
         this.nextNodeBtn = EditorButton.builder(Component.literal("None"), btn -> this.openNodePicker())
                 .bounds(fieldX, nextY, nextBtnW, EditorTheme.FIELD_HEIGHT).build();
         int endY = layout.fieldRow();
-        this.endDialogCheckX = fieldX;
-        this.endDialogCheckY = endY;
-        this.endDialogCheckW = fieldW;
-        this.endDialogCheck = this.buildEndDialogCheck(false);
+        this.endDialogOption = new Option<>(
+                () -> this.currentEntry != null && this.currentEntry.isEndDialog(),
+                v -> { if (this.currentEntry != null) this.currentEntry.setEndDialog(v); },
+                () -> { if (this.dirtyListener != null) this.dirtyListener.run(); });
+        this.endDialogRow = new BooleanOptionRow(fieldX, endY, fieldW, EditorTheme.FIELD_HEIGHT,
+                Component.translatable("gui.vn_edit.end_dialog"), this.endDialogOption, this.font);
         int skipY = layout.fieldRow();
-        this.allowSkipCheckX = fieldX;
-        this.allowSkipCheckY = skipY;
-        this.allowSkipCheckW = fieldW;
-        this.allowSkipCheck = this.buildAllowSkipCheck(true);
+        this.allowSkipOption = new Option<>(
+                () -> this.currentEntry != null && this.currentEntry.isSkipAllowed(),
+                v -> { if (this.currentEntry != null) this.currentEntry.setAllowSkip(v); },
+                () -> { if (this.dirtyListener != null) this.dirtyListener.run(); });
+        this.allowSkipRow = new BooleanOptionRow(fieldX, skipY, fieldW, EditorTheme.FIELD_HEIGHT,
+                Component.translatable("gui.vn_edit.allow_skip"), this.allowSkipOption, this.font);
 
         // ===== 音频分节 =====
         this.audioHeaderY = layout.section();
@@ -188,9 +187,9 @@ public class LogicPropertyPage extends AbstractPropertyPage {
     public void unbind() {
         this.currentEntry = null;
         this.nextNodeBtn.setMessage(Component.literal("None"));
-        // 重建 Checkbox 替代 setCheckboxSelectedSilent：新实例初始值即目标值，无回调抑制需求
-        this.endDialogCheck = this.buildEndDialogCheck(false);
-        this.allowSkipCheck = this.buildAllowSkipCheck(true);
+        // 重置 Option 基线（currentEntry 已置 null，getter 防护返回 false），无需重建控件
+        this.endDialogOption.snapshot();
+        this.allowSkipOption.snapshot();
         this.audioPathBox.setValue("");
         this.visibilityCommandBox.setValue("");
         this.clearCommandWidgets();
@@ -206,9 +205,9 @@ public class LogicPropertyPage extends AbstractPropertyPage {
         }
         String nextId = this.currentEntry.getNextId();
         this.nextNodeBtn.setMessage(Component.literal(nextId != null && !nextId.isEmpty() ? nextId : "None"));
-        // 重建 Checkbox 替代 setCheckboxSelectedSilent：用 entry 的当前值作为新实例初始值
-        this.endDialogCheck = this.buildEndDialogCheck(this.currentEntry.isEndDialog());
-        this.allowSkipCheck = this.buildAllowSkipCheck(this.currentEntry.isSkipAllowed());
+        // 重置 Option 基线为 entry 当前值，行控件读 option.get() 自动反映新值，无需重建
+        this.endDialogOption.snapshot();
+        this.allowSkipOption.snapshot();
         this.setBoxSilent(this.audioPathBox, this.currentEntry.getAudioPath() != null ? this.currentEntry.getAudioPath() : "", s -> {
             if (this.currentEntry != null) {
                 this.currentEntry.setAudioPath(s.isEmpty() ? null : s);
@@ -558,8 +557,8 @@ public class LogicPropertyPage extends AbstractPropertyPage {
         EditorTheme.drawSectionHeader(graphics, this.font, this.x, this.flowHeaderY, this.width, Component.translatable("gui.vn_edit.section.flow"));
         graphics.drawString(this.font, Component.translatable("gui.vn_edit.next_id"), this.x + 5, this.flowLabelY, EditorTheme.TEXT_SECONDARY);
         this.nextNodeBtn.render(graphics, mouseX, mouseY, partialTick);
-        this.endDialogCheck.render(graphics, mouseX, mouseY, partialTick);
-        this.allowSkipCheck.render(graphics, mouseX, mouseY, partialTick);
+        this.endDialogRow.render(graphics, mouseX, mouseY, partialTick);
+        this.allowSkipRow.render(graphics, mouseX, mouseY, partialTick);
 
         EditorTheme.drawSectionHeader(graphics, this.font, this.x, this.audioHeaderY, this.width, Component.translatable("gui.vn_edit.section.audio"));
         graphics.drawString(this.font, Component.translatable("gui.vn_edit.audio_path"), this.x + 5, this.audioLabelY, EditorTheme.TEXT_SECONDARY);
@@ -633,7 +632,7 @@ public class LogicPropertyPage extends AbstractPropertyPage {
 
     @Override
     public List<? extends GuiEventListener> children() {
-        List<GuiEventListener> list = new ArrayList<>(List.of(this.nextNodeBtn, this.endDialogCheck, this.allowSkipCheck,
+        List<GuiEventListener> list = new ArrayList<>(List.of(this.nextNodeBtn, this.endDialogRow, this.allowSkipRow,
                 this.addCommandBtn, this.addOptionBtn, this.addItemBtn, this.pickFromInventoryBtn,
                 this.audioPathBox, this.audioBrowseBtn, this.audioPlayBtn,
                 this.audioFolderBtn, this.visibilityCommandBox));
@@ -652,8 +651,8 @@ public class LogicPropertyPage extends AbstractPropertyPage {
     public void setVisible(boolean visible) {
         this.visible = visible;
         this.nextNodeBtn.visible = visible;
-        this.endDialogCheck.visible = visible;
-        this.allowSkipCheck.visible = visible;
+        this.endDialogRow.visible = visible;
+        this.allowSkipRow.visible = visible;
         this.addCommandBtn.visible = visible;
         this.addOptionBtn.visible = visible;
         this.addItemBtn.visible = visible;
@@ -687,35 +686,16 @@ public class LogicPropertyPage extends AbstractPropertyPage {
     }
 
     /**
-     * 构造 endDialog Checkbox。选中态由参数指定，回调直接写回 currentEntry（无抑制标志）。
-     * 重建方式天然避免 onPress+suppressCallback 的脆弱状态机：新实例初始值即目标值。
+     * 序列保存成功后重置字段 dirty 基线：Option.snapshot 把基线设为当前值，清除 dirty。
+     * 保存失败时不调用（由主屏 onSave 在 markClean 后触发），保留字段 dirty 视觉与序列 dirty。
      */
-    private Checkbox buildEndDialogCheck(boolean selected) {
-        return Checkbox.builder(Component.translatable("gui.vn_edit.end_dialog"), this.font)
-                .pos(this.endDialogCheckX, this.endDialogCheckY)
-                .maxWidth(this.endDialogCheckW)
-                .selected(selected)
-                .onValueChange((checkbox, value) -> {
-                    if (this.currentEntry != null) {
-                        this.currentEntry.setEndDialog(value);
-                    }
-                })
-                .build();
-    }
-
-    /**
-     * 构造 allowSkip Checkbox。语义同 buildEndDialogCheck。
-     */
-    private Checkbox buildAllowSkipCheck(boolean selected) {
-        return Checkbox.builder(Component.translatable("gui.vn_edit.allow_skip"), this.font)
-                .pos(this.allowSkipCheckX, this.allowSkipCheckY)
-                .maxWidth(this.allowSkipCheckW)
-                .selected(selected)
-                .onValueChange((checkbox, value) -> {
-                    if (this.currentEntry != null) {
-                        this.currentEntry.setAllowSkip(value);
-                    }
-                })
-                .build();
+    @Override
+    public void onSequenceSaved() {
+        if (this.endDialogOption != null) {
+            this.endDialogOption.snapshot();
+        }
+        if (this.allowSkipOption != null) {
+            this.allowSkipOption.snapshot();
+        }
     }
 }

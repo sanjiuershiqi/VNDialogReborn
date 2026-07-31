@@ -24,6 +24,8 @@ public abstract class AbstractPropertyPage implements PropertyPage {
     protected int height;
     protected boolean visible = true;
     protected DialogEntry currentEntry = null;
+    /** 字段变脏回调，由主屏注入（markDirty 序列）；Option 构造时引用此字段。 */
+    protected Runnable dirtyListener;
 
     protected AbstractPropertyPage(Font font) {
         this.font = font;
@@ -53,6 +55,12 @@ public abstract class AbstractPropertyPage implements PropertyPage {
         box.setValue(value);
         box.setResponder(responder);
         if (extra != null) extra.run();
+    }
+
+    /** 存储 dirtyListener，供子类构造 Option 时通过 this.dirtyListener 引用。 */
+    @Override
+    public void setDirtyListener(Runnable listener) {
+        this.dirtyListener = listener;
     }
 
     /** 默认 setVisible：遍历 children() 联动可见性。子类可重写扩展。 */
