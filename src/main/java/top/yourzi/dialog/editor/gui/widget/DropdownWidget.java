@@ -191,10 +191,6 @@ public class DropdownWidget extends AbstractWidget {
                 boolean hovered = mouseX >= this.getX() && mouseX <= this.getX() + pw && mouseY >= rowY && mouseY <= rowY + ITEM_HEIGHT;
                 int bg = hovered ? EditorTheme.BG_HOVER : (i == this.selectedIndex ? EditorTheme.BG_SELECTED : EditorTheme.BG_SURFACE);
                 graphics.fill(this.getX() + 1, rowY, this.getX() + pw - 1, rowY + ITEM_HEIGHT, bg);
-                // 第八轮美化：选中项左侧 2px ACCENT 竖条（项 6，与 DialogTreeWidget 选中项统一锚点）
-                if (i == this.selectedIndex) {
-                    graphics.fill(this.getX() + 1, rowY, this.getX() + 3, rowY + ITEM_HEIGHT, EditorTheme.ACCENT);
-                }
                 String itemText = this.items.get(i);
                 if (itemText.length() > 22) {
                     itemText = itemText.substring(0, 19) + "...";

@@ -224,8 +224,6 @@ public class PropertyPanel extends AbstractWidget {
             graphics.fill(tabX, tabY, tabX + TAB_WIDTH, tabY + TAB_HEIGHT, bgColor);
             graphics.drawCenteredString(this.font, tab.title, tabX + TAB_WIDTH / 2, tabY + 4, color);
             if (i == this.activeTabIndex) {
-                // 第八轮美化：活动标签左侧 2px ACCENT 竖条（与 DialogTreeWidget 选中项统一锚点语言）
-                graphics.fill(tabX, tabY, tabX + 2, tabY + TAB_HEIGHT, EditorTheme.ACCENT);
                 graphics.fill(tabX, tabY + TAB_HEIGHT - 2, tabX + TAB_WIDTH, tabY + TAB_HEIGHT, EditorTheme.ACCENT);
             }
             graphics.fill(tabX + TAB_WIDTH, tabY, tabX + TAB_WIDTH + 1, tabY + TAB_HEIGHT, EditorTheme.BORDER);

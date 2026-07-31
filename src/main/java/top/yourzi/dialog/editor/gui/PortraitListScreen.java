@@ -123,8 +123,6 @@ public class PortraitListScreen extends Screen {
      *   实际对话中立绘会跟着变大/变小。此模式下 previewZoom 保持 1.0。
      */
     private float previewZoom = 1.0f;
-    /** 选中立绘/加载预览后自动适配缩放的待执行标志（viewport 就绪后在 render 中执行）。 */
-    private boolean needsFitZoom = false;
     private DropdownWidget posDropdown;
     private DropdownWidget animDropdown;
     private EditBox sizeBox;
@@ -360,11 +358,6 @@ public class PortraitListScreen extends Screen {
         int contentH = this.height - HEADER - FOOTER;
         // 计算本帧舞台视口：把实际屏幕等比映射到舞台区域，所有渲染共用此视口
         this.viewport = new StageViewport(this.width, this.height, STAGE_X, HEADER, stageWidth(), contentH);
-        // 选中立绘/加载预览后自动适配缩放（viewport 就绪后执行，确保 fitZoomToStage 能正确计算）
-        if (this.needsFitZoom) {
-            this.needsFitZoom = false;
-            fitZoomToStage();
-        }
         this.renderLeftList(g, mx, my, contentH);
         this.renderMiddlePanel(g, mx, my, contentH);
         // 舞台背景在 widget 之前绘制（作为底层背景）
@@ -692,31 +685,6 @@ public class PortraitListScreen extends Screen {
         syncBoxIfNotFocused(this.sizeBox, info.getSize());
         syncBoxIfNotFocused(this.offsetXBox, info.getOffsetX());
         syncBoxIfNotFocused(this.offsetYBox, info.getOffsetY());
-    }
-
-    /**
-     * 自动计算"适合舞台"的缩放倍率：让立绘完整放入视口（取宽高方向较小的适配比）。
-     * 立绘在 zoom=1.0 时的视口内尺寸由实际演出位置和 size 决定，这里基于当前选中立绘计算。
-     */
-    private void fitZoomToStage() {
-        PortraitInfo info = this.getSelected();
-        if (info == null || this.previewW <= 0 || this.previewH <= 0 || this.viewport == null) {
-            return;
-        }
-        float size = Mth.clamp(info.getSize(), 0.1f, 5.0f);
-        int realPortraitH = (int) (this.height * 0.68f * size);
-        float ratio = (float) this.previewW / (float) this.previewH;
-        int realPortraitW = Math.max(1, (int) (realPortraitH * ratio));
-        int portraitW = this.viewport.mapSize(realPortraitW);
-        int portraitH = this.viewport.mapSize(realPortraitH);
-        if (portraitW <= 0 || portraitH <= 0) {
-            return;
-        }
-        // 留 8px 边距，避免贴边
-        float fitW = (float) (this.viewport.viewW - 8) / portraitW;
-        float fitH = (float) (this.viewport.viewH - 8) / portraitH;
-        float fit = Math.min(fitW, fitH);
-        this.previewZoom = Mth.clamp(fit, ZOOM_MIN, ZOOM_MAX);
     }
 
     private void updateDynamicButtons() {
@@ -1058,8 +1026,6 @@ public class PortraitListScreen extends Screen {
                 case org.lwjgl.glfw.GLFW.GLFW_KEY_DOWN -> { info.setOffsetY(info.getOffsetY() + step); syncBoxIfNotFocused(this.offsetYBox, info.getOffsetY()); return true; }
                 // R：重置预览缩放（不影响立绘实际 offset/size）
                 case org.lwjgl.glfw.GLFW.GLFW_KEY_R -> { resetZoom(); return true; }
-                // F：自动适配缩放，让立绘完整放入视口
-                case org.lwjgl.glfw.GLFW.GLFW_KEY_F -> { fitZoomToStage(); return true; }
             }
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
@@ -1079,8 +1045,6 @@ public class PortraitListScreen extends Screen {
         PortraitInfo info = this.getSelected();
         if (info != null) {
             this.loadPreview(info.getPath());
-            // 标记需要自动适配缩放，下帧 viewport 就绪后执行
-            this.needsFitZoom = true;
         } else {
             this.clearPreviewRef();
         }

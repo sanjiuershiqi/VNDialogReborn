@@ -89,8 +89,6 @@ public class EditorTheme {
      */
     public static void drawSectionHeader(GuiGraphics graphics, Font font, int x, int y, int width, Component title) {
         graphics.fill(x, y, x + width, y + SECTION_HDR_H, BG_ELEVATED);
-        // 左侧 2px ACCENT 竖条：分节锚点，与树选中项竖条呼应
-        graphics.fill(x, y, x + 2, y + SECTION_HDR_H, ACCENT);
         // 底部分割线：DIVIDER 半透明白，比 BORDER 实色更轻盈
         graphics.fill(x, y + SECTION_HDR_H - 1, x + width, y + SECTION_HDR_H, DIVIDER);
         // 标题文字：暖米色 + 阴影，比灰色无阴影更突出
