@@ -674,9 +674,30 @@ public class PortraitListScreen extends Screen {
         };
     }
 
-    /** 重置预览缩放为 1.0。 */
+    /**
+     * 重置缩放：恢复选中立绘 size 到上次保存状态（originalPortraits 中的值），
+     * 同时把预览缩放 previewZoom 归位到 1.0。
+     * 原实现仅重置 previewZoom=1.0，若用户从未改过预览缩放则无可见效果，故"没用"。
+     * 现改为恢复实际 size：滚轮直接改 size 后，R 能明显回退到保存值。
+     * 新建未保存的立绘（originalPortraits 中无匹配 path）回退到默认 1.0。
+     */
     private void resetZoom() {
         this.previewZoom = 1.0f;
+        PortraitInfo info = this.getSelected();
+        if (info == null) {
+            return;
+        }
+        float savedSize = 1.0f;
+        if (info.getPath() != null) {
+            for (PortraitInfo saved : this.originalPortraits) {
+                if (saved.getPath() != null && saved.getPath().equalsIgnoreCase(info.getPath())) {
+                    savedSize = saved.getSize();
+                    break;
+                }
+            }
+        }
+        info.setSize(savedSize);
+        syncBoxIfNotFocused(this.sizeBox, info.getSize());
     }
 
     /**
@@ -863,7 +884,7 @@ public class PortraitListScreen extends Screen {
         }
         // 缩放控件点击：[-] / [+] / 中间倍率文字（单击文字重置缩放）
         // 仅在选中立绘且有预览时响应，左键生效
-        // Ctrl 修饰键：缩放直接应用到立绘实际 size（实际对话中立绘跟着变），否则仅预览缩放
+        // 默认直接点 +/- 修改立绘实际 size（与滚轮一致）；Ctrl+点 +/- 仅预览缩放
         if (button == 0 && this.getSelected() != null && this.previewTex != null) {
             int stageW = stageWidth();
             int[][] zb = getZoomControlBounds(STAGE_X, HEADER, stageW);
@@ -871,25 +892,25 @@ public class PortraitListScreen extends Screen {
             boolean ctrlSize = hasControlDown();
             if (isMouseInRect(mouseX, mouseY, minusB[0], minusB[1], minusB[2], minusB[3])) {
                 if (ctrlSize) {
+                    this.previewZoom = Mth.clamp(this.previewZoom - ZOOM_BTN_STEP, ZOOM_MIN, ZOOM_MAX);
+                } else {
                     PortraitInfo info = this.getSelected();
                     if (info != null) {
                         info.setSize(Mth.clamp(info.getSize() - ZOOM_BTN_STEP, 0.1f, 5.0f));
                         syncBoxIfNotFocused(this.sizeBox, info.getSize());
                     }
-                } else {
-                    this.previewZoom = Mth.clamp(this.previewZoom - ZOOM_BTN_STEP, ZOOM_MIN, ZOOM_MAX);
                 }
                 return true;
             }
             if (isMouseInRect(mouseX, mouseY, plusB[0], plusB[1], plusB[2], plusB[3])) {
                 if (ctrlSize) {
+                    this.previewZoom = Mth.clamp(this.previewZoom + ZOOM_BTN_STEP, ZOOM_MIN, ZOOM_MAX);
+                } else {
                     PortraitInfo info = this.getSelected();
                     if (info != null) {
                         info.setSize(Mth.clamp(info.getSize() + ZOOM_BTN_STEP, 0.1f, 5.0f));
                         syncBoxIfNotFocused(this.sizeBox, info.getSize());
                     }
-                } else {
-                    this.previewZoom = Mth.clamp(this.previewZoom + ZOOM_BTN_STEP, ZOOM_MIN, ZOOM_MAX);
                 }
                 return true;
             }
@@ -989,21 +1010,20 @@ public class PortraitListScreen extends Screen {
         // 在舞台区域内滚轮控制缩放
         int stageW = stageWidth();
         if (isMouseInRect(mx, my, STAGE_X, HEADER, stageW, this.height - HEADER - FOOTER)) {
-            // Ctrl 修饰键：缩放直接应用到立绘实际 size，实际对话中立绘会跟着变大/变小
+            // Ctrl+滚轮：纯预览缩放（仅影响显示，不修改实际 size）
             if (hasControlDown()) {
-                PortraitInfo info = this.getSelected();
-                if (info != null) {
-                    // size 步长与滚轮方向一致：向上滚增大、向下滚减小
-                    float sizeStep = (float) scrollY * ZOOM_WHEEL_STEP;
-                    float newSize = Mth.clamp(info.getSize() + sizeStep, 0.1f, 5.0f);
-                    info.setSize(newSize);
-                    syncBoxIfNotFocused(this.sizeBox, info.getSize());
-                }
+                float delta = (float) scrollY * ZOOM_WHEEL_STEP;
+                this.previewZoom = Mth.clamp(this.previewZoom + delta, ZOOM_MIN, ZOOM_MAX);
                 return true;
             }
-            // 默认：纯预览缩放，不影响实际 size
-            float delta = (float) scrollY * ZOOM_WHEEL_STEP;
-            this.previewZoom = Mth.clamp(this.previewZoom + delta, ZOOM_MIN, ZOOM_MAX);
+            // 默认直接滚轮：缩放直接应用到立绘实际 size，实际对话中立绘跟着变大/变小
+            PortraitInfo info = this.getSelected();
+            if (info != null) {
+                float sizeStep = (float) scrollY * ZOOM_WHEEL_STEP;
+                float newSize = Mth.clamp(info.getSize() + sizeStep, 0.1f, 5.0f);
+                info.setSize(newSize);
+                syncBoxIfNotFocused(this.sizeBox, info.getSize());
+            }
             return true;
         }
         return super.mouseScrolled(mx, my, scrollX, scrollY);
