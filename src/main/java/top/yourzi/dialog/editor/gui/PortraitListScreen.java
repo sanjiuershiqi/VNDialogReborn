@@ -40,6 +40,53 @@ public class PortraitListScreen extends Screen {
     private static final int STAGE_X = 330;
     private static final int MAX_CACHE_SIZE = 30;
 
+    /**
+     * 舞台视口：把实际屏幕（this.width x this.height）等比缩放到舞台区域内。
+     * 保持宽高比，让立绘、对话框、网格的相对位置与实际演出完全一致。
+     * 立绘渲染、对话框参考框、九宫格全部基于此视口映射，杜绝 X/Y 缩放不一致导致的位置错位。
+     */
+    private static final class StageViewport {
+        final int screenW;      // 实际屏幕宽
+        final int screenH;      // 实际屏幕高
+        final int viewX;        // 视口在舞台内的左上 X
+        final int viewY;        // 视口在舞台内的左上 Y
+        final int viewW;        // 视口宽（等比缩放后的屏幕宽）
+        final int viewH;        // 视口高（等比缩放后的屏幕高）
+        final float scale;      // 统一缩放比 = viewW / screenW = viewH / screenH
+
+        StageViewport(int screenW, int screenH, int stageX, int stageY, int stageW, int stageH) {
+            this.screenW = screenW;
+            this.screenH = screenH;
+            // 等比缩放：取宽高两个方向较小的缩放比，保证屏幕完整放入舞台
+            float sx = (float) stageW / screenW;
+            float sy = (float) stageH / screenH;
+            this.scale = Math.min(sx, sy);
+            this.viewW = (int) (screenW * this.scale);
+            this.viewH = (int) (screenH * this.scale);
+            // 视口在舞台内居中
+            this.viewX = stageX + (stageW - this.viewW) / 2;
+            this.viewY = stageY + (stageH - this.viewH) / 2;
+        }
+
+        /** 把实际屏幕 X 坐标映射到视口 X。 */
+        int mapX(int screenX) {
+            return viewX + (int) (screenX * scale);
+        }
+
+        /** 把实际屏幕 Y 坐标映射到视口 Y。 */
+        int mapY(int screenY) {
+            return viewY + (int) (screenY * scale);
+        }
+
+        /** 把实际屏幕尺寸（宽或高）映射到视口尺寸。 */
+        int mapSize(int screenSize) {
+            return (int) (screenSize * scale);
+        }
+    }
+
+    /** 当前帧的舞台视口，render 开头计算一次，所有渲染共用。 */
+    private StageViewport viewport;
+
     // 预览纹理缓存：与 AppearancePropertyPage 完全一致的机制（静态 LRU + sizeCache）。
     private static final java.util.Map<String, ResourceLocation> textureCache = new java.util.LinkedHashMap<String, ResourceLocation>() {
         @Override
@@ -300,6 +347,8 @@ public class PortraitListScreen extends Screen {
         this.renderBackground(g, mx, my, pt);
         g.drawCenteredString(this.font, this.title, this.width / 2, 10, EditorTheme.TEXT_PRIMARY);
         int contentH = this.height - HEADER - FOOTER;
+        // 计算本帧舞台视口：把实际屏幕等比映射到舞台区域，所有渲染共用此视口
+        this.viewport = new StageViewport(this.width, this.height, STAGE_X, HEADER, stageWidth(), contentH);
         this.renderLeftList(g, mx, my, contentH);
         this.renderMiddlePanel(g, mx, my, contentH);
         // 舞台背景在 widget 之前绘制（作为底层背景）
@@ -322,134 +371,165 @@ public class PortraitListScreen extends Screen {
 
     /**
      * 绘制舞台背景与边框（底层，在 widget 之前）。
+     * 舞台外层用 BG_SURFACE 填充整个区域；视口区域（实际屏幕等比映射）用更深色填充并画边框，
+     * 让用户清楚看到"实际屏幕"在舞台中的范围。九宫格和对话框参考框都画在视口内。
      */
     private void renderStageBackground(GuiGraphics g) {
         int x = STAGE_X;
         int y = HEADER;
         int w = stageWidth();
         int h = this.height - HEADER - FOOTER;
+        // 舞台外层背景
         g.fill(x, y, x + w, y + h, EditorTheme.BG_SURFACE);
+        // 视口区域（实际屏幕等比映射区）：用更深的颜色区分，并画边框
+        g.fill(this.viewport.viewX, this.viewport.viewY,
+               this.viewport.viewX + this.viewport.viewW, this.viewport.viewY + this.viewport.viewH,
+               0xFF101010);
+        int frameColor = EditorTheme.BORDER_LIGHT;
+        g.fill(this.viewport.viewX, this.viewport.viewY,
+               this.viewport.viewX + this.viewport.viewW, this.viewport.viewY + 1, frameColor);
+        g.fill(this.viewport.viewX, this.viewport.viewY + this.viewport.viewH - 1,
+               this.viewport.viewX + this.viewport.viewW, this.viewport.viewY + this.viewport.viewH, frameColor);
+        g.fill(this.viewport.viewX, this.viewport.viewY,
+               this.viewport.viewX + 1, this.viewport.viewY + this.viewport.viewH, frameColor);
+        g.fill(this.viewport.viewX + this.viewport.viewW - 1, this.viewport.viewY,
+               this.viewport.viewX + this.viewport.viewW, this.viewport.viewY + this.viewport.viewH, frameColor);
+        // 舞台外边框
         g.fill(x, y, x + w, y + 1, EditorTheme.BG_ELEVATED);
         g.fill(x, y + h - 1, x + w, y + h, EditorTheme.BG_ELEVATED);
         g.fill(x, y, x + 1, y + h, EditorTheme.BG_ELEVATED);
         g.fill(x + w - 1, y, x + w, y + h, EditorTheme.BG_ELEVATED);
-        // 九宫格辅助线（1px 半透明三分线），方便对齐立绘位置
-        renderRuleOfThirdsGrid(g, x, y, w, h);
-        // 对话框位置参考框：按实际演出比例在舞台内绘制
-        renderDialogBoxGuide(g, x, y, w, h);
+        // 九宫格辅助线画在视口内（实际屏幕的三分线）
+        renderRuleOfThirdsGrid(g);
+        // 对话框位置参考框画在视口内（实际演出位置）
+        renderDialogBoxGuide(g);
     }
 
     /**
-     * 绘制九宫格辅助线（三分线）：在舞台内画两条竖线、两条横线，将舞台均分为 3x3。
-     * 1px 半透明白色，置于对话框参考框之下，仅作对齐辅助不干扰主视觉。
+     * 绘制九宫格辅助线（三分线）：在视口内画两条竖线、两条横线，将实际屏幕均分为 3x3。
+     * 基于视口映射，与实际屏幕比例一致。1px 半透明白色，仅作对齐辅助不干扰主视觉。
      */
-    private void renderRuleOfThirdsGrid(GuiGraphics g, int x, int y, int w, int h) {
+    private void renderRuleOfThirdsGrid(GuiGraphics g) {
         int gridColor = 0x33FFFFFF;
-        int x1 = x + w / 3;
-        int x2 = x + w * 2 / 3;
-        int y1 = y + h / 3;
-        int y2 = y + h * 2 / 3;
+        // 三分线在实际屏幕坐标的 1/3、2/3 处，映射到视口
+        int x1 = this.viewport.mapX(this.width / 3);
+        int x2 = this.viewport.mapX(this.width * 2 / 3);
+        int y1 = this.viewport.mapY(this.height / 3);
+        int y2 = this.viewport.mapY(this.height * 2 / 3);
+        int top = this.viewport.viewY;
+        int bot = this.viewport.viewY + this.viewport.viewH;
+        int left = this.viewport.viewX;
+        int right = this.viewport.viewX + this.viewport.viewW;
         // 竖线
-        g.fill(x1, y, x1 + 1, y + h, gridColor);
-        g.fill(x2, y, x2 + 1, y + h, gridColor);
+        g.fill(x1, top, x1 + 1, bot, gridColor);
+        g.fill(x2, top, x2 + 1, bot, gridColor);
         // 横线
-        g.fill(x, y1, x + w, y1 + 1, gridColor);
-        g.fill(x, y2, x + w, y2 + 1, gridColor);
+        g.fill(left, y1, right, y1 + 1, gridColor);
+        g.fill(left, y2, right, y2 + 1, gridColor);
     }
 
     /**
-     * 在舞台内按实际演出比例绘制对话框参考框。
-     * 实际演出中对话框位置：宽=min(DIALOG_BOX_WIDTH, width-20)，高=DIALOG_BOX_HEIGHT，
-     * X=(width-boxW)/2，Y=height-boxH-20。这里把实际屏幕尺寸映射到舞台区域。
-     * 使用醒目的虚线感边框 + 标题角标，让用户一眼看出对话框的实际位置。
+     * 在视口内按实际演出位置绘制对话框参考框。
+     * 实际演出中对话框：宽=min(DIALOG_BOX_WIDTH, width-20)，高=DIALOG_BOX_HEIGHT，
+     * X=(width-boxW)/2，Y=height-boxH-20。通过视口等比映射到舞台，位置与实际演出完全一致。
+     * 框内绘制示意文字和内边距参考线，模拟真实对话框样式。
      */
-    private void renderDialogBoxGuide(GuiGraphics g, int stageX, int stageY, int stageW, int stageH) {
-        // 取实际配置的对话框尺寸
+    private void renderDialogBoxGuide(GuiGraphics g) {
         int cfgBoxW = top.yourzi.dialog.config.ClientConfig.DIALOG_BOX_WIDTH.get();
         int cfgBoxH = top.yourzi.dialog.config.ClientConfig.DIALOG_BOX_HEIGHT.get();
-        // 实际屏幕对应的对话框宽高（按比例）
+        int cfgPad = top.yourzi.dialog.config.ClientConfig.DIALOG_BOX_PADDING.get();
+        // 实际屏幕对应的对话框宽高（与 DialogScreen 完全一致）
         int realBoxW = Math.min(cfgBoxW, this.width - 20);
         int realBoxH = cfgBoxH;
-        // 映射到舞台坐标：实际屏幕宽 this.width -> 舞台宽 stageW；实际屏幕高 this.height -> 舞台高 stageH
-        float scaleX = (float) stageW / this.width;
-        float scaleY = (float) stageH / this.height;
-        int boxW = Math.max(20, (int) (realBoxW * scaleX));
-        int boxH = Math.max(12, (int) (realBoxH * scaleY));
-        int boxX = stageX + (int) ((this.width - realBoxW) / 2 * scaleX);
-        // 实际 Y = height - boxH - 20，映射到舞台
-        int boxY = stageY + (int) ((this.height - realBoxH - 20) * scaleY);
-        // 对话框区域填充：深色半透明（模拟实际对话框底色）
-        g.fill(boxX, boxY, boxX + boxW, boxY + boxH, 0x80000000);
-        // 醒目的高亮边框（使用强调色，2px 厚）
+        // 实际演出位置
+        int realBoxX = (this.width - realBoxW) / 2;
+        int realBoxY = this.height - realBoxH - 20;
+        // 映射到视口
+        int boxX = this.viewport.mapX(realBoxX);
+        int boxY = this.viewport.mapY(realBoxY);
+        int boxW = this.viewport.mapSize(realBoxW);
+        int boxH = this.viewport.mapSize(realBoxH);
+        // 对话框底色：深色半透明（模拟实际对话框底色）
+        g.fill(boxX, boxY, boxX + boxW, boxY + boxH, 0xCC000000);
+        // 醒目边框（强调色 2px 厚）
         int borderColor = EditorTheme.ACCENT;
         g.fill(boxX, boxY, boxX + boxW, boxY + 2, borderColor);
         g.fill(boxX, boxY + boxH - 2, boxX + boxW, boxY + boxH, borderColor);
         g.fill(boxX, boxY, boxX + 2, boxY + boxH, borderColor);
         g.fill(boxX + boxW - 2, boxY, boxX + boxW, boxY + boxH, borderColor);
-        // 框内居中标注
-        g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.dialog_box_preview"), boxX + boxW / 2, boxY + boxH / 2 - 4, 0xFFFFFFFF);
+        // 内边距参考线（虚线感）：实际 padding 映射到视口
+        int pad = Math.max(2, this.viewport.mapSize(cfgPad));
+        int padColor = 0x40FFFFFF;
+        g.fill(boxX + pad, boxY + pad, boxX + boxW - pad, boxY + pad + 1, padColor);
+        g.fill(boxX + pad, boxY + boxH - pad - 1, boxX + boxW - pad, boxY + boxH - pad, padColor);
+        g.fill(boxX + pad, boxY + pad, boxX + pad + 1, boxY + boxH - pad, padColor);
+        g.fill(boxX + boxW - pad - 1, boxY + pad, boxX + boxW - pad, boxY + boxH - pad, padColor);
+        // 框内标注：仅当框足够大时显示，避免小框文字溢出
+        if (boxW > 60 && boxH > 20) {
+            g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.dialog_box_preview"),
+                    boxX + boxW / 2, boxY + boxH / 2 - 4, 0xFFFFFFFF);
+        }
     }
 
     /**
      * 绘制立绘 blit 与提示文字（在所有 widget 之后）。
-     * 立绘渲染逻辑与 DialogScreen.renderPortraits 完全对齐：
-     * - 高度 = 屏幕高 * 0.68 * size（映射到舞台）
-     * - X 按 position（LEFT/CENTER/RIGHT）定位，侧边距 20px（映射到舞台）
-     * - Y 底部对齐（立绘站在屏幕底部，映射到舞台底部）
-     * - offset 相对屏幕尺寸（映射到舞台）
+     * 立绘渲染逻辑与 DialogScreen.renderPortraits 完全对齐，先在实际屏幕坐标系计算位置，
+     * 再通过视口统一映射到舞台，保证位置与实际演出 100% 一致：
+     * - 高度 = 屏幕高 * 0.68 * size
+     * - X 按 position（LEFT/CENTER/RIGHT）定位，侧边距 20px
+     * - Y 底部对齐（立绘站在屏幕底部）
+     * - offset 相对屏幕尺寸
      */
     private void renderPortraitBlit(GuiGraphics g) {
-        int x = STAGE_X;
-        int y = HEADER;
-        int w = stageWidth();
-        int h = this.height - HEADER - FOOTER;
+        int stageX = STAGE_X;
+        int stageY = HEADER;
+        int stageW = stageWidth();
+        int stageH = this.height - HEADER - FOOTER;
         PortraitInfo info = this.getSelected();
         if (this.previewTex != null && info != null) {
             float size = Mth.clamp(info.getSize(), 0.1f, 5.0f);
-            // 映射比例：实际屏幕尺寸 -> 舞台尺寸
-            float scaleX = (float) w / this.width;
-            float scaleY = (float) h / this.height;
-            // 立绘高度 = 实际屏幕高 * 0.68 * size，映射到舞台
-            int portraitH = (int) (this.height * 0.68f * size * scaleY);
-            if (portraitH > h) {
-                portraitH = h;
-            }
+            // 先在实际屏幕坐标系计算立绘尺寸（与 DialogScreen 完全一致）
+            int realPortraitH = (int) (this.height * 0.68f * size);
             float ratio = (this.previewW > 0 && this.previewH > 0)
                     ? (float) this.previewW / (float) this.previewH
                     : 1.0f;
-            int portraitW = Math.max(1, (int) (portraitH * ratio));
-            if (portraitW > w) {
-                portraitW = w;
-                portraitH = (int) (portraitW / ratio);
-            }
-            // X 基准按 position 定位，侧边距 20px 映射到舞台
-            int sideMargin = (int) (20 * scaleX);
-            int baseX = switch (info.getPosition()) {
-                case LEFT -> x + sideMargin;
-                case CENTER -> x + (w - portraitW) / 2;
-                case RIGHT -> x + w - portraitW - sideMargin;
+            int realPortraitW = Math.max(1, (int) (realPortraitH * ratio));
+            // 实际屏幕坐标的立绘基准位置（与 DialogScreen.renderPortraits 一致）
+            int realBaseX = switch (info.getPosition()) {
+                case LEFT -> 20;                                    // PORTRAIT_SIDE_MARGIN
+                case CENTER -> (this.width - realPortraitW) / 2;
+                case RIGHT -> this.width - realPortraitW - 20;
             };
-            // Y 底部对齐：立绘站在舞台底部（对应实际屏幕底部）
-            int baseY = y + h - portraitH;
-            // offset 相对实际屏幕尺寸，映射到舞台
-            int renderX = baseX + (int) (info.getOffsetX() * this.width * scaleX);
-            int renderY = baseY + (int) (info.getOffsetY() * this.height * scaleY);
-            // 与实际演出完全一致的渲染方式
+            int realBaseY = this.height - realPortraitH;            // 底部对齐
+            // offset 相对实际屏幕尺寸（与 DialogScreen 一致）
+            int realRenderX = realBaseX + (int) (info.getOffsetX() * this.width);
+            int realRenderY = realBaseY + (int) (info.getOffsetY() * this.height);
+            // 通过视口映射到舞台（统一等比缩放，与对话框参考框用同一套映射）
+            int renderX = this.viewport.mapX(realRenderX);
+            int renderY = this.viewport.mapY(realRenderY);
+            int portraitW = this.viewport.mapSize(realPortraitW);
+            int portraitH = this.viewport.mapSize(realPortraitH);
+            if (portraitW < 1) portraitW = 1;
+            if (portraitH < 1) portraitH = 1;
+            // 渲染立绘
             RenderSystem.setShaderTexture(0, this.previewTex);
             RenderSystem.enableBlend();
             RenderSystem.defaultBlendFunc();
             g.blit(this.previewTex, renderX, renderY, 0.0f, 0.0f, portraitW, portraitH, portraitW, portraitH);
             RenderSystem.disableBlend();
-            // 拖动时显示十字辅助线（PPT 智能参考线）：从立绘中心向舞台四边延伸，
-            // 便于观察立绘当前对齐到的位置（如是否对齐九宫格交点、对话框中线等）
+            // 拖动时显示十字辅助线（PPT 智能参考线）：从立绘中心向视口四边延伸
             if (this.draggingPortrait) {
-                int centerX = Math.max(x, Math.min(x + w, renderX + portraitW / 2));
-                int centerY = Math.max(y, Math.min(y + h, renderY + portraitH / 2));
+                int centerX = renderX + portraitW / 2;
+                int centerY = renderY + portraitH / 2;
                 int crossColor = 0x804A9EFF;
-                // 横线：贯穿舞台左右
-                g.fill(x, centerY, x + w, centerY + 1, crossColor);
-                // 竖线：贯穿舞台上下
-                g.fill(centerX, y, centerX + 1, y + h, crossColor);
+                int left = this.viewport.viewX;
+                int right = this.viewport.viewX + this.viewport.viewW;
+                int top = this.viewport.viewY;
+                int bot = this.viewport.viewY + this.viewport.viewH;
+                // 横线：贯穿视口左右
+                g.fill(left, centerY, right, centerY + 1, crossColor);
+                // 竖线：贯穿视口上下
+                g.fill(centerX, top, centerX + 1, bot, crossColor);
                 // 立绘外框高亮：强调色 1px 边框，明确显示立绘当前边界
                 int boxColor = EditorTheme.ACCENT;
                 g.fill(renderX, renderY, renderX + portraitW, renderY + 1, boxColor);
@@ -458,19 +538,19 @@ public class PortraitListScreen extends Screen {
                 g.fill(renderX + portraitW - 1, renderY, renderX + portraitW, renderY + portraitH, boxColor);
             }
             if (this.draggingPortrait) {
-                g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.drag_hint"), x + w / 2, y + 4, EditorTheme.ACCENT);
-                // offset 数值贴近立绘上方显示，与立绘位置强关联，比放舞台底部更直观
+                g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.drag_hint"), stageX + stageW / 2, stageY + 4, EditorTheme.ACCENT);
+                // offset 数值贴近立绘上方显示
                 String offsetText = String.format(java.util.Locale.ROOT, "X: %.2f  Y: %.2f", info.getOffsetX(), info.getOffsetY());
                 int textX = renderX + portraitW / 2;
-                int textY = Math.max(y + 2, renderY - 11);
+                int textY = Math.max(stageY + 2, renderY - 11);
                 g.drawCenteredString(this.font, Component.literal(offsetText), textX, textY, EditorTheme.ACCENT);
             } else {
-                g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.drag_to_adjust"), x + w / 2, y + 4, EditorTheme.TEXT_MUTED);
+                g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.drag_to_adjust"), stageX + stageW / 2, stageY + 4, EditorTheme.TEXT_MUTED);
             }
         } else if (info == null) {
-            g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.no_portrait_selected"), x + w / 2, y + h / 2 - 4, EditorTheme.TEXT_MUTED);
+            g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.no_portrait_selected"), stageX + stageW / 2, stageY + stageH / 2 - 4, EditorTheme.TEXT_MUTED);
         } else {
-            g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.no_preview"), x + w / 2, y + h / 2 - 4, EditorTheme.TEXT_MUTED);
+            g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.no_preview"), stageX + stageW / 2, stageY + stageH / 2 - 4, EditorTheme.TEXT_MUTED);
         }
     }
 
@@ -638,11 +718,14 @@ public class PortraitListScreen extends Screen {
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
         if (this.draggingPortrait && button == 0) {
             PortraitInfo info = this.getSelected();
-            if (info != null) {
-                // offset 相对实际屏幕尺寸（与 DialogScreen 演出一致），故拖动量除以屏幕尺寸
-                // 像素拖动量 / 屏幕尺寸 = offset 变化量；舞台是屏幕的缩放映射，拖动同一个像素对应的 offset 一致
-                info.setOffsetX(info.getOffsetX() + (float) ((mouseX - this.lastDragX) / this.width));
-                info.setOffsetY(info.getOffsetY() + (float) ((mouseY - this.lastDragY) / this.height));
+            if (info != null && this.viewport != null) {
+                // offset = 实际屏幕像素变化 / 屏幕尺寸。
+                // 舞台是实际屏幕的等比缩放（scale），舞台像素变化 / scale = 实际屏幕像素变化。
+                float scale = this.viewport.scale;
+                float dxReal = (float) ((mouseX - this.lastDragX) / scale);
+                float dyReal = (float) ((mouseY - this.lastDragY) / scale);
+                info.setOffsetX(info.getOffsetX() + dxReal / this.width);
+                info.setOffsetY(info.getOffsetY() + dyReal / this.height);
                 this.lastDragX = mouseX;
                 this.lastDragY = mouseY;
                 // 拖动时同步输入框显示（仅当输入框未聚焦时，避免打断用户输入）
