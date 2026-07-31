@@ -361,6 +361,8 @@ public class PortraitListScreen extends Screen {
         // 立绘 blit 若在 super.render() 之前调用会被 GuiGraphics 缓冲，随后渲染 widget 时
         // 批量 flush 会把 DynamicTexture 纹理绑定与其它 RenderType 混在一起导致不可见。
         this.renderPortraitBlit(g);
+        // 对话框参考框在立绘之后绘制，避免被立绘图片覆盖而看不见
+        this.renderDialogBoxGuide(g);
         // 下拉弹出列表最后渲染，确保不被遮挡
         this.posDropdown.renderPopup(g, mx, my, pt);
         this.animDropdown.renderPopup(g, mx, my, pt);
@@ -403,8 +405,8 @@ public class PortraitListScreen extends Screen {
         g.fill(x + w - 1, y, x + w, y + h, EditorTheme.BG_ELEVATED);
         // 九宫格辅助线画在视口内（实际屏幕的三分线）
         renderRuleOfThirdsGrid(g);
-        // 对话框位置参考框画在视口内（实际演出位置）
-        renderDialogBoxGuide(g);
+        // 对话框参考框不在此处绘制：立绘 blit 在 super.render 之后绘制，
+        // 会覆盖此处画的对话框框。对话框框改到 renderPortraitBlit 之后绘制，确保可见。
     }
 
     /**
