@@ -317,6 +317,7 @@ public class PortraitListScreen extends Screen {
      * 在舞台内按实际演出比例绘制对话框参考框。
      * 实际演出中对话框位置：宽=min(DIALOG_BOX_WIDTH, width-20)，高=DIALOG_BOX_HEIGHT，
      * X=(width-boxW)/2，Y=height-boxH-20。这里把实际屏幕尺寸映射到舞台区域。
+     * 使用醒目的虚线感边框 + 标题角标，让用户一眼看出对话框的实际位置。
      */
     private void renderDialogBoxGuide(GuiGraphics g, int stageX, int stageY, int stageW, int stageH) {
         // 取实际配置的对话框尺寸
@@ -328,18 +329,21 @@ public class PortraitListScreen extends Screen {
         // 映射到舞台坐标：实际屏幕宽 this.width -> 舞台宽 stageW；实际屏幕高 this.height -> 舞台高 stageH
         float scaleX = (float) stageW / this.width;
         float scaleY = (float) stageH / this.height;
-        int boxW = (int) (realBoxW * scaleX);
-        int boxH = (int) (realBoxH * scaleY);
+        int boxW = Math.max(20, (int) (realBoxW * scaleX));
+        int boxH = Math.max(12, (int) (realBoxH * scaleY));
         int boxX = stageX + (int) ((this.width - realBoxW) / 2 * scaleX);
         // 实际 Y = height - boxH - 20，映射到舞台
         int boxY = stageY + (int) ((this.height - realBoxH - 20) * scaleY);
-        // 半透明边框表示对话框区域
-        g.fill(boxX, boxY, boxX + boxW, boxY + boxH, 0x33444444);
-        g.fill(boxX, boxY, boxX + boxW, boxY + 1, 0x88AAAAAA);
-        g.fill(boxX, boxY + boxH - 1, boxX + boxW, boxY + boxH, 0x88AAAAAA);
-        g.fill(boxX, boxY, boxX + 1, boxY + boxH, 0x88AAAAAA);
-        g.fill(boxX + boxW - 1, boxY, boxX + boxW, boxY + boxH, 0x88AAAAAA);
-        g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.dialog_box_preview"), boxX + boxW / 2, boxY + boxH / 2 - 4, 0x88AAAAAA);
+        // 对话框区域填充：深色半透明（模拟实际对话框底色）
+        g.fill(boxX, boxY, boxX + boxW, boxY + boxH, 0x80000000);
+        // 醒目的高亮边框（使用强调色，2px 厚）
+        int borderColor = EditorTheme.ACCENT;
+        g.fill(boxX, boxY, boxX + boxW, boxY + 2, borderColor);
+        g.fill(boxX, boxY + boxH - 2, boxX + boxW, boxY + boxH, borderColor);
+        g.fill(boxX, boxY, boxX + 2, boxY + boxH, borderColor);
+        g.fill(boxX + boxW - 2, boxY, boxX + boxW, boxY + boxH, borderColor);
+        // 框内居中标注
+        g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.dialog_box_preview"), boxX + boxW / 2, boxY + boxH / 2 - 4, 0xFFFFFFFF);
     }
 
     /**
@@ -424,7 +428,7 @@ public class PortraitListScreen extends Screen {
         // 仅在选中项变化时刷新布局和值，避免每帧覆盖用户输入
         if (visible && this.needsLayoutRefresh) {
             this.needsLayoutRefresh = false;
-            // 布局自上而下：尺寸/亮度/偏移输入框 → 重置按钮 → 位置/动画下拉框（放最底部，向下弹出不覆盖输入框）
+            // 布局自上而下：输入框 → 重置按钮 → 操作按钮 → 位置/动画下拉框（并排放底部，向下弹出到空白区）
             layoutFloatBox(this.sizeBox, 40);
             layoutFloatBox(this.brightnessBox, 65);
             layoutFloatBox(this.offsetXBox, 90);
@@ -437,12 +441,14 @@ public class PortraitListScreen extends Screen {
             this.upBtn.setY(140);
             this.downBtn.setX(285);
             this.downBtn.setY(140);
-            // 位置/动画下拉框放在按钮下方，向下弹出不会覆盖任何输入框
-            this.posDropdown.setX(200);
-            this.posDropdown.setY(165);
+            // 位置/动画下拉框并排放底部，向下弹出进入下方空白区，互不覆盖也不覆盖输入框
+            this.posDropdown.setX(145);
+            this.posDropdown.setY(170);
+            this.posDropdown.setWidth(82);
             this.posDropdown.setSelected(this.getPositionDisplay(info.getPosition()).getString());
-            this.animDropdown.setX(200);
-            this.animDropdown.setY(190);
+            this.animDropdown.setX(232);
+            this.animDropdown.setY(170);
+            this.animDropdown.setWidth(82);
             this.animDropdown.setSelected(this.getAnimationDisplay(info.getAnimationType()).getString());
             this.sizeBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getSize()));
             this.brightnessBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getBrightness()));
@@ -503,8 +509,9 @@ public class PortraitListScreen extends Screen {
         g.drawString(this.font, Component.translatable("gui.vn_edit.brightness"), x + 5, 69, EditorTheme.TEXT_SECONDARY);
         g.drawString(this.font, Component.translatable("gui.vn_edit.offset_x"), x + 5, 94, EditorTheme.TEXT_SECONDARY);
         g.drawString(this.font, Component.translatable("gui.vn_edit.offset_y"), x + 5, 119, EditorTheme.TEXT_SECONDARY);
-        g.drawString(this.font, Component.translatable("gui.vn_edit.position"), x + 5, 169, EditorTheme.TEXT_SECONDARY);
-        g.drawString(this.font, Component.translatable("gui.vn_edit.animation"), x + 5, 194, EditorTheme.TEXT_SECONDARY);
+        // 位置/动画标签放在各自下拉框上方
+        g.drawString(this.font, Component.translatable("gui.vn_edit.position"), 145, 160, EditorTheme.TEXT_SECONDARY);
+        g.drawString(this.font, Component.translatable("gui.vn_edit.animation"), 232, 160, EditorTheme.TEXT_SECONDARY);
     }
 
     private boolean isMouseInStage(double mx, double my) {

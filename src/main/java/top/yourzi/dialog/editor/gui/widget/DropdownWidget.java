@@ -112,8 +112,8 @@ public class DropdownWidget extends AbstractWidget {
         int dropBottom = this.getPopupBottom();
         int visibleCount = Math.min(MAX_VISIBLE, this.items.size());
         int totalHeight = visibleCount * ITEM_HEIGHT;
-        // 不透明背景，确保文字清晰
-        graphics.fill(this.getX(), dropY, this.getX() + this.getWidth(), dropBottom, 0xF0181818);
+        // 完全不透明背景，确保下方控件/文字不会透出
+        graphics.fill(this.getX(), dropY, this.getX() + this.getWidth(), dropBottom, 0xFF181818);
         // 边框
         graphics.fill(this.getX(), dropY, this.getX() + this.getWidth(), dropY + 1, EditorTheme.BORDER);
         graphics.fill(this.getX(), dropBottom - 1, this.getX() + this.getWidth(), dropBottom, EditorTheme.BORDER);
