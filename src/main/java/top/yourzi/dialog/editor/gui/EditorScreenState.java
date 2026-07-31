@@ -19,6 +19,8 @@ public final class EditorScreenState {
     private String selectedNodeId = null;
     /** 树面板滚动偏移（重建后恢复滚动位置）。 */
     private int treeScrollOffset = 0;
+    /** 对话树搜索文本（重建后回填，借鉴 Sparkle ModelPanelState）。 */
+    private String treeSearchText = "";
 
     private EditorScreenState() {
     }
@@ -51,10 +53,19 @@ public final class EditorScreenState {
         this.treeScrollOffset = offset;
     }
 
+    public String getTreeSearchText() {
+        return treeSearchText;
+    }
+
+    public void setTreeSearchText(String text) {
+        this.treeSearchText = text == null ? "" : text;
+    }
+
     /** 编辑器整体关闭时清空所有状态，下次打开为初始状态。 */
     public void reset() {
         this.activePropertyTab = 0;
         this.selectedNodeId = null;
         this.treeScrollOffset = 0;
+        this.treeSearchText = "";
     }
 }

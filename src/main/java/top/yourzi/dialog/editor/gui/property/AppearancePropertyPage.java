@@ -115,6 +115,7 @@ public class AppearancePropertyPage extends AbstractPropertyPage {
                     }
                 }
             }
+            if (this.dirtyListener != null) this.dirtyListener.run();
         });
         int btnOffset = fieldX + pathBoxW + EditorTheme.GAP;
         this.backgroundBrowseBtn = EditorButton.builder(Component.translatable("gui.vn_edit.browse"), btn -> this.onBackgroundBrowse())
@@ -168,6 +169,7 @@ public class AppearancePropertyPage extends AbstractPropertyPage {
                     this.currentEntry.setBackgroundImage(new BackgroundImageInfo(path, next));
                 }
             }
+            if (this.dirtyListener != null) this.dirtyListener.run();
         });
         this.backgroundAnimDropdown = new DropdownWidget(this.font, fieldX + eachDropdownW + dropdownGap, renderRowY, eachDropdownW, EditorTheme.FIELD_HEIGHT, new ArrayList<>(BG_ANIM_ITEMS), selected -> {
             if (this.currentEntry == null) {
@@ -188,6 +190,7 @@ public class AppearancePropertyPage extends AbstractPropertyPage {
                     this.currentEntry.setBackgroundImage(newInfo);
                 }
             }
+            if (this.dirtyListener != null) this.dirtyListener.run();
         });
 
         this.computedHeight = layout.getContentHeight();

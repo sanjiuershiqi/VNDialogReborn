@@ -103,6 +103,7 @@ public class TextPropertyPage extends AbstractPropertyPage {
                 MutableComponent component = this.parseFormattingCodesToComponent(s);
                 this.currentEntry.setSpeaker(ComponentJson.toJsonTree(component));
             }
+            if (this.dirtyListener != null) this.dirtyListener.run();
         });
 
         // ===== 正文 / 翻译分节（根据模式不同位置不同）=====
@@ -111,7 +112,7 @@ public class TextPropertyPage extends AbstractPropertyPage {
         int contentY = layout.customRow(EditorTheme.CONTENT_BOX_H);
         this.contentLabelY = contentY + 4;
         this.contentBox = new MultiLineEditBox(this.font, fieldX, contentY, fieldW, EditorTheme.CONTENT_BOX_H);
-        this.contentBox.setResponder(s -> this.saveTextToEntry());
+        this.contentBox.setResponder(s -> { this.saveTextToEntry(); if (this.dirtyListener != null) this.dirtyListener.run(); });
 
         // 模式切换按钮
         int modeY = layout.fieldRow();
@@ -122,15 +123,15 @@ public class TextPropertyPage extends AbstractPropertyPage {
         int transKeyY = layout.fieldRow();
         this.translationKeyBox = new EditBox(this.font, fieldX, transKeyY, fieldW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.translation_key"));
         this.translationKeyBox.setMaxLength(999999999);
-        this.translationKeyBox.setResponder(s -> this.saveTranslationToEntry());
+        this.translationKeyBox.setResponder(s -> { this.saveTranslationToEntry(); if (this.dirtyListener != null) this.dirtyListener.run(); });
         int transZhY = layout.fieldRow();
         this.translationZhCnBox = new EditBox(this.font, fieldX, transZhY, fieldW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.translation_zh_cn"));
         this.translationZhCnBox.setMaxLength(999999999);
-        this.translationZhCnBox.setResponder(s -> this.saveTranslationToEntry());
+        this.translationZhCnBox.setResponder(s -> { this.saveTranslationToEntry(); if (this.dirtyListener != null) this.dirtyListener.run(); });
         int transEnY = layout.fieldRow();
         this.translationEnUsBox = new EditBox(this.font, fieldX, transEnY, fieldW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.translation_en_us"));
         this.translationEnUsBox.setMaxLength(999999999);
-        this.translationEnUsBox.setResponder(s -> this.saveTranslationToEntry());
+        this.translationEnUsBox.setResponder(s -> { this.saveTranslationToEntry(); if (this.dirtyListener != null) this.dirtyListener.run(); });
         int genLangY = layout.fieldRow();
         this.generateLangBtn = new EditorButton(fieldX, genLangY, 80, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.generate_lang"), b -> this.generateLangFiles());
 

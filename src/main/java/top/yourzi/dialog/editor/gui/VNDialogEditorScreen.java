@@ -6,6 +6,7 @@ import com.google.gson.JsonPrimitive;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
@@ -31,6 +32,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
+import org.lwjgl.glfw.GLFW;
+
 /**
  * VNDialog 可视化编辑器主屏幕。融合自 visual_mod_edit_vndialog，并适配 NeoForge 1.21.1。
  * 该屏幕集成了对话树、属性面板、标签页管理、文件保存/读取/测试/导入等功能。
@@ -49,6 +52,8 @@ public class VNDialogEditorScreen extends Screen {
     private final List<DialogSequence> openSequences = new ArrayList<>();
     private int activeSequenceIndex = -1;
     private DialogTreeWidget treeWidget;
+    /** 对话树搜索框：实时过滤节点，文本由 EditorScreenState 持久化跨重建回填。 */
+    private EditBox treeSearchBox;
     private PropertyPanel propertyPanel;
     private final List<TabButton> tabButtons = new ArrayList<>();
     private EditorButton addTabBtn;
@@ -182,7 +187,23 @@ public class VNDialogEditorScreen extends Screen {
         this.addRenderableWidget(this.addNodeBtn);
         int treeContentY = treeY + EditorTheme.BTN_HEIGHT;
         int contentHeight = this.height - treeContentY - STATUS_HEIGHT;
-        this.treeWidget = new DialogTreeWidget(0, treeContentY, TREE_WIDTH, contentHeight, this.font);
+        // 搜索框占树内容区顶部 18px，treeWidget 下移并缩减高度
+        this.treeSearchBox = new EditBox(this.font, 0, treeContentY, TREE_WIDTH, 16, Component.translatable("gui.vn_edit.search"));
+        this.treeSearchBox.setMaxLength(999999999);
+        this.treeSearchBox.setHint(Component.translatable("gui.vn_edit.search_hint"));
+        java.util.function.Consumer<String> searchResponder = text -> {
+            EditorScreenState.get().setTreeSearchText(text);
+            this.treeWidget.setSearchText(text);
+        };
+        this.treeSearchBox.setResponder(searchResponder);
+        // silent 回填初值，避免触发 responder（setSequence 会权威回填搜索态）
+        this.treeSearchBox.setResponder(null);
+        this.treeSearchBox.setValue(EditorScreenState.get().getTreeSearchText());
+        this.treeSearchBox.setResponder(searchResponder);
+        this.addRenderableWidget(this.treeSearchBox);
+        int treeWidgetY = treeContentY + 18;
+        int treeWidgetH = contentHeight - 18;
+        this.treeWidget = new DialogTreeWidget(0, treeWidgetY, TREE_WIDTH, treeWidgetH, this.font);
         this.treeWidget.setCallbacks(this::onEntrySelected, this::onEntryDelete, this::onEntryAddChild);
         this.addRenderableWidget(this.treeWidget);
         int propX = TREE_WIDTH + 1;
@@ -896,11 +917,56 @@ public class VNDialogEditorScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == 83 && Screen.hasControlDown()) {
-            this.onSave();
-            return true;
+        // Ctrl 组合键任何情况都拦截（Ctrl+S/N/Enter/Tab 不用于文本编辑）
+        if (Screen.hasControlDown()) {
+            if (keyCode == GLFW.GLFW_KEY_S) { this.onSave(); return true; }
+            if (keyCode == GLFW.GLFW_KEY_N) { this.onNew(); return true; }
+            if (keyCode == GLFW.GLFW_KEY_ENTER) { this.onTest(); return true; }
+            if (keyCode == GLFW.GLFW_KEY_TAB) {
+                if (this.openSequences.isEmpty()) return true;
+                int dir = Screen.hasShiftDown() ? -1 : 1;
+                int next = this.activeSequenceIndex + dir;
+                if (next < 0) next = this.openSequences.size() - 1;
+                if (next >= this.openSequences.size()) next = 0;
+                this.switchToSequence(next);
+                return true;
+            }
+        }
+        // 功能键仅在 EditBox 未聚焦时拦截，避免与文本编辑冲突
+        if (!(this.getFocused() instanceof EditBox)) {
+            if (keyCode == GLFW.GLFW_KEY_DELETE) {
+                DialogEntry sel = this.treeWidget.getSelectedEntry();
+                if (sel != null) { this.onEntryDelete(sel); return true; }
+            }
+            if (keyCode == GLFW.GLFW_KEY_F2) {
+                DialogEntry sel = this.treeWidget.getSelectedEntry();
+                if (sel != null) { this.startRenameEntry(sel); return true; }
+            }
+            if (keyCode == GLFW.GLFW_KEY_INSERT) {
+                this.onAddNode();
+                return true;
+            }
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    /**
+     * F2 重命名选中节点：弹出 InputDialogScreen，确认后调 treeWidget.renameSelectedEntry。
+     * 失败（ID 冲突）时显示状态栏警告，修复原双击重命名失败无 UI 反馈的缺陷。
+     */
+    private void startRenameEntry(DialogEntry entry) {
+        Minecraft.getInstance().setScreen(new InputDialogScreen(
+                Component.translatable("gui.vn_edit.rename.title"), entry.getId(), newId -> {
+            if (newId.isEmpty() || newId.equals(entry.getId())) {
+                return;
+            }
+            if (!this.treeWidget.renameSelectedEntry(newId)) {
+                this.setStatus(Component.translatable("gui.vn_edit.rename.failed").getString(), StatusLevel.WARNING);
+            } else {
+                this.setStatus(Component.translatable("gui.vn_edit.rename.success", newId).getString(), StatusLevel.SUCCESS);
+                this.markDirty(this.currentSequence);
+            }
+        }, this));
     }
 
     @Override

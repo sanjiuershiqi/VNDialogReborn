@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -41,6 +42,8 @@ public class DialogTreeWidget extends AbstractWidget {
     /** 上一帧纳秒时间戳，用于计算 dt 驱动平滑滚动。 */
     private long lastFrameNanos = 0L;
     private int selectedIndex = -1;
+    /** 当前搜索文本（非空时 visibleNodes 仅含匹配项及其祖先链）。由外部 searchBox 通过 setSearchText 注入。 */
+    private String searchText = "";
     private Consumer<DialogEntry> onEntrySelected;
     private Consumer<DialogEntry> onEntryDelete;
     private final List<TreeNode> roots = new ArrayList<>();
@@ -59,7 +62,13 @@ public class DialogTreeWidget extends AbstractWidget {
         this.selectedIndex = -1;
         this.scrollOffset = 0;
         this.buildTree();
-        // 从状态单例恢复选中节点与滚动位置（子屏返回重建后保持状态）
+        // 从状态单例回填搜索文本：搜索激活时过滤可见节点，跳过选中恢复（搜索态选中无意义）
+        this.searchText = EditorScreenState.get().getTreeSearchText();
+        if (this.isSearching()) {
+            this.applySearch();
+            return;
+        }
+        // 非搜索态：从状态单例恢复选中节点与滚动位置（子屏返回重建后保持状态）
         String savedId = EditorScreenState.get().getSelectedNodeId();
         if (savedId != null && this.visibleNodes != null) {
             for (int i = 0; i < this.visibleNodes.size(); i++) {
@@ -79,6 +88,116 @@ public class DialogTreeWidget extends AbstractWidget {
         this.onEntrySelected = onSelect;
         this.onEntryDelete = onDelete;
         // onAddChild 回调当前未实现，保留参数以维持 API 兼容
+    }
+
+    /**
+     * 设置搜索文本并重新过滤可见节点。由外部 searchBox 的 responder 调用。
+     * 空文本恢复完整树（flattenTree）；非空文本仅保留 ID 包含文本的节点及其祖先链。
+     */
+    public void setSearchText(String text) {
+        this.searchText = text == null ? "" : text;
+        this.applySearch();
+    }
+
+    /** 当前是否处于搜索态（搜索文本非空）。供 render 判断是否显示空结果提示。 */
+    public boolean isSearching() {
+        return this.searchText != null && !this.searchText.isEmpty();
+    }
+
+    /** 应用搜索过滤：重建 visibleNodes。搜索时清空选中并重置滚动，避免索引错位。 */
+    private void applySearch() {
+        if (!this.isSearching()) {
+            this.flattenTree();
+            return;
+        }
+        String q = this.searchText.toLowerCase(Locale.ROOT);
+        this.visibleNodes.clear();
+        for (TreeNode root : this.roots) {
+            this.addFilteredNodes(root, q, this.visibleNodes);
+        }
+        for (TreeNode orphan : this.orphans) {
+            this.addFilteredNodes(orphan, q, this.visibleNodes);
+        }
+        this.selectedIndex = -1;
+        this.scrollOffset = 0;
+        this.scrollState.reset(0);
+    }
+
+    /** 判断 node 子树中是否有 ID 包含 q 的节点（含自身）。 */
+    private boolean subtreeMatches(TreeNode node, String q) {
+        if (node.entry.getId() != null && node.entry.getId().toLowerCase(Locale.ROOT).contains(q)) {
+            return true;
+        }
+        for (TreeNode child : node.children) {
+            if (this.subtreeMatches(child, q)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 前序输出子树中"自身或后代匹配 q"的节点（含祖先链），保留原 depth 缩进。 */
+    private void addFilteredNodes(TreeNode node, String q, List<TreeNode> out) {
+        if (!this.subtreeMatches(node, q)) {
+            return;
+        }
+        out.add(node);
+        for (TreeNode child : node.children) {
+            this.addFilteredNodes(child, q, out);
+        }
+    }
+
+    /** 获取当前选中节点，无选中返回 null。供 Delete/F2 快捷键判断目标。 */
+    public DialogEntry getSelectedEntry() {
+        if (this.selectedIndex < 0 || this.selectedIndex >= this.visibleNodes.size()) {
+            return null;
+        }
+        return this.visibleNodes.get(this.selectedIndex).entry;
+    }
+
+    /**
+     * 重命名当前选中节点。由双击重命名和 F2 快捷键共用。
+     * 含 ID 唯一性校验、引用更新（nextId/options.targetId）、重建树、恢复选中。
+     * @return true 表示成功（含新旧 ID 相同的无变化情况）；false 表示 ID 冲突或无选中
+     */
+    public boolean renameSelectedEntry(String newId) {
+        if (this.selectedIndex < 0 || this.selectedIndex >= this.visibleNodes.size()) {
+            return false;
+        }
+        TreeNode node = this.visibleNodes.get(this.selectedIndex);
+        String oldId = node.entry.getId();
+        if (oldId.equals(newId)) {
+            return true;
+        }
+        if (this.sequence.findEntryById(newId) != null) {
+            return false;
+        }
+        node.entry.setId(newId);
+        if (this.sequence.getEntries() != null) {
+            for (DialogEntry e : this.sequence.getEntries()) {
+                DialogOption[] options;
+                if (oldId.equals(e.getNextId())) {
+                    e.setNextId(newId);
+                }
+                if ((options = e.getOptions()) == null) {
+                    continue;
+                }
+                for (DialogOption opt : options) {
+                    if (!oldId.equals(opt.getTargetId())) {
+                        continue;
+                    }
+                    opt.setTargetId(newId);
+                }
+            }
+        }
+        this.buildTree();
+        this.selectedIndex = this.visibleNodes.indexOf(this.visibleNodes.stream()
+                .filter(n -> n.entry.getId().equals(newId)).findFirst().orElse(null));
+        EditorScreenState.get().setSelectedNodeId(newId);
+        if (this.onEntrySelected != null) {
+            this.onEntrySelected.accept(node.entry);
+        }
+        return true;
     }
 
     private void buildTree() {
@@ -256,6 +375,11 @@ public class DialogTreeWidget extends AbstractWidget {
             int infoX = this.getX() + this.getWidth() - infoWidth - 6;
             graphics.drawString(this.font, connectionInfo, infoX, rowY + 2, EditorTheme.TEXT_MUTED);
         }
+        // 搜索无匹配：居中显示提示（借鉴 Sparkle 三态列表的 no_results）
+        if (this.isSearching() && this.visibleNodes.isEmpty()) {
+            graphics.drawCenteredString(this.font, Component.translatable("gui.vn_edit.search_no_result"),
+                    this.getX() + this.getWidth() / 2, this.getY() + this.getHeight() / 2 - 4, EditorTheme.TEXT_SECONDARY);
+        }
         if (this.visibleNodes.size() * ROW_HEIGHT > this.getHeight()) {
             int scrollBarHeight = Math.max(10, this.getHeight() * this.getHeight() / (this.visibleNodes.size() * ROW_HEIGHT));
             int scrollBarY = this.getY() + (int) ((float) displayOffset / (float) (this.visibleNodes.size() * ROW_HEIGHT - this.getHeight()) * (float) (this.getHeight() - scrollBarHeight));
@@ -291,40 +415,10 @@ public class DialogTreeWidget extends AbstractWidget {
             if (button == 0) {
                 long now = System.currentTimeMillis();
                 if (this.lastClickIndex == index && now - this.lastClickTime < 500L) {
-                    Minecraft.getInstance().setScreen(new InputDialogScreen(Component.translatable("gui.vn_edit.rename.title"), node.entry.getId(), newId -> {
-                        String oldId = node.entry.getId();
-                        if (oldId.equals(newId)) {
-                            return;
-                        }
-                        if (this.sequence.findEntryById(newId) != null) {
-                            Dialog.LOGGER.warn("Rename failed: ID '{}' already exists", newId);
-                            return;
-                        }
-                        node.entry.setId(newId);
-                        if (this.sequence.getEntries() != null) {
-                            for (DialogEntry e : this.sequence.getEntries()) {
-                                DialogOption[] options;
-                                if (oldId.equals(e.getNextId())) {
-                                    e.setNextId(newId);
-                                }
-                                if ((options = e.getOptions()) == null) {
-                                    continue;
-                                }
-                                for (DialogOption opt : options) {
-                                    if (!oldId.equals(opt.getTargetId())) {
-                                        continue;
-                                    }
-                                    opt.setTargetId(newId);
-                                }
-                            }
-                        }
-                        this.buildTree();
-                        this.selectedIndex = this.visibleNodes.indexOf(this.visibleNodes.stream()
-                                .filter(n -> n.entry.getId().equals(newId)).findFirst().orElse(null));
-                        EditorScreenState.get().setSelectedNodeId(newId);
-                        if (this.onEntrySelected != null) {
-                            this.onEntrySelected.accept(node.entry);
-                        }
+                    // 双击重命名：复用 renameSelectedEntry（与 F2 快捷键共用），selectedIndex 已由首次单击设为 index
+                    DialogEntry entryToRename = node.entry;
+                    Minecraft.getInstance().setScreen(new InputDialogScreen(Component.translatable("gui.vn_edit.rename.title"), entryToRename.getId(), newId -> {
+                        this.renameSelectedEntry(newId);
                     }, Minecraft.getInstance().screen));
                     this.lastClickIndex = -1;
                     return true;
