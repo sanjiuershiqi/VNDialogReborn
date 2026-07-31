@@ -201,7 +201,7 @@
   "gui.vn_edit.brightness": "Brightness",
   "gui.vn_edit.offset_x": "Offset X",
   "gui.vn_edit.offset_y": "Offset Y",
-  "gui.vn_edit.drag_to_adjust": "Drag portrait to adjust · Wheel to zoom · Right-drag to pan",
+  "gui.vn_edit.drag_to_adjust": "Drag to adjust · Wheel zoom · Ctrl+Wheel real size · Right-drag pan",
   "gui.vn_edit.drag_hint": "Dragging...",
   "gui.vn_edit.pan_hint": "Panning preview... release right button to finish",
   "gui.vn_edit.dialog_box_preview": "Dialog Box",

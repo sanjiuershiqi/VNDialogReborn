@@ -201,7 +201,7 @@
   "gui.vn_edit.brightness": "亮度",
   "gui.vn_edit.offset_x": "横向偏移",
   "gui.vn_edit.offset_y": "纵向偏移",
-  "gui.vn_edit.drag_to_adjust": "在预览区拖动立绘可微调位置 · 滚轮缩放 · 右键拖动平移",
+  "gui.vn_edit.drag_to_adjust": "拖动立绘微调位置 · 滚轮缩放 · Ctrl+滚轮改实际大小 · 右键拖动平移",
   "gui.vn_edit.drag_hint": "拖动中…",
   "gui.vn_edit.pan_hint": "平移预览中… 松开右键结束",
   "gui.vn_edit.dialog_box_preview": "对话框位置",
