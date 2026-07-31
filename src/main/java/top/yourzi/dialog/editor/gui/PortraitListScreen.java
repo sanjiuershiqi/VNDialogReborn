@@ -333,8 +333,28 @@ public class PortraitListScreen extends Screen {
         g.fill(x, y + h - 1, x + w, y + h, EditorTheme.BG_ELEVATED);
         g.fill(x, y, x + 1, y + h, EditorTheme.BG_ELEVATED);
         g.fill(x + w - 1, y, x + w, y + h, EditorTheme.BG_ELEVATED);
+        // 九宫格辅助线（1px 半透明三分线），方便对齐立绘位置
+        renderRuleOfThirdsGrid(g, x, y, w, h);
         // 对话框位置参考框：按实际演出比例在舞台内绘制
         renderDialogBoxGuide(g, x, y, w, h);
+    }
+
+    /**
+     * 绘制九宫格辅助线（三分线）：在舞台内画两条竖线、两条横线，将舞台均分为 3x3。
+     * 1px 半透明白色，置于对话框参考框之下，仅作对齐辅助不干扰主视觉。
+     */
+    private void renderRuleOfThirdsGrid(GuiGraphics g, int x, int y, int w, int h) {
+        int gridColor = 0x33FFFFFF;
+        int x1 = x + w / 3;
+        int x2 = x + w * 2 / 3;
+        int y1 = y + h / 3;
+        int y2 = y + h * 2 / 3;
+        // 竖线
+        g.fill(x1, y, x1 + 1, y + h, gridColor);
+        g.fill(x2, y, x2 + 1, y + h, gridColor);
+        // 横线
+        g.fill(x, y1, x + w, y1 + 1, gridColor);
+        g.fill(x, y2, x + w, y2 + 1, gridColor);
     }
 
     /**
@@ -420,6 +440,17 @@ public class PortraitListScreen extends Screen {
             RenderSystem.defaultBlendFunc();
             g.blit(this.previewTex, renderX, renderY, 0.0f, 0.0f, portraitW, portraitH, portraitW, portraitH);
             RenderSystem.disableBlend();
+            // 拖动时显示十字辅助线（PPT 智能参考线）：从立绘中心向舞台四边延伸，
+            // 便于观察立绘当前对齐到的位置（如是否对齐九宫格交点、对话框中线等）
+            if (this.draggingPortrait) {
+                int centerX = Math.max(x, Math.min(x + w, renderX + portraitW / 2));
+                int centerY = Math.max(y, Math.min(y + h, renderY + portraitH / 2));
+                int crossColor = 0x804A9EFF;
+                // 横线：贯穿舞台左右
+                g.fill(x, centerY, x + w, centerY + 1, crossColor);
+                // 竖线：贯穿舞台上下
+                g.fill(centerX, y, centerX + 1, y + h, crossColor);
+            }
             if (this.draggingPortrait) {
                 g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.drag_hint"), x + w / 2, y + 4, EditorTheme.ACCENT);
                 // 拖动时在舞台底部显示当前 offset 值，方便精确微调
@@ -506,6 +537,10 @@ public class PortraitListScreen extends Screen {
             boolean hover = isMouseInRect(mx, my, x, rowY, w, ROW_H);
             int bg = i == this.selectedIndex ? EditorTheme.BG_SELECTED : (hover ? EditorTheme.BG_HOVER : 0);
             g.fill(x, rowY, x + w, rowY + ROW_H, bg);
+            // 选中项左侧 2px 强调色竖条（VS Code 活动标签风格），视觉锚点更明确
+            if (i == this.selectedIndex) {
+                g.fill(x, rowY, x + 2, rowY + ROW_H, EditorTheme.ACCENT);
+            }
             String name = info.getPath() != null ? info.getPath() : "";
             String trimmed = this.font.plainSubstrByWidth(name, w - 10);
             g.drawString(this.font, trimmed, x + 4, rowY + 2, EditorTheme.TEXT_PRIMARY);
