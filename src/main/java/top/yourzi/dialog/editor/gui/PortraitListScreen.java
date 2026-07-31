@@ -428,28 +428,28 @@ public class PortraitListScreen extends Screen {
         // 仅在选中项变化时刷新布局和值，避免每帧覆盖用户输入
         if (visible && this.needsLayoutRefresh) {
             this.needsLayoutRefresh = false;
-            // 布局自上而下：输入框 → 重置按钮 → 操作按钮 → 位置/动画下拉框（并排放底部，向下弹出到空白区）
-            layoutFloatBox(this.sizeBox, 40);
-            layoutFloatBox(this.brightnessBox, 65);
-            layoutFloatBox(this.offsetXBox, 90);
-            layoutFloatBox(this.offsetYBox, 115);
-            this.resetOffsetBtn.setX(282);
-            this.resetOffsetBtn.setY(115);
-            this.delBtn.setX(145);
-            this.delBtn.setY(140);
-            this.upBtn.setX(260);
-            this.upBtn.setY(140);
-            this.downBtn.setX(285);
-            this.downBtn.setY(140);
-            // 位置/动画下拉框并排放底部，向下弹出进入下方空白区，互不覆盖也不覆盖输入框
-            this.posDropdown.setX(145);
-            this.posDropdown.setY(170);
-            this.posDropdown.setWidth(82);
+            // 布局自上而下：位置/动画下拉框 → 尺寸/亮度/偏移输入框 → 操作按钮
+            // 下拉框弹出菜单完全不透明，覆盖下方内容不会有重叠问题
+            this.posDropdown.setX(200);
+            this.posDropdown.setY(40);
+            this.posDropdown.setWidth(100);
             this.posDropdown.setSelected(this.getPositionDisplay(info.getPosition()).getString());
-            this.animDropdown.setX(232);
-            this.animDropdown.setY(170);
-            this.animDropdown.setWidth(82);
+            this.animDropdown.setX(200);
+            this.animDropdown.setY(65);
+            this.animDropdown.setWidth(100);
             this.animDropdown.setSelected(this.getAnimationDisplay(info.getAnimationType()).getString());
+            layoutFloatBox(this.sizeBox, 90);
+            layoutFloatBox(this.brightnessBox, 115);
+            layoutFloatBox(this.offsetXBox, 140);
+            layoutFloatBox(this.offsetYBox, 165);
+            this.resetOffsetBtn.setX(282);
+            this.resetOffsetBtn.setY(165);
+            this.delBtn.setX(145);
+            this.delBtn.setY(190);
+            this.upBtn.setX(260);
+            this.upBtn.setY(190);
+            this.downBtn.setX(285);
+            this.downBtn.setY(190);
             this.sizeBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getSize()));
             this.brightnessBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getBrightness()));
             this.offsetXBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getOffsetX()));
@@ -505,13 +505,12 @@ public class PortraitListScreen extends Screen {
             g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.no_portrait_selected"), x + w / 2, y + 20, EditorTheme.TEXT_MUTED);
             return;
         }
-        g.drawString(this.font, Component.translatable("gui.vn_edit.size"), x + 5, 44, EditorTheme.TEXT_SECONDARY);
-        g.drawString(this.font, Component.translatable("gui.vn_edit.brightness"), x + 5, 69, EditorTheme.TEXT_SECONDARY);
-        g.drawString(this.font, Component.translatable("gui.vn_edit.offset_x"), x + 5, 94, EditorTheme.TEXT_SECONDARY);
-        g.drawString(this.font, Component.translatable("gui.vn_edit.offset_y"), x + 5, 119, EditorTheme.TEXT_SECONDARY);
-        // 位置/动画标签放在各自下拉框上方
-        g.drawString(this.font, Component.translatable("gui.vn_edit.position"), 145, 160, EditorTheme.TEXT_SECONDARY);
-        g.drawString(this.font, Component.translatable("gui.vn_edit.animation"), 232, 160, EditorTheme.TEXT_SECONDARY);
+        g.drawString(this.font, Component.translatable("gui.vn_edit.position"), x + 5, 44, EditorTheme.TEXT_SECONDARY);
+        g.drawString(this.font, Component.translatable("gui.vn_edit.animation"), x + 5, 69, EditorTheme.TEXT_SECONDARY);
+        g.drawString(this.font, Component.translatable("gui.vn_edit.size"), x + 5, 94, EditorTheme.TEXT_SECONDARY);
+        g.drawString(this.font, Component.translatable("gui.vn_edit.brightness"), x + 5, 119, EditorTheme.TEXT_SECONDARY);
+        g.drawString(this.font, Component.translatable("gui.vn_edit.offset_x"), x + 5, 144, EditorTheme.TEXT_SECONDARY);
+        g.drawString(this.font, Component.translatable("gui.vn_edit.offset_y"), x + 5, 169, EditorTheme.TEXT_SECONDARY);
     }
 
     private boolean isMouseInStage(double mx, double my) {
