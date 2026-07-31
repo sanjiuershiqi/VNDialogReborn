@@ -313,7 +313,9 @@ public class AppearancePropertyPage implements PropertyPage {
     }
 
     private ResourceLocation loadTexture(File file, String cacheKey) {
-        String safeKey = cacheKey.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9/._-]", "_");
+        // 用文件绝对路径 + 最后修改时间作为缓存 key，避免中文文件名经 replaceAll 后产生冲突
+        String stableKey = file.getAbsolutePath().toLowerCase(Locale.ROOT) + "|" + file.lastModified();
+        String safeKey = stableKey.replaceAll("[^a-z0-9/._-]", "_");
         if (textureCache.containsKey(safeKey)) {
             int[] size = sizeCache.get(safeKey);
             if (size != null) {
@@ -343,6 +345,7 @@ public class AppearancePropertyPage implements PropertyPage {
             this.backgroundTexWidth = image.getWidth();
             this.backgroundTexHeight = image.getHeight();
             DynamicTexture dynamicTexture = new DynamicTexture(image);
+            dynamicTexture.upload();
             ResourceLocation rl = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "editor_preview/" + safeKey);
             Minecraft.getInstance().getTextureManager().register(rl, dynamicTexture);
             textureCache.put(safeKey, rl);
