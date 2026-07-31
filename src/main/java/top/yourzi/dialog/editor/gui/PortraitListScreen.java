@@ -40,6 +40,16 @@ public class PortraitListScreen extends Screen {
     private static final int STAGE_X = 330;
     private static final int MAX_CACHE_SIZE = 30;
 
+    // 预览缩放参数：滚轮/按钮控制，范围 0.25-5.0（< 1.0 可缩小查看整体，> 1.0 可放大查看细节）。
+    private static final float ZOOM_MIN = 0.25f;
+    private static final float ZOOM_MAX = 5.0f;
+    private static final float ZOOM_WHEEL_STEP = 0.2f;   // 滚轮每次滚动步长
+    private static final float ZOOM_BTN_STEP = 0.25f;    // +/- 按钮步长
+    // 缩放控件 UI 尺寸（舞台右上角的 [-] 1.5x [+] 控件条）
+    private static final int ZOOM_CTRL_H = 14;
+    private static final int ZOOM_CTRL_BTN_W = 16;       // +/- 按钮宽
+    private static final int ZOOM_CTRL_LABEL_W = 34;     // 中间倍率文字宽
+
     /**
      * 舞台视口：把实际屏幕（this.width x this.height）等比缩放到舞台区域内。
      * 保持宽高比，让立绘、对话框、网格的相对位置与实际演出完全一致。
@@ -116,6 +126,19 @@ public class PortraitListScreen extends Screen {
     private boolean draggingPortrait = false;
     private double lastDragX = 0;
     private double lastDragY = 0;
+    /**
+     * 预览缩放倍率，仅影响预览显示不影响实际 size。
+     * 滚轮或 +/- 按钮调节，范围 ZOOM_MIN~ZOOM_MAX，默认 1.0。
+     * 仅当 != 1.0f 时应用缩放变换与平移。
+     */
+    private float previewZoom = 1.0f;
+    /** 预览平移偏移（舞台像素），仅 zoom != 1.0 时生效。右键拖动调整，R 重置。 */
+    private int panOffsetX = 0;
+    private int panOffsetY = 0;
+    /** 是否正在右键拖动平移预览（与左键拖动调整 offset 区分开）。 */
+    private boolean panningPreview = false;
+    private double lastPanX = 0;
+    private double lastPanY = 0;
     private DropdownWidget posDropdown;
     private DropdownWidget animDropdown;
     private EditBox sizeBox;
@@ -362,7 +385,7 @@ public class PortraitListScreen extends Screen {
         // 立绘 blit 必须在 super.render() 之后绘制：本屏是独立 Screen，
         // 立绘 blit 若在 super.render() 之前调用会被 GuiGraphics 缓冲，随后渲染 widget 时
         // 批量 flush 会把 DynamicTexture 纹理绑定与其它 RenderType 混在一起导致不可见。
-        this.renderPortraitBlit(g);
+        this.renderPortraitBlit(g, mx, my);
         // 对话框参考框在立绘之后绘制，避免被立绘图片覆盖而看不见
         this.renderDialogBoxGuide(g);
         // 下拉弹出列表最后渲染，确保不被遮挡
@@ -485,8 +508,12 @@ public class PortraitListScreen extends Screen {
      * - X 按 position（LEFT/CENTER/RIGHT）定位，侧边距 20px
      * - Y 底部对齐（立绘站在屏幕底部）
      * - offset 相对屏幕尺寸
+     *
+     * 预览缩放（previewZoom）与平移（panOffsetX/Y）仅影响预览显示，不修改实际 size/offset。
+     * 缩放以立绘底部中心为基点；平移通过右键拖动调整，受 clampPanOffset 约束保证图片不完全离开视口。
+     * 立绘绘制用 scissor 裁剪到舞台区域，避免放大后溢出到左侧列表/中间面板。
      */
-    private void renderPortraitBlit(GuiGraphics g) {
+    private void renderPortraitBlit(GuiGraphics g, int mx, int my) {
         int stageX = STAGE_X;
         int stageY = HEADER;
         int stageW = stageWidth();
@@ -515,8 +542,25 @@ public class PortraitListScreen extends Screen {
             int renderY = this.viewport.mapY(realRenderY);
             int portraitW = this.viewport.mapSize(realPortraitW);
             int portraitH = this.viewport.mapSize(realPortraitH);
+            // 应用预览缩放：以立绘底部中心为基点放大/缩小，仅影响预览显示不影响实际 size
+            boolean zoomed = this.previewZoom != 1.0f;
+            if (zoomed) {
+                int scaledW = Math.max(1, (int) (portraitW * this.previewZoom));
+                int scaledH = Math.max(1, (int) (portraitH * this.previewZoom));
+                // 底部中心对齐：保持立绘脚部位置不变，向上向外扩展
+                renderX = renderX + (portraitW - scaledW) / 2;
+                renderY = renderY + (portraitH - scaledH);
+                portraitW = scaledW;
+                portraitH = scaledH;
+                // 平移：先 clamp 到合理范围（保证图片不完全离开视口），再应用
+                clampPanOffset(renderX, renderY, portraitW, portraitH);
+                renderX += this.panOffsetX;
+                renderY += this.panOffsetY;
+            }
             if (portraitW < 1) portraitW = 1;
             if (portraitH < 1) portraitH = 1;
+            // scissor 裁剪到舞台区域，避免放大/平移后立绘溢出到左侧列表与中间面板
+            g.enableScissor(stageX, stageY, stageX + stageW, stageY + stageH);
             // 渲染立绘
             RenderSystem.setShaderTexture(0, this.previewTex);
             RenderSystem.enableBlend();
@@ -543,6 +587,8 @@ public class PortraitListScreen extends Screen {
                 g.fill(renderX, renderY, renderX + 1, renderY + portraitH, boxColor);
                 g.fill(renderX + portraitW - 1, renderY, renderX + portraitW, renderY + portraitH, boxColor);
             }
+            g.disableScissor();
+            // 顶部提示文字（在 scissor 外，确保不被裁剪）
             if (this.draggingPortrait) {
                 g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.drag_hint"), stageX + stageW / 2, stageY + 4, EditorTheme.ACCENT);
                 // offset 数值贴近立绘上方显示
@@ -550,14 +596,141 @@ public class PortraitListScreen extends Screen {
                 int textX = renderX + portraitW / 2;
                 int textY = Math.max(stageY + 2, renderY - 11);
                 g.drawCenteredString(this.font, Component.literal(offsetText), textX, textY, EditorTheme.ACCENT);
+            } else if (this.panningPreview) {
+                g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.pan_hint"), stageX + stageW / 2, stageY + 4, EditorTheme.ACCENT);
             } else {
                 g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.drag_to_adjust"), stageX + stageW / 2, stageY + 4, EditorTheme.TEXT_MUTED);
             }
+            // 缩放控件 UI（舞台右上角，始终显示让用户知道有缩放功能）
+            renderZoomControl(g, mx, my, stageX, stageY, stageW);
         } else if (info == null) {
             g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.no_portrait_selected"), stageX + stageW / 2, stageY + stageH / 2 - 4, EditorTheme.TEXT_MUTED);
         } else {
             g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.no_preview"), stageX + stageW / 2, stageY + stageH / 2 - 4, EditorTheme.TEXT_MUTED);
         }
+    }
+
+    /**
+     * 限制平移偏移，保证放大后的图片至少有部分落在视口内，避免用户把图片拖丢。
+     * - 图片比视口大：允许平移到图片任一边到达视口中心（保证至少一半可见区域有图片）
+     * - 图片比视口小：限制图片不超出视口边界
+     */
+    private void clampPanOffset(int unpannedX, int unpannedY, int w, int h) {
+        int viewX = this.viewport.viewX;
+        int viewY = this.viewport.viewY;
+        int viewW = this.viewport.viewW;
+        int viewH = this.viewport.viewH;
+        // X 方向
+        int minX, maxX;
+        if (w >= viewW) {
+            // 图片大于视口：允许图片边到达视口中心（保证至少视口一半区域有图片）
+            int halfView = viewW / 2;
+            minX = viewX + halfView - (unpannedX + w);   // 图片右边对齐视口中心
+            maxX = viewX + viewW - halfView - unpannedX; // 图片左边对齐视口中心
+        } else {
+            // 图片小于视口：限制图片不超出视口边界
+            minX = viewX - unpannedX;
+            maxX = viewX + viewW - unpannedX - w;
+        }
+        this.panOffsetX = Mth.clamp(this.panOffsetX, minX, maxX);
+        // Y 方向
+        int minY, maxY;
+        if (h >= viewH) {
+            int halfView = viewH / 2;
+            minY = viewY + halfView - (unpannedY + h);
+            maxY = viewY + viewH - halfView - unpannedY;
+        } else {
+            minY = viewY - unpannedY;
+            maxY = viewY + viewH - unpannedY - h;
+        }
+        this.panOffsetY = Mth.clamp(this.panOffsetY, minY, maxY);
+    }
+
+    /**
+     * 缩放控件 UI：舞台右上角的 [-] 1.5x [+] 控件条。
+     * - [-] 减小缩放（步长 ZOOM_BTN_STEP，下限 ZOOM_MIN）
+     * - [+] 增大缩放（步长 ZOOM_BTN_STEP，上限 ZOOM_MAX）
+     * - 中间倍率文字可点击：单击重置为 1.0（同时清零平移）
+     * 鼠标悬停按钮高亮显示，提供清晰的可点击反馈。
+     */
+    private void renderZoomControl(GuiGraphics g, int mx, int my, int stageX, int stageY, int stageW) {
+        int totalW = ZOOM_CTRL_BTN_W + ZOOM_CTRL_LABEL_W + ZOOM_CTRL_BTN_W;
+        int cx = stageX + stageW - totalW - 4;
+        int cy = stageY + 4;
+        // 背景胶囊（半透明深色 + 边框）
+        g.fill(cx - 1, cy - 1, cx + totalW + 1, cy + ZOOM_CTRL_H + 1, 0xE6000000);
+        g.fill(cx, cy, cx + totalW, cy + ZOOM_CTRL_H, EditorTheme.BG_ELEVATED);
+        // 三个区域的 bounds
+        int minusX = cx;
+        int labelX = cx + ZOOM_CTRL_BTN_W;
+        int plusX = cx + ZOOM_CTRL_BTN_W + ZOOM_CTRL_LABEL_W;
+        boolean hoverMinus = isMouseInRect(mx, my, minusX, cy, ZOOM_CTRL_BTN_W, ZOOM_CTRL_H);
+        boolean hoverLabel = isMouseInRect(mx, my, labelX, cy, ZOOM_CTRL_LABEL_W, ZOOM_CTRL_H);
+        boolean hoverPlus = isMouseInRect(mx, my, plusX, cy, ZOOM_CTRL_BTN_W, ZOOM_CTRL_H);
+        // 悬停高亮
+        if (hoverMinus) g.fill(minusX, cy, minusX + ZOOM_CTRL_BTN_W, cy + ZOOM_CTRL_H, EditorTheme.BG_HOVER);
+        if (hoverLabel) g.fill(labelX, cy, labelX + ZOOM_CTRL_LABEL_W, cy + ZOOM_CTRL_H, EditorTheme.BG_HOVER);
+        if (hoverPlus) g.fill(plusX, cy, plusX + ZOOM_CTRL_BTN_W, cy + ZOOM_CTRL_H, EditorTheme.BG_HOVER);
+        // 分隔线
+        int lineColor = EditorTheme.BORDER;
+        g.fill(labelX, cy, labelX + 1, cy + ZOOM_CTRL_H, lineColor);
+        g.fill(plusX, cy, plusX + 1, cy + ZOOM_CTRL_H, lineColor);
+        // 文字
+        int textY = cy + (ZOOM_CTRL_H - this.font.lineHeight) / 2 + 1;
+        int minusColor = hoverMinus ? EditorTheme.ACCENT : EditorTheme.TEXT_PRIMARY;
+        int plusColor = hoverPlus ? EditorTheme.ACCENT : EditorTheme.TEXT_PRIMARY;
+        int labelColor = this.previewZoom == 1.0f ? EditorTheme.TEXT_SECONDARY : EditorTheme.ACCENT;
+        g.drawCenteredString(this.font, Component.literal("-"), minusX + ZOOM_CTRL_BTN_W / 2, textY, minusColor);
+        String zoomText = String.format(java.util.Locale.ROOT, "%.2fx", this.previewZoom);
+        g.drawCenteredString(this.font, Component.literal(zoomText), labelX + ZOOM_CTRL_LABEL_W / 2, textY, labelColor);
+        g.drawCenteredString(this.font, Component.literal("+"), plusX + ZOOM_CTRL_BTN_W / 2, textY, plusColor);
+    }
+
+    /** 返回缩放控件三个可点击区域的 bounds：[minus, label, plus]，每个为 {x, y, w, h}。 */
+    private int[][] getZoomControlBounds(int stageX, int stageY, int stageW) {
+        int totalW = ZOOM_CTRL_BTN_W + ZOOM_CTRL_LABEL_W + ZOOM_CTRL_BTN_W;
+        int cx = stageX + stageW - totalW - 4;
+        int cy = stageY + 4;
+        return new int[][]{
+                {cx, cy, ZOOM_CTRL_BTN_W, ZOOM_CTRL_H},                                     // minus
+                {cx + ZOOM_CTRL_BTN_W, cy, ZOOM_CTRL_LABEL_W, ZOOM_CTRL_H},                 // label
+                {cx + ZOOM_CTRL_BTN_W + ZOOM_CTRL_LABEL_W, cy, ZOOM_CTRL_BTN_W, ZOOM_CTRL_H} // plus
+        };
+    }
+
+    /** 重置缩放为 1.0 并清零平移偏移。 */
+    private void resetZoomAndPan() {
+        this.previewZoom = 1.0f;
+        this.panOffsetX = 0;
+        this.panOffsetY = 0;
+    }
+
+    /**
+     * 自动计算"适合舞台"的缩放倍率：让立绘完整放入视口（取宽高方向较小的适配比）。
+     * 立绘在 zoom=1.0 时的视口内尺寸由实际演出位置和 size 决定，这里基于当前选中立绘计算。
+     */
+    private void fitZoomToStage() {
+        PortraitInfo info = this.getSelected();
+        if (info == null || this.previewW <= 0 || this.previewH <= 0 || this.viewport == null) {
+            return;
+        }
+        float size = Mth.clamp(info.getSize(), 0.1f, 5.0f);
+        int realPortraitH = (int) (this.height * 0.68f * size);
+        float ratio = (float) this.previewW / (float) this.previewH;
+        int realPortraitW = Math.max(1, (int) (realPortraitH * ratio));
+        int portraitW = this.viewport.mapSize(realPortraitW);
+        int portraitH = this.viewport.mapSize(realPortraitH);
+        if (portraitW <= 0 || portraitH <= 0) {
+            return;
+        }
+        // 留 8px 边距，避免贴边
+        float fitW = (float) (this.viewport.viewW - 8) / portraitW;
+        float fitH = (float) (this.viewport.viewH - 8) / portraitH;
+        float fit = Math.min(fitW, fitH);
+        this.previewZoom = Mth.clamp(fit, ZOOM_MIN, ZOOM_MAX);
+        // 适配后清零平移，让立绘回到默认底部中心位置
+        this.panOffsetX = 0;
+        this.panOffsetY = 0;
     }
 
     private void updateDynamicButtons() {
@@ -695,6 +868,26 @@ public class PortraitListScreen extends Screen {
             this.animDropdown.close();
             return true;
         }
+        // 缩放控件点击：[-] / [+] / 中间倍率文字（单击文字重置缩放）
+        // 仅在选中立绘且有预览时响应，左键生效
+        if (button == 0 && this.getSelected() != null && this.previewTex != null) {
+            int stageW = stageWidth();
+            int[][] zb = getZoomControlBounds(STAGE_X, HEADER, stageW);
+            int[] minusB = zb[0], labelB = zb[1], plusB = zb[2];
+            if (isMouseInRect(mouseX, mouseY, minusB[0], minusB[1], minusB[2], minusB[3])) {
+                this.previewZoom = Mth.clamp(this.previewZoom - ZOOM_BTN_STEP, ZOOM_MIN, ZOOM_MAX);
+                if (this.previewZoom == 1.0f) { this.panOffsetX = 0; this.panOffsetY = 0; }
+                return true;
+            }
+            if (isMouseInRect(mouseX, mouseY, plusB[0], plusB[1], plusB[2], plusB[3])) {
+                this.previewZoom = Mth.clamp(this.previewZoom + ZOOM_BTN_STEP, ZOOM_MIN, ZOOM_MAX);
+                return true;
+            }
+            if (isMouseInRect(mouseX, mouseY, labelB[0], labelB[1], labelB[2], labelB[3])) {
+                resetZoomAndPan();
+                return true;
+            }
+        }
         if (super.mouseClicked(mouseX, mouseY, button)) {
             return true;
         }
@@ -708,7 +901,16 @@ public class PortraitListScreen extends Screen {
                 return true;
             }
         }
-        // 在舞台内按下：开始拖动立绘调整偏移
+        // 在舞台内右键按下且当前已缩放：开始平移预览（不修改 offset，只移动查看位置）
+        if (button == 1 && this.isMouseInStage(mouseX, mouseY)
+                && this.getSelected() != null && this.previewTex != null && this.previewZoom != 1.0f) {
+            clearAllBoxFocus();
+            this.panningPreview = true;
+            this.lastPanX = mouseX;
+            this.lastPanY = mouseY;
+            return true;
+        }
+        // 在舞台内左键按下：开始拖动立绘调整偏移
         if (button == 0 && this.isMouseInStage(mouseX, mouseY) && this.getSelected() != null && this.previewTex != null) {
             // 点击舞台时取消输入框聚焦，使方向键微调可用
             clearAllBoxFocus();
@@ -722,6 +924,14 @@ public class PortraitListScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        // 右键拖动：平移放大后的预览（仅 zoom != 1.0 时启用）
+        if (this.panningPreview && button == 1 && this.previewZoom != 1.0f) {
+            this.panOffsetX += (int) (mouseX - this.lastPanX);
+            this.panOffsetY += (int) (mouseY - this.lastPanY);
+            this.lastPanX = mouseX;
+            this.lastPanY = mouseY;
+            return true;
+        }
         if (this.draggingPortrait && button == 0) {
             PortraitInfo info = this.getSelected();
             if (info != null && this.viewport != null) {
@@ -752,6 +962,10 @@ public class PortraitListScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (this.panningPreview && button == 1) {
+            this.panningPreview = false;
+            return true;
+        }
         if (this.draggingPortrait && button == 0) {
             this.draggingPortrait = false;
             return true;
@@ -763,6 +977,19 @@ public class PortraitListScreen extends Screen {
     public boolean mouseScrolled(double mx, double my, double scrollX, double scrollY) {
         if (isMouseInRect(mx, my, 10, HEADER, LEFT_W, this.height - HEADER - FOOTER)) {
             this.scrollOffset = Mth.clamp(this.scrollOffset - (int) scrollY * ROW_H, 0, Integer.MAX_VALUE);
+            return true;
+        }
+        // 在舞台区域内滚轮控制预览缩放，仅影响显示不影响实际 size
+        int stageW = stageWidth();
+        if (isMouseInRect(mx, my, STAGE_X, HEADER, stageW, this.height - HEADER - FOOTER)) {
+            // 向上滚放大、向下滚缩小，步长 ZOOM_WHEEL_STEP
+            float delta = (float) scrollY * ZOOM_WHEEL_STEP;
+            this.previewZoom = Mth.clamp(this.previewZoom + delta, ZOOM_MIN, ZOOM_MAX);
+            // 缩放回到 1.0 时自动清零平移，避免残留偏移导致图片错位
+            if (this.previewZoom == 1.0f) {
+                this.panOffsetX = 0;
+                this.panOffsetY = 0;
+            }
             return true;
         }
         return super.mouseScrolled(mx, my, scrollX, scrollY);
@@ -801,6 +1028,10 @@ public class PortraitListScreen extends Screen {
                 case org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT -> { info.setOffsetX(info.getOffsetX() + step); syncBoxIfNotFocused(this.offsetXBox, info.getOffsetX()); return true; }
                 case org.lwjgl.glfw.GLFW.GLFW_KEY_UP -> { info.setOffsetY(info.getOffsetY() - step); syncBoxIfNotFocused(this.offsetYBox, info.getOffsetY()); return true; }
                 case org.lwjgl.glfw.GLFW.GLFW_KEY_DOWN -> { info.setOffsetY(info.getOffsetY() + step); syncBoxIfNotFocused(this.offsetYBox, info.getOffsetY()); return true; }
+                // R：重置预览缩放与平移（不影响立绘实际 offset/size）
+                case org.lwjgl.glfw.GLFW.GLFW_KEY_R -> { resetZoomAndPan(); return true; }
+                // F：自动适配缩放，让立绘完整放入视口
+                case org.lwjgl.glfw.GLFW.GLFW_KEY_F -> { fitZoomToStage(); return true; }
             }
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
