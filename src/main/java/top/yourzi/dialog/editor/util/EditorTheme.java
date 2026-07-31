@@ -24,6 +24,16 @@ public class EditorTheme {
     public static final int ACCENT_DIM     = 0xFF2A5A8A;
     public static final int DANGER         = 0xFFE05555;  // 删除/危险
 
+    // ===== 语义化半透明色 =====
+    // 收编散落在各 Screen 的 0x33FFFFFF / 0xCC000000 / 0x804A9EFF 等魔法数字，
+    // 让半透明叠层也走主题系统。语义命名，便于全局调整。
+    public static final int OVERLAY_MASK    = 0xCC000000;  // 模态遮罩（InputDialog/Confirm）
+    public static final int HOVER_TINT      = 0x33FFFFFF;  // 悬停提亮叠层
+    public static final int ACCENT_TINT     = 0x804A9EFF;  // 强调半透明（选中描边等）
+    public static final int DIVIDER         = 0x40FFFFFF;  // 分隔线/网格辅助线
+    public static final int SCROLLBAR_TRACK = 0x33000000;  // 滚动条轨道
+    public static final int SCROLLBAR_THUMB = 0x80B0B0B0;  // 滚动条滑块
+
     // ===== 间距 =====
     public static final int PADDING      = 6;
     public static final int GAP          = 5;

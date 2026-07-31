@@ -1,13 +1,11 @@
 package top.yourzi.dialog.editor.gui;
 
-import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
@@ -16,13 +14,12 @@ import top.yourzi.dialog.editor.gui.widget.DropdownWidget;
 import top.yourzi.dialog.editor.gui.BuiltInTextureBrowserScreen;
 import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.editor.util.EditorTheme;
-import top.yourzi.dialog.editor.util.FileSystemTextureLoader;
+import top.yourzi.dialog.editor.util.TextureCacheService;
 import top.yourzi.dialog.model.PortraitAnimationType;
 import top.yourzi.dialog.model.PortraitInfo;
 import top.yourzi.dialog.model.PortraitPosition;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -38,7 +35,6 @@ public class PortraitListScreen extends Screen {
     private static final int LEFT_W = 130;
     private static final int ROW_H = 12;
     private static final int STAGE_X = 330;
-    private static final int MAX_CACHE_SIZE = 30;
 
     // 预览缩放参数：滚轮/按钮控制，范围 0.25-5.0（< 1.0 可缩小查看整体，> 1.0 可放大查看细节）。
     private static final float ZOOM_MIN = 0.25f;
@@ -96,20 +92,6 @@ public class PortraitListScreen extends Screen {
 
     /** 当前帧的舞台视口，render 开头计算一次，所有渲染共用。 */
     private StageViewport viewport;
-
-    // 预览纹理缓存：与 AppearancePropertyPage 完全一致的机制（静态 LRU + sizeCache）。
-    private static final java.util.Map<String, ResourceLocation> textureCache = new java.util.LinkedHashMap<String, ResourceLocation>() {
-        @Override
-        protected boolean removeEldestEntry(java.util.Map.Entry<String, ResourceLocation> eldest) {
-            if (this.size() > MAX_CACHE_SIZE) {
-                Minecraft.getInstance().getTextureManager().release(eldest.getValue());
-                sizeCache.remove(eldest.getKey());
-                return true;
-            }
-            return false;
-        }
-    };
-    private static final java.util.Map<String, int[]> sizeCache = new java.util.LinkedHashMap<>();
 
     private final List<PortraitInfo> portraits;
     /** 原始立绘列表的深拷贝，取消时用于恢复未修改状态。 */
@@ -359,15 +341,8 @@ public class PortraitListScreen extends Screen {
     }
 
     /**
-     * 释放所有静态缓存的预览纹理。编辑器关闭时调用。
+     * 释放预览纹理现由 TextureCacheService 统一管理，编辑器关闭时由主屏调用 releaseAll()。
      */
-    public static void releaseTextures() {
-        for (ResourceLocation rl : textureCache.values()) {
-            Minecraft.getInstance().getTextureManager().release(rl);
-        }
-        textureCache.clear();
-        sizeCache.clear();
-    }
 
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
@@ -393,9 +368,7 @@ public class PortraitListScreen extends Screen {
         this.renderPortraitBlit(g, mx, my);
         // 对话框参考框在立绘之后绘制，避免被立绘图片覆盖而看不见
         this.renderDialogBoxGuide(g);
-        // 下拉弹出列表最后渲染，确保不被遮挡
-        this.posDropdown.renderPopup(g, mx, my, pt);
-        this.animDropdown.renderPopup(g, mx, my, pt);
+        // 下拉浮层已由 DropdownWidget.renderWidget 自包含渲染，无需手动调用。
     }
 
     /** 舞台宽度（右侧预览区）。 */
@@ -1089,66 +1062,16 @@ public class PortraitListScreen extends Screen {
     }
 
     /**
-     * 加载纹理：静态缓存复用，命中时恢复尺寸，未命中时解码并注册。
-     * 缓存 key 基于文件绝对路径的稳定 hash，避免中文文件名经 replaceAll 后产生冲突。
+     * 加载纹理：复用 TextureCacheService 统一缓存，命中时返回缓存尺寸，未命中时由服务解码并注册。
      */
     private ResourceLocation loadTexture(File file, String cacheKey) {
-        // 用文件绝对路径 + 最后修改时间作为缓存 key，避免不同中文文件名被替换成相同 key 导致缓存冲突
-        String stableKey = file.getAbsolutePath().toLowerCase(Locale.ROOT) + "|" + file.lastModified();
-        String safeKey = stableKey.replaceAll("[^a-z0-9/._-]", "_");
-        if (textureCache.containsKey(safeKey)) {
-            int[] size = sizeCache.get(safeKey);
-            if (size != null) {
-                this.previewW = size[0];
-                this.previewH = size[1];
-            }
-            return textureCache.get(safeKey);
-        }
-        if (!file.exists()) {
-            File parent = file.getParentFile();
-            if (parent != null && parent.isDirectory()) {
-                File finalFile = file;
-                File[] matches = parent.listFiles((dir, name) -> name.equalsIgnoreCase(finalFile.getName()));
-                if (matches != null && matches.length > 0) {
-                    file = matches[0];
-                } else {
-                    Dialog.LOGGER.warn("Texture file not found: {}", file.getAbsolutePath());
-                    return null;
-                }
-            } else {
-                Dialog.LOGGER.warn("Texture file not found: {}", file.getAbsolutePath());
-                return null;
-            }
-        }
-        try (FileInputStream fis = new FileInputStream(file)) {
-            NativeImage image = FileSystemTextureLoader.decodeToNativeImage(fis);
-            try {
-                this.previewW = image.getWidth();
-                this.previewH = image.getHeight();
-                ResourceLocation rl = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "editor_preview/" + safeKey);
-                DynamicTexture dynamicTexture = new DynamicTexture(image);
-                try {
-                    dynamicTexture.upload();
-                    Minecraft.getInstance().getTextureManager().register(rl, dynamicTexture);
-                } catch (Exception registerEx) {
-                    dynamicTexture.close();
-                    throw registerEx;
-                }
-                textureCache.put(safeKey, rl);
-                sizeCache.put(safeKey, new int[]{this.previewW, this.previewH});
-                return rl;
-            } catch (Exception ex) {
-                try {
-                    image.close();
-                } catch (Exception closeEx) {
-                    Dialog.LOGGER.warn("Failed to close NativeImage: {}", closeEx.toString());
-                }
-                throw ex;
-            }
-        } catch (Exception e) {
-            Dialog.LOGGER.error("Failed to load preview texture: {}", file, e);
+        TextureCacheService.CachedTexture cached = TextureCacheService.load(file);
+        if (cached == null) {
             return null;
         }
+        this.previewW = cached.width();
+        this.previewH = cached.height();
+        return cached.location();
     }
 
     private static boolean isMouseInRect(double mx, double my, int x, int y, int w, int h) {

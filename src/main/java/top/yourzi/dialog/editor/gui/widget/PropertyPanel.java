@@ -8,6 +8,7 @@ import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
+import top.yourzi.dialog.editor.gui.EditorScreenState;
 import top.yourzi.dialog.editor.gui.property.AppearancePropertyPage;
 import top.yourzi.dialog.editor.gui.property.LogicPropertyPage;
 import top.yourzi.dialog.editor.gui.property.PropertyPage;
@@ -34,6 +35,8 @@ public class PropertyPanel extends AbstractWidget {
     private OnTabChangeListener onTabChangeListener;
     // 内容垂直滚动偏移，用于在页面内容超出可视高度时滚动查看
     private int scrollOffset = 0;
+    /** 当前活动页是否有下拉框浮层展开，展开时跳过内容 scissor 避免裁剪浮层。 */
+    private boolean popupOpen = false;
 
     public PropertyPanel(int x, int y, int width, int height, Font font) {
         super(x, y, width, height, Component.empty());
@@ -41,6 +44,11 @@ public class PropertyPanel extends AbstractWidget {
         this.tabs.add(new Tab(Component.translatable("gui.vn_edit.tab.text"), new TextPropertyPage(font)));
         this.tabs.add(new Tab(Component.translatable("gui.vn_edit.tab.appearance"), new AppearancePropertyPage(font)));
         this.tabs.add(new Tab(Component.translatable("gui.vn_edit.tab.logic"), new LogicPropertyPage(font)));
+        // 从状态单例恢复上次活动标签，子屏返回后不再回退到首个标签
+        this.activeTabIndex = EditorScreenState.get().getActivePropertyTab();
+        if (this.activeTabIndex < 0 || this.activeTabIndex >= this.tabs.size()) {
+            this.activeTabIndex = 0;
+        }
     }
 
     public void setOnTabChangeListener(OnTabChangeListener listener) {
@@ -87,6 +95,10 @@ public class PropertyPanel extends AbstractWidget {
         int pageHeight = this.getHeight() - TAB_HEIGHT - 6;
         for (Tab tab : this.tabs) {
             tab.page.init(pageX, pageY, pageWidth, pageHeight);
+            // 为页面内所有下拉框注册浮层回调，展开时跳过内容 scissor
+            for (DropdownWidget dd : tab.page.getDropdowns()) {
+                dd.setOnPopupToggle(open -> this.popupOpen = open);
+            }
         }
     }
 
@@ -122,12 +134,21 @@ public class PropertyPanel extends AbstractWidget {
     public void setActiveTab(int index) {
         this.ensureInitialized();
         if (index >= 0 && index < this.tabs.size()) {
+            // 切换标签页前关闭当前页所有下拉浮层，避免浮层状态残留
+            if (this.popupOpen) {
+                for (DropdownWidget dd : this.tabs.get(this.activeTabIndex).page.getDropdowns()) {
+                    dd.closePopup();
+                }
+                this.popupOpen = false;
+            }
             this.activeTabIndex = index;
             for (int i = 0; i < this.tabs.size(); i++) {
                 this.tabs.get(i).page.setVisible(i == index);
             }
             // 切换标签页时重置滚动，避免上一个页面的偏移影响新页面
             this.scrollOffset = 0;
+            // 写回状态单例，子屏重建后 PropertyPanel 构造时自动恢复活动标签
+            EditorScreenState.get().setActivePropertyTab(index);
             if (this.onTabChangeListener != null) {
                 this.onTabChangeListener.onTabChanged(index);
             }
@@ -168,8 +189,12 @@ public class PropertyPanel extends AbstractWidget {
             int pageTop = this.getPageTop();
             int pageH = this.getPageHeight();
             int contentH = this.getActiveContentHeight();
-            // 用 scissor 裁剪页面内容区域，滚动时不会溢出到标签栏上
-            graphics.enableScissor(this.getX(), pageTop, this.getX() + this.getWidth(), pageTop + pageH);
+            // 用 scissor 裁剪页面内容区域，滚动时不会溢出到标签栏上。
+            // 当下拉框浮层展开时跳过 scissor，让 DropdownWidget 自渲染的浮层不被裁剪。
+            boolean useScissor = !this.popupOpen;
+            if (useScissor) {
+                graphics.enableScissor(this.getX(), pageTop, this.getX() + this.getWidth(), pageTop + pageH);
+            }
             try {
                 graphics.pose().pushPose();
                 graphics.pose().translate(0, -this.scrollOffset, 0);
@@ -177,7 +202,9 @@ public class PropertyPanel extends AbstractWidget {
                 this.tabs.get(this.activeTabIndex).page.render(graphics, mouseX, mouseY + this.scrollOffset, partialTick);
                 graphics.pose().popPose();
             } finally {
-                graphics.disableScissor();
+                if (useScissor) {
+                    graphics.disableScissor();
+                }
             }
             // 滚动条
             if (contentH > pageH) {
@@ -186,16 +213,7 @@ public class PropertyPanel extends AbstractWidget {
                 graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, pageTop, this.getX() + this.getWidth(), pageTop + pageH, 0x33000000);
                 graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, scrollBarY, this.getX() + this.getWidth(), scrollBarY + scrollBarHeight, EditorTheme.TEXT_MUTED);
             }
-            // 在 scissor 之外渲染展开的下拉弹出列表，确保不被裁剪或遮挡
-            List<DropdownWidget> dropdowns = this.tabs.get(this.activeTabIndex).page.getDropdowns();
-            if (!dropdowns.isEmpty()) {
-                graphics.pose().pushPose();
-                graphics.pose().translate(0, -this.scrollOffset, 0);
-                for (DropdownWidget dd : dropdowns) {
-                    dd.renderPopup(graphics, mouseX, mouseY + this.scrollOffset, partialTick);
-                }
-                graphics.pose().popPose();
-            }
+            // 下拉浮层已由 DropdownWidget.renderWidget 自包含渲染（跟随页面 translate），无需在此手动调用。
         }
     }
 

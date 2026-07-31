@@ -35,7 +35,7 @@ import java.util.Map;
  * 文本属性页：说话者、正文、格式化代码、翻译模式。融合自 visual_mod_edit_vndialog。
  * 使用 PageLayout 游标布局，自动适应不同屏幕尺寸和 GUI 缩放。
  */
-public class TextPropertyPage implements PropertyPage {
+public class TextPropertyPage extends AbstractPropertyPage {
     private static final int MODE_PLAIN = 0;
     private static final int MODE_TRANSLATION = 1;
     private static final ChatFormatting[] COLORS = new ChatFormatting[]{
@@ -46,14 +46,8 @@ public class TextPropertyPage implements PropertyPage {
     };
     private static final Gson GSON = new Gson();
 
-    private final Font font;
     private EditBox speakerBox;
     private MultiLineEditBox contentBox;
-    private boolean visible = true;
-    private int x;
-    private int y;
-    private int width;
-    private DialogEntry currentEntry;
     private boolean textModified = false;
     private EditorButton boldBtn;
     private EditorButton italicBtn;
@@ -83,7 +77,7 @@ public class TextPropertyPage implements PropertyPage {
     private int hexLabelY;
 
     public TextPropertyPage(Font font) {
-        this.font = font;
+        super(font);
     }
 
     @Override
@@ -91,6 +85,7 @@ public class TextPropertyPage implements PropertyPage {
         this.x = x;
         this.y = y;
         this.width = width;
+        this.height = height;
 
         PageLayout layout = new PageLayout(x, y, width);
         int fieldX = layout.fieldX();

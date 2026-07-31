@@ -17,6 +17,7 @@ import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import top.yourzi.dialog.editor.gui.widget.PropertyPanel;
 import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.editor.util.EditorTheme;
+import top.yourzi.dialog.editor.util.TextureCacheService;
 import top.yourzi.dialog.model.DialogEntry;
 import top.yourzi.dialog.model.DialogOption;
 import top.yourzi.dialog.model.DialogSequence;
@@ -811,10 +812,10 @@ public class VNDialogEditorScreen extends Screen {
         }
         this.dirtySequences.clear();
         this.saveSession();
-        AppearancePropertyPage.releaseTextures();
-        // PortraitListScreen 的预览纹理由静态 LRU 缓存管理，子屏关闭时不释放；
-        // 必须在主编辑器关闭时统一释放，否则会一直占用显存直到游戏退出。
-        PortraitListScreen.releaseTextures();
+        // 预览纹理由 TextureCacheService 统一缓存管理，编辑器关闭时统一释放避免显存泄漏。
+        TextureCacheService.releaseAll();
+        // 清空跨屏 UI 状态单例，下次打开编辑器为初始状态（活动标签/选中节点/树滚动归零）。
+        EditorScreenState.get().reset();
         super.onClose();
     }
 

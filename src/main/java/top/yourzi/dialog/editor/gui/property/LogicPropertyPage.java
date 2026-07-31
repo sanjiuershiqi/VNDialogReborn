@@ -34,13 +34,12 @@ import java.util.function.Consumer;
  * 逻辑属性页：下一节点、结束/跳过、音频、命令、选项。
  * 使用 PageLayout 游标布局处理静态部分，动态部分（命令/物品/选项）基于游标位置动态重排。
  */
-public class LogicPropertyPage implements PropertyPage {
+public class LogicPropertyPage extends AbstractPropertyPage {
     private static final int LABEL_WIDTH = EditorTheme.LABEL_WIDTH;
     private static final int OPTION_ROW_HEIGHT = EditorTheme.FIELD_HEIGHT;
     private static final int COMMAND_ROW_HEIGHT = EditorTheme.FIELD_HEIGHT;
     private static final int DYNAMIC_SECTION_OVERHEAD = EditorTheme.SECTION_GAP + EditorTheme.SECTION_HDR_H + EditorTheme.ROW_GAP + EditorTheme.FIELD_HEIGHT + EditorTheme.ROW_GAP;
 
-    private final Font font;
     private EditorButton nextNodeBtn;
     private Checkbox endDialogCheck;
     private Checkbox allowSkipCheck;
@@ -52,7 +51,6 @@ public class LogicPropertyPage implements PropertyPage {
     private EditorButton audioFolderBtn;
     private EditBox visibilityCommandBox;
     private DialogSequence currentSequence;
-    private DialogEntry currentEntry;
     private final List<EditBox> commandEdits = new ArrayList<>();
     private final List<EditorButton> commandDeleteBtns = new ArrayList<>();
     private final List<EditorButton> editOptionButtons = new ArrayList<>();
@@ -67,10 +65,6 @@ public class LogicPropertyPage implements PropertyPage {
     private int commandListStartY;
     private int displayItemsStartY;
     private int dynamicStartY;
-    private boolean visible = true;
-    private int x;
-    private int y;
-    private int width;
     /** 程序化设置 Checkbox 状态时抑制 onValueChange 回调，避免回写 entry（C6 反射修复） */
     private boolean suppressCheckboxCallback = false;
 
@@ -83,7 +77,7 @@ public class LogicPropertyPage implements PropertyPage {
     private int visibilityLabelY;
 
     public LogicPropertyPage(Font font) {
-        this.font = font;
+        super(font);
     }
 
     @Override

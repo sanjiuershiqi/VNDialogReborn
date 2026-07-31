@@ -15,8 +15,11 @@ import java.util.function.Consumer;
 
 /**
  * 下拉列表控件。移植自 visual_mod_edit_vndialog，适配 NeoForge 1.21.1。
- * 渲染分两阶段：renderWidget 只画按钮条，renderPopup 画展开列表。
- * 父容器需在所有其他控件之后调用 renderPopup，避免展开列表被遮挡或被 scissor 裁剪。
+ *
+ * 自包含浮层设计（借鉴 Sparkle-Morpher 浮层协议）：
+ * - renderWidget 内部自渲染展开列表，父容器无需手动调 renderPopup。
+ * - 展开时通过 onPopupToggle 回调通知父容器跳过内容 scissor，避免弹出列表被裁剪。
+ * - 父容器仍需在 mouseClicked/mouseScrolled 中优先路由事件给展开的 dropdown（通过 isPopupOpen 判断）。
  */
 public class DropdownWidget extends AbstractWidget {
     private final Font font;
@@ -31,6 +34,8 @@ public class DropdownWidget extends AbstractWidget {
     private static final int ITEM_HEIGHT = 12;
     /** 弹出列表是否向上展开（用于避免覆盖下方的输入框等控件）。 */
     private boolean popupAbove = false;
+    /** 浮层展开/收起回调，父容器据此控制内容 scissor。 */
+    private Consumer<Boolean> onPopupToggle = null;
 
     public DropdownWidget(Font font, int x, int y, int width, int height, List<String> items, Consumer<String> onSelected) {
         super(x, y, width, height, Component.empty());
@@ -47,6 +52,14 @@ public class DropdownWidget extends AbstractWidget {
     /** 设置弹出方向：true=向上展开（适合下方有其他控件的场景），false=向下展开（默认）。 */
     public void setPopupAbove(boolean above) {
         this.popupAbove = above;
+    }
+
+    /**
+     * 注册浮层展开/收起回调。父容器据此跳过内容 scissor，让弹出列表不被裁剪。
+     * 回调参数：true=即将展开，false=已收起。
+     */
+    public void setOnPopupToggle(Consumer<Boolean> callback) {
+        this.onPopupToggle = callback;
     }
 
     public void setItems(List<String> items) {
@@ -69,12 +82,33 @@ public class DropdownWidget extends AbstractWidget {
         return this.items;
     }
 
+    /** 浮层是否展开（父容器据此路由事件与控制 scissor）。 */
+    public boolean isPopupOpen() {
+        return this.expanded;
+    }
+
+    /** 兼容旧 API：等同 isPopupOpen。 */
     public boolean isExpanded() {
         return this.expanded;
     }
 
+    /** 关闭浮层（不触发回调，用于父容器外部点击关闭）。 */
+    public void closePopup() {
+        if (this.expanded) {
+            this.expanded = false;
+            this.notifyToggle(false);
+        }
+    }
+
+    /** 兼容旧 API：等同 closePopup。 */
     public void close() {
-        this.expanded = false;
+        closePopup();
+    }
+
+    private void notifyToggle(boolean open) {
+        if (this.onPopupToggle != null) {
+            this.onPopupToggle.accept(open);
+        }
     }
 
     /** 弹出列表顶部 Y 坐标（含边框）。向下展开=按钮底部；向上展开=按钮顶部-列表高度。 */
@@ -92,10 +126,12 @@ public class DropdownWidget extends AbstractWidget {
     }
 
     /**
-     * 只渲染按钮条（折叠状态）。展开的列表由 renderPopup 单独渲染。
+     * 渲染按钮条；若展开则同时渲染弹出列表（自包含，父容器无需额外调用）。
+     * 父容器须在展开时跳过内容 scissor（通过 onPopupToggle 回调感知），否则弹出列表会被裁剪。
      */
     @Override
     protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // 按钮条
         graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), EditorTheme.BG_ELEVATED);
         if (this.isHovered()) {
             graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), EditorTheme.BG_HOVER);
@@ -106,19 +142,17 @@ public class DropdownWidget extends AbstractWidget {
         }
         graphics.drawString(this.font, text, this.getX() + 3, this.getY() + (this.getHeight() - 8) / 2, EditorTheme.TEXT_PRIMARY);
         graphics.drawString(this.font, this.expanded ? "\u25b2" : "\u25bc", this.getX() + this.getWidth() - 10, this.getY() + (this.getHeight() - 8) / 2, EditorTheme.TEXT_MUTED);
+
+        // 展开时自渲染浮层（父容器已通过 onPopupToggle 跳过 scissor）
+        if (this.expanded && this.visible && !this.items.isEmpty()) {
+            renderPopupInternal(graphics, mouseX, mouseY);
+        }
     }
 
-    /**
-     * 渲染展开的弹出列表。应在所有其他控件渲染之后调用，且在 scissor 之外。
-     */
-    public void renderPopup(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        if (!this.expanded || !this.visible || this.items.isEmpty()) {
-            return;
-        }
+    /** 浮层内部渲染（自包含调用，外部无需调用）。 */
+    private void renderPopupInternal(GuiGraphics graphics, int mouseX, int mouseY) {
         int dropY = this.getPopupTop();
         int dropBottom = this.getPopupBottom();
-        int visibleCount = Math.min(this.maxVisible, this.items.size());
-        int totalHeight = visibleCount * ITEM_HEIGHT;
         // 完全不透明背景，确保下方控件/文字不会透出
         graphics.fill(this.getX(), dropY, this.getX() + this.getWidth(), dropBottom, 0xFF181818);
         // 边框
@@ -172,6 +206,7 @@ public class DropdownWidget extends AbstractWidget {
                 if (index >= 0 && index < this.items.size()) {
                     this.selectedIndex = index;
                     this.expanded = false;
+                    this.notifyToggle(false);
                     if (this.onSelected != null) {
                         this.onSelected.accept(this.items.get(index));
                     }
@@ -181,14 +216,17 @@ public class DropdownWidget extends AbstractWidget {
             // 点击按钮条本身则切换关闭
             if (onButton) {
                 this.expanded = false;
+                this.notifyToggle(false);
                 return true;
             }
             // 点击其他区域，关闭但不消费事件
             this.expanded = false;
+            this.notifyToggle(false);
             return false;
         }
         if (onButton) {
             this.expanded = true;
+            this.notifyToggle(true);
             // 确保选中项在可见范围内
             if (this.selectedIndex >= 0) {
                 this.scrollOffset = Mth.clamp(this.scrollOffset, Math.max(0, this.selectedIndex - this.maxVisible + 1), Math.min(this.selectedIndex, Math.max(0, this.items.size() - this.maxVisible)));

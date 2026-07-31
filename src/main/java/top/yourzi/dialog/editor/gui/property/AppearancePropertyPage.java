@@ -1,6 +1,5 @@
 package top.yourzi.dialog.editor.gui.property;
 
-import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -8,7 +7,6 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import top.yourzi.dialog.Dialog;
@@ -20,41 +18,24 @@ import top.yourzi.dialog.editor.gui.widget.DropdownWidget;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.editor.util.EditorTheme;
-import top.yourzi.dialog.editor.util.FileSystemTextureLoader;
 import top.yourzi.dialog.editor.util.PageLayout;
+import top.yourzi.dialog.editor.util.TextureCacheService;
 import top.yourzi.dialog.model.BackgroundAnimationType;
 import top.yourzi.dialog.model.BackgroundImageInfo;
 import top.yourzi.dialog.model.BackgroundRenderOption;
 import top.yourzi.dialog.model.DialogEntry;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 /**
  * 外观属性页：背景图、渲染选项、背景动画、立绘列表。
  * 使用 PageLayout 游标布局，自动适应不同屏幕尺寸。
  */
-public class AppearancePropertyPage implements PropertyPage {
-    private static final int MAX_CACHE_SIZE = 30;
-    private static final Map<String, ResourceLocation> textureCache = new LinkedHashMap<String, ResourceLocation>() {
-        @Override
-        protected boolean removeEldestEntry(Map.Entry<String, ResourceLocation> eldest) {
-            if (this.size() > MAX_CACHE_SIZE) {
-                Minecraft.getInstance().getTextureManager().release(eldest.getValue());
-                sizeCache.remove(eldest.getKey());
-                return true;
-            }
-            return false;
-        }
-    };
-    private static final Map<String, int[]> sizeCache = new LinkedHashMap<>();
+public class AppearancePropertyPage extends AbstractPropertyPage {
 
-    private final Font font;
     private EditBox backgroundPathBox;
     private EditorButton backgroundBrowseBtn;
     private EditorButton backgroundBuiltInBtn;
@@ -62,7 +43,6 @@ public class AppearancePropertyPage implements PropertyPage {
     private EditorButton portraitListBtn;
     private DropdownWidget backgroundRenderDropdown;
     private DropdownWidget backgroundAnimDropdown;
-    private boolean visible = true;
     private static final List<String> RENDER_ITEMS = List.of(
             Component.translatable("gui.vn_edit.render_option.fill").getString(),
             Component.translatable("gui.vn_edit.render_option.fit").getString(),
@@ -76,9 +56,6 @@ public class AppearancePropertyPage implements PropertyPage {
             Component.translatable("gui.vn_edit.bg_anim.fade_in").getString()
     );
     private static final BackgroundAnimationType[] BG_ANIM_VALUES = BackgroundAnimationType.values();
-    private int x;
-    private int y;
-    private int width;
     private ResourceLocation backgroundTexture = null;
     private int backgroundTexWidth = 0;
     private int backgroundTexHeight = 0;
@@ -86,7 +63,6 @@ public class AppearancePropertyPage implements PropertyPage {
     private int backgroundPreviewY;
     private int backgroundPreviewWidth = 100;
     private int backgroundPreviewHeight = 64;
-    private DialogEntry currentEntry = null;
     private int computedHeight = 0;
 
     // 渲染位置缓存
@@ -98,7 +74,7 @@ public class AppearancePropertyPage implements PropertyPage {
     private int renderLabelY;
 
     public AppearancePropertyPage(Font font) {
-        this.font = font;
+        super(font);
     }
 
     @Override
@@ -280,11 +256,15 @@ public class AppearancePropertyPage implements PropertyPage {
         }
         File file = EditorConfig.BACKGROUNDS_DIR.resolve(path).toFile();
         if (file.exists()) {
-            this.backgroundTexture = this.loadTexture(file, "background_" + path);
-            if (this.backgroundTexture == null) {
+            TextureCacheService.CachedTexture cached = TextureCacheService.load(file);
+            if (cached == null) {
+                this.backgroundTexture = null;
                 this.backgroundTexWidth = 0;
                 this.backgroundTexHeight = 0;
             } else {
+                this.backgroundTexture = cached.location();
+                this.backgroundTexWidth = cached.width();
+                this.backgroundTexHeight = cached.height();
                 Dialog.LOGGER.info("Background preview loaded: {} ({}x{})", path, this.backgroundTexWidth, this.backgroundTexHeight);
             }
         } else {
@@ -310,73 +290,6 @@ public class AppearancePropertyPage implements PropertyPage {
                 this.backgroundTexHeight = 0;
             }
         }
-    }
-
-    private ResourceLocation loadTexture(File file, String cacheKey) {
-        // 用文件绝对路径 + 最后修改时间作为缓存 key，避免中文文件名经 replaceAll 后产生冲突
-        String stableKey = file.getAbsolutePath().toLowerCase(Locale.ROOT) + "|" + file.lastModified();
-        String safeKey = stableKey.replaceAll("[^a-z0-9/._-]", "_");
-        if (textureCache.containsKey(safeKey)) {
-            int[] size = sizeCache.get(safeKey);
-            if (size != null) {
-                this.backgroundTexWidth = size[0];
-                this.backgroundTexHeight = size[1];
-            }
-            return textureCache.get(safeKey);
-        }
-        if (!file.exists()) {
-            File parent = file.getParentFile();
-            if (parent != null && parent.isDirectory()) {
-                File finalFile = file;
-                File[] matches = parent.listFiles((dir, name) -> name.equalsIgnoreCase(finalFile.getName()));
-                if (matches != null && matches.length > 0) {
-                    file = matches[0];
-                } else {
-                    Dialog.LOGGER.warn("Texture file not found: {}", file.getAbsolutePath());
-                    return null;
-                }
-            } else {
-                Dialog.LOGGER.warn("Texture file not found: {}", file.getAbsolutePath());
-                return null;
-            }
-        }
-        try (FileInputStream fis = new FileInputStream(file)) {
-            NativeImage image = FileSystemTextureLoader.decodeToNativeImage(fis);
-            try {
-                this.backgroundTexWidth = image.getWidth();
-                this.backgroundTexHeight = image.getHeight();
-                ResourceLocation rl = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "editor_preview/" + safeKey);
-                DynamicTexture dynamicTexture = new DynamicTexture(image);
-                try {
-                    dynamicTexture.upload();
-                    Minecraft.getInstance().getTextureManager().register(rl, dynamicTexture);
-                } catch (Exception registerEx) {
-                    dynamicTexture.close();
-                    throw registerEx;
-                }
-                textureCache.put(safeKey, rl);
-                sizeCache.put(safeKey, new int[]{this.backgroundTexWidth, this.backgroundTexHeight});
-                return rl;
-            } catch (Exception ex) {
-                try {
-                    image.close();
-                } catch (Exception closeEx) {
-                    Dialog.LOGGER.warn("Failed to close NativeImage: {}", closeEx.toString());
-                }
-                throw ex;
-            }
-        } catch (Exception e) {
-            Dialog.LOGGER.error("Failed to load preview texture: {}", file, e);
-            return null;
-        }
-    }
-
-    public static void releaseTextures() {
-        for (ResourceLocation rl : textureCache.values()) {
-            Minecraft.getInstance().getTextureManager().release(rl);
-        }
-        textureCache.clear();
-        sizeCache.clear();
     }
 
     @Override
