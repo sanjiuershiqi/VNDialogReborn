@@ -137,6 +137,8 @@ public class PortraitListScreen extends Screen {
      *   实际对话中立绘会跟着变大/变小。此模式下 previewZoom 保持 1.0。
      */
     private float previewZoom = 1.0f;
+    /** 选中立绘/加载预览后自动适配缩放的待执行标志（viewport 就绪后在 render 中执行）。 */
+    private boolean needsFitZoom = false;
     private DropdownWidget posDropdown;
     private DropdownWidget animDropdown;
     private EditBox sizeBox;
@@ -374,6 +376,11 @@ public class PortraitListScreen extends Screen {
         int contentH = this.height - HEADER - FOOTER;
         // 计算本帧舞台视口：把实际屏幕等比映射到舞台区域，所有渲染共用此视口
         this.viewport = new StageViewport(this.width, this.height, STAGE_X, HEADER, stageWidth(), contentH);
+        // 选中立绘/加载预览后自动适配缩放（viewport 就绪后执行，确保 fitZoomToStage 能正确计算）
+        if (this.needsFitZoom) {
+            this.needsFitZoom = false;
+            fitZoomToStage();
+        }
         this.renderLeftList(g, mx, my, contentH);
         this.renderMiddlePanel(g, mx, my, contentH);
         // 舞台背景在 widget 之前绘制（作为底层背景）
@@ -540,12 +547,18 @@ public class PortraitListScreen extends Screen {
             int renderY = this.viewport.mapY(realRenderY);
             int portraitW = this.viewport.mapSize(realPortraitW);
             int portraitH = this.viewport.mapSize(realPortraitH);
-            // 应用预览缩放：以立绘底部中心为基点放大/缩小，仅影响预览显示不影响实际 size
+            // 应用预览缩放：以立绘底边为基点放大/缩小，仅影响预览显示不影响实际 size。
+            // X 方向按 position 决定锚点（立绘靠边的那一侧位置不变，避免放大后整体平移）：
+            //   LEFT 左边不动向右扩展、RIGHT 右边不动向左扩展、CENTER 中心不动两侧扩展
+            // Y 方向底边对齐：立绘脚部位置不变，向上扩展
             if (this.previewZoom != 1.0f) {
                 int scaledW = Math.max(1, (int) (portraitW * this.previewZoom));
                 int scaledH = Math.max(1, (int) (portraitH * this.previewZoom));
-                // 底部中心对齐：保持立绘脚部位置不变，向上向外扩展
-                renderX = renderX + (portraitW - scaledW) / 2;
+                switch (info.getPosition()) {
+                    case LEFT -> { /* renderX 不变，向右扩展 */ }
+                    case CENTER -> renderX = renderX + (portraitW - scaledW) / 2;
+                    case RIGHT -> renderX = renderX + (portraitW - scaledW);
+                }
                 renderY = renderY + (portraitH - scaledH);
                 portraitW = scaledW;
                 portraitH = scaledH;
@@ -1030,6 +1043,8 @@ public class PortraitListScreen extends Screen {
         PortraitInfo info = this.getSelected();
         if (info != null) {
             this.loadPreview(info.getPath());
+            // 标记需要自动适配缩放，下帧 viewport 就绪后执行
+            this.needsFitZoom = true;
         } else {
             this.clearPreviewRef();
         }
