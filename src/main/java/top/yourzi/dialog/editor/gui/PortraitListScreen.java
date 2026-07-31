@@ -127,10 +127,12 @@ public class PortraitListScreen extends Screen {
     private EditorButton downBtn;
     private EditorButton folderBtn;
     private EditorButton resetOffsetBtn;
+    // 注意：POS_ITEMS 顺序必须与 PortraitPosition 枚举顺序一致（LEFT, CENTER, RIGHT），
+    // 否则 POS_ITEMS.indexOf(selected) 映射到 POS_VALUES[idx] 会错位，导致选"右"实际设成 CENTER 等 bug。
     private static final List<String> POS_ITEMS = List.of(
             Component.translatable("gui.vn_edit.position.left").getString(),
-            Component.translatable("gui.vn_edit.position.right").getString(),
-            Component.translatable("gui.vn_edit.position.center").getString()
+            Component.translatable("gui.vn_edit.position.center").getString(),
+            Component.translatable("gui.vn_edit.position.right").getString()
     );
     private static final PortraitPosition[] POS_VALUES = PortraitPosition.values();
     private static final List<String> ANIM_ITEMS = List.of(
