@@ -450,12 +450,20 @@ public class PortraitListScreen extends Screen {
                 g.fill(x, centerY, x + w, centerY + 1, crossColor);
                 // 竖线：贯穿舞台上下
                 g.fill(centerX, y, centerX + 1, y + h, crossColor);
+                // 立绘外框高亮：强调色 1px 边框，明确显示立绘当前边界
+                int boxColor = EditorTheme.ACCENT;
+                g.fill(renderX, renderY, renderX + portraitW, renderY + 1, boxColor);
+                g.fill(renderX, renderY + portraitH - 1, renderX + portraitW, renderY + portraitH, boxColor);
+                g.fill(renderX, renderY, renderX + 1, renderY + portraitH, boxColor);
+                g.fill(renderX + portraitW - 1, renderY, renderX + portraitW, renderY + portraitH, boxColor);
             }
             if (this.draggingPortrait) {
                 g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.drag_hint"), x + w / 2, y + 4, EditorTheme.ACCENT);
-                // 拖动时在舞台底部显示当前 offset 值，方便精确微调
+                // offset 数值贴近立绘上方显示，与立绘位置强关联，比放舞台底部更直观
                 String offsetText = String.format(java.util.Locale.ROOT, "X: %.2f  Y: %.2f", info.getOffsetX(), info.getOffsetY());
-                g.drawCenteredString(this.font, Component.literal(offsetText), x + w / 2, y + h - 12, EditorTheme.ACCENT);
+                int textX = renderX + portraitW / 2;
+                int textY = Math.max(y + 2, renderY - 11);
+                g.drawCenteredString(this.font, Component.literal(offsetText), textX, textY, EditorTheme.ACCENT);
             } else {
                 g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.drag_to_adjust"), x + w / 2, y + 4, EditorTheme.TEXT_MUTED);
             }
@@ -483,28 +491,30 @@ public class PortraitListScreen extends Screen {
         // 仅在选中项变化时刷新布局和值，避免每帧覆盖用户输入
         if (visible && this.needsLayoutRefresh) {
             this.needsLayoutRefresh = false;
-            // 布局自上而下：位置/动画下拉框 → 尺寸/亮度/偏移输入框 → 操作按钮
-            // 下拉框弹出菜单完全不透明，覆盖下方内容不会有重叠问题
-            this.posDropdown.setX(200);
-            this.posDropdown.setY(40);
-            this.posDropdown.setWidth(100);
+            // 位置/动画下拉框并排放置（同一行），水平错开，弹出菜单不再互相覆盖；
+            // 下方输入框自上而下整齐排列，标签在左、输入框在右。
+            this.posDropdown.setX(145);
+            this.posDropdown.setY(42);
+            this.posDropdown.setWidth(82);
+            this.posDropdown.setPopupAbove(false);
             this.posDropdown.setSelected(this.getPositionDisplay(info.getPosition()).getString());
-            this.animDropdown.setX(200);
-            this.animDropdown.setY(65);
-            this.animDropdown.setWidth(100);
+            this.animDropdown.setX(233);
+            this.animDropdown.setY(42);
+            this.animDropdown.setWidth(82);
+            this.animDropdown.setPopupAbove(false);
             this.animDropdown.setSelected(this.getAnimationDisplay(info.getAnimationType()).getString());
-            layoutFloatBox(this.sizeBox, 90);
-            layoutFloatBox(this.brightnessBox, 115);
-            layoutFloatBox(this.offsetXBox, 140);
-            layoutFloatBox(this.offsetYBox, 165);
+            layoutFloatBox(this.sizeBox, 70);
+            layoutFloatBox(this.brightnessBox, 95);
+            layoutFloatBox(this.offsetXBox, 120);
+            layoutFloatBox(this.offsetYBox, 145);
             this.resetOffsetBtn.setX(282);
-            this.resetOffsetBtn.setY(165);
+            this.resetOffsetBtn.setY(145);
             this.delBtn.setX(145);
-            this.delBtn.setY(190);
-            this.upBtn.setX(260);
-            this.upBtn.setY(190);
+            this.delBtn.setY(175);
+            this.upBtn.setX(255);
+            this.upBtn.setY(175);
             this.downBtn.setX(285);
-            this.downBtn.setY(190);
+            this.downBtn.setY(175);
             this.sizeBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getSize()));
             this.brightnessBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getBrightness()));
             this.offsetXBox.setValue(String.format(java.util.Locale.ROOT, "%.2f", info.getOffsetX()));
@@ -564,12 +574,14 @@ public class PortraitListScreen extends Screen {
             g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.no_portrait_selected"), x + w / 2, y + 20, EditorTheme.TEXT_MUTED);
             return;
         }
-        g.drawString(this.font, Component.translatable("gui.vn_edit.position"), x + 5, 44, EditorTheme.TEXT_SECONDARY);
-        g.drawString(this.font, Component.translatable("gui.vn_edit.animation"), x + 5, 69, EditorTheme.TEXT_SECONDARY);
-        g.drawString(this.font, Component.translatable("gui.vn_edit.size"), x + 5, 94, EditorTheme.TEXT_SECONDARY);
-        g.drawString(this.font, Component.translatable("gui.vn_edit.brightness"), x + 5, 119, EditorTheme.TEXT_SECONDARY);
-        g.drawString(this.font, Component.translatable("gui.vn_edit.offset_x"), x + 5, 144, EditorTheme.TEXT_SECONDARY);
-        g.drawString(this.font, Component.translatable("gui.vn_edit.offset_y"), x + 5, 169, EditorTheme.TEXT_SECONDARY);
+        // 位置/动画下拉框上方的小标签（下拉框并排于 y=42）
+        g.drawString(this.font, Component.translatable("gui.vn_edit.position"), x + 5, 32, EditorTheme.TEXT_SECONDARY);
+        g.drawString(this.font, Component.translatable("gui.vn_edit.animation"), x + 93, 32, EditorTheme.TEXT_SECONDARY);
+        // 下方输入框标签（输入框 y 分别为 70/95/120/145，标签 y 对齐输入框垂直中心）
+        g.drawString(this.font, Component.translatable("gui.vn_edit.size"), x + 5, 74, EditorTheme.TEXT_SECONDARY);
+        g.drawString(this.font, Component.translatable("gui.vn_edit.brightness"), x + 5, 99, EditorTheme.TEXT_SECONDARY);
+        g.drawString(this.font, Component.translatable("gui.vn_edit.offset_x"), x + 5, 124, EditorTheme.TEXT_SECONDARY);
+        g.drawString(this.font, Component.translatable("gui.vn_edit.offset_y"), x + 5, 149, EditorTheme.TEXT_SECONDARY);
     }
 
     private boolean isMouseInStage(double mx, double my) {
