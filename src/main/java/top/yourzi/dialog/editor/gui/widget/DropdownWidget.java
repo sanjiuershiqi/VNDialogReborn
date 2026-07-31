@@ -7,6 +7,7 @@ import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
+import top.yourzi.dialog.editor.gui.EditorRenderHelper;
 import top.yourzi.dialog.editor.util.EditorTheme;
 
 import java.util.ArrayList;
@@ -36,6 +37,10 @@ public class DropdownWidget extends AbstractWidget {
     private boolean popupAbove = false;
     /** 浮层展开/收起回调，父容器据此控制内容 scissor。 */
     private Consumer<Boolean> onPopupToggle = null;
+    /** hover 渐变进度（0=未 hover，1=hover），第八轮美化，借鉴 Sparkle blendBg。 */
+    private float hoverProgress = 0f;
+    /** 上一帧纳秒时间戳，用于计算 dt 驱动 hoverProgress lerp。 */
+    private long lastFrameNanos = 0L;
 
     public DropdownWidget(Font font, int x, int y, int width, int height, List<String> items, Consumer<String> onSelected) {
         super(x, y, width, height, Component.empty());
@@ -131,16 +136,23 @@ public class DropdownWidget extends AbstractWidget {
      */
     @Override
     protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        // 按钮条
-        graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), EditorTheme.BG_ELEVATED);
-        if (this.isHovered()) {
-            graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), EditorTheme.BG_HOVER);
-        }
+        // 第八轮美化：hover lerp 推进
+        long now = System.nanoTime();
+        float dt = this.lastFrameNanos == 0L ? 0f : Math.min(0.1f, (now - this.lastFrameNanos) / 1.0e9f);
+        this.lastFrameNanos = now;
+        float targetHover = this.isHovered() ? 1f : 0f;
+        this.hoverProgress = EditorRenderHelper.tickProgress(this.hoverProgress, targetHover, dt);
+
+        // 按钮条：lerp 背景从 BG_ELEVATED 到 BG_HOVER，圆角填充
+        int bg = EditorRenderHelper.lerpColor(EditorTheme.BG_ELEVATED, EditorTheme.BG_HOVER, this.hoverProgress);
+        EditorRenderHelper.fillRoundedRect(graphics, this.getX(), this.getY(), this.getWidth(), this.getHeight(), 2, bg);
         String text = this.selectedIndex >= 0 ? this.items.get(this.selectedIndex) : "";
         if (text.length() > 20) {
             text = text.substring(0, 17) + "...";
         }
-        graphics.drawString(this.font, text, this.getX() + 3, this.getY() + (this.getHeight() - 8) / 2, EditorTheme.TEXT_PRIMARY);
+        // hover 时文字加阴影（项 9）
+        boolean textShadow = this.hoverProgress > 0.5f;
+        graphics.drawString(this.font, text, this.getX() + 3, this.getY() + (this.getHeight() - 8) / 2, EditorTheme.TEXT_PRIMARY, textShadow);
         graphics.drawString(this.font, this.expanded ? "\u25b2" : "\u25bc", this.getX() + this.getWidth() - 10, this.getY() + (this.getHeight() - 8) / 2, EditorTheme.TEXT_MUTED);
         // 聚焦时 ACCENT 描边（与 EditorButton 一致），未展开时显示，展开时浮层已有边框
         if (this.isFocused() && !this.expanded) {
@@ -160,30 +172,36 @@ public class DropdownWidget extends AbstractWidget {
     private void renderPopupInternal(GuiGraphics graphics, int mouseX, int mouseY) {
         int dropY = this.getPopupTop();
         int dropBottom = this.getPopupBottom();
-        // 完全不透明背景，确保下方控件/文字不会透出
-        graphics.fill(this.getX(), dropY, this.getX() + this.getWidth(), dropBottom, 0xFF181818);
+        int pw = this.getWidth();
+        // 第八轮美化：浮层投影，制造悬浮感（项 5）
+        EditorRenderHelper.fillWithShadow(graphics, this.getX(), dropY, pw, dropBottom - dropY, 0xFF181818, EditorTheme.SHADOW_DROP);
         // 边框
-        graphics.fill(this.getX(), dropY, this.getX() + this.getWidth(), dropY + 1, EditorTheme.BORDER);
-        graphics.fill(this.getX(), dropBottom - 1, this.getX() + this.getWidth(), dropBottom, EditorTheme.BORDER);
+        graphics.fill(this.getX(), dropY, this.getX() + pw, dropY + 1, EditorTheme.BORDER);
+        graphics.fill(this.getX(), dropBottom - 1, this.getX() + pw, dropBottom, EditorTheme.BORDER);
         graphics.fill(this.getX(), dropY, this.getX() + 1, dropBottom, EditorTheme.BORDER);
-        graphics.fill(this.getX() + this.getWidth() - 1, dropY, this.getX() + this.getWidth(), dropBottom, EditorTheme.BORDER);
+        graphics.fill(this.getX() + pw - 1, dropY, this.getX() + pw, dropBottom, EditorTheme.BORDER);
 
-        graphics.enableScissor(this.getX(), dropY, this.getX() + this.getWidth(), dropBottom);
+        graphics.enableScissor(this.getX(), dropY, this.getX() + pw, dropBottom);
         try {
             for (int i = 0; i < this.items.size(); i++) {
                 int rowY = dropY + 1 + (i - this.scrollOffset) * ITEM_HEIGHT;
                 if (rowY + ITEM_HEIGHT < dropY || rowY > dropBottom) {
                     continue;
                 }
-                boolean hovered = mouseX >= this.getX() && mouseX <= this.getX() + this.getWidth() && mouseY >= rowY && mouseY <= rowY + ITEM_HEIGHT;
+                boolean hovered = mouseX >= this.getX() && mouseX <= this.getX() + pw && mouseY >= rowY && mouseY <= rowY + ITEM_HEIGHT;
                 int bg = hovered ? EditorTheme.BG_HOVER : (i == this.selectedIndex ? EditorTheme.BG_SELECTED : EditorTheme.BG_SURFACE);
-                graphics.fill(this.getX() + 1, rowY, this.getX() + this.getWidth() - 1, rowY + ITEM_HEIGHT, bg);
+                graphics.fill(this.getX() + 1, rowY, this.getX() + pw - 1, rowY + ITEM_HEIGHT, bg);
+                // 第八轮美化：选中项左侧 2px ACCENT 竖条（项 6，与 DialogTreeWidget 选中项统一锚点）
+                if (i == this.selectedIndex) {
+                    graphics.fill(this.getX() + 1, rowY, this.getX() + 3, rowY + ITEM_HEIGHT, EditorTheme.ACCENT);
+                }
                 String itemText = this.items.get(i);
                 if (itemText.length() > 22) {
                     itemText = itemText.substring(0, 19) + "...";
                 }
                 int textColor = hovered ? EditorTheme.TEXT_PRIMARY : EditorTheme.TEXT_SECONDARY;
-                graphics.drawString(this.font, itemText, this.getX() + 3, rowY + 2, textColor);
+                // 第八轮美化：hover 项文字加阴影（项 9）
+                graphics.drawString(this.font, itemText, this.getX() + 3, rowY + 2, textColor, hovered);
             }
         } finally {
             graphics.disableScissor();

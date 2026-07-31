@@ -124,7 +124,7 @@ public class AppearancePropertyPage extends AbstractPropertyPage {
         this.backgroundBuiltInBtn = EditorButton.builder(Component.translatable("gui.vn_edit.builtin_bg"), btn -> this.onBackgroundBuiltIn())
                 .bounds(btnOffset, bgRowY, builtinBtnW, EditorTheme.FIELD_HEIGHT).build();
         btnOffset += builtinBtnW + EditorTheme.GAP;
-        this.backgroundFolderBtn = EditorButton.builder(Component.literal("\uD83D\uDCC2"), btn -> EditorConfig.openFolder(EditorConfig.BACKGROUNDS_DIR))
+        this.backgroundFolderBtn = EditorButton.builder(Component.literal("..."), btn -> EditorConfig.openFolder(EditorConfig.BACKGROUNDS_DIR))
                 .bounds(btnOffset, bgRowY, folderBtnW, EditorTheme.FIELD_HEIGHT).build();
 
         // 背景预览

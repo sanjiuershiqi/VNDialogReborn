@@ -7,6 +7,7 @@ import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
+import top.yourzi.dialog.editor.gui.EditorRenderHelper;
 import top.yourzi.dialog.editor.util.EditorTheme;
 
 /**
@@ -16,6 +17,10 @@ import top.yourzi.dialog.editor.util.EditorTheme;
 public class EditorButton extends AbstractButton {
     private OnPress onPress;
     private boolean focused = false;
+    /** hover 渐变进度（0=未 hover，1=hover），每帧 lerp 推进，避免布尔硬切换跳变。借鉴 Sparkle blendBg。 */
+    private float hoverProgress = 0f;
+    /** 上一帧纳秒时间戳，用于计算 dt 驱动 hoverProgress lerp。 */
+    private long lastFrameNanos = 0L;
 
     public EditorButton(int x, int y, int width, int height, Component message, OnPress onPress) {
         super(x, y, width, height, message);
@@ -46,19 +51,26 @@ public class EditorButton extends AbstractButton {
         int w = this.getWidth();
         int h = this.getHeight();
 
-        // 背景色：根据状态选择
+        // 第八轮美化：hover 渐变 lerp，避免布尔硬切换跳变（借鉴 Sparkle blendBg）
+        long now = System.nanoTime();
+        float dt = this.lastFrameNanos == 0L ? 0f : Math.min(0.1f, (now - this.lastFrameNanos) / 1.0e9f);
+        this.lastFrameNanos = now;
+        float targetHover = (this.active && this.isHoveredOrFocused()) ? 1f : 0f;
+        this.hoverProgress = EditorRenderHelper.tickProgress(this.hoverProgress, targetHover, dt);
+
+        // 背景色：disabled 固定；enabled 用 lerp 从 BG_ELEVATED 渐变到 BG_HOVER
         int bgColor;
         if (!this.active) {
             bgColor = EditorTheme.BG_SURFACE;
-        } else if (this.isHoveredOrFocused()) {
-            bgColor = EditorTheme.BG_HOVER;
         } else {
-            bgColor = EditorTheme.BG_ELEVATED;
+            bgColor = EditorRenderHelper.lerpColor(EditorTheme.BG_ELEVATED, EditorTheme.BG_HOVER, this.hoverProgress);
         }
-        graphics.fill(x, y, x + w, y + h, bgColor);
+        // 第八轮美化：圆角填充（radius=2），边缘柔和
+        EditorRenderHelper.fillRoundedRect(graphics, x, y, w, h, 2, bgColor);
 
-        // 边框：悬停/聚焦时使用强调色，否则使用普通边框色
-        int borderColor = this.isHoveredOrFocused() && this.active ? EditorTheme.ACCENT : EditorTheme.BORDER;
+        // 边框：lerp 从 BORDER 渐变到 ACCENT
+        int borderColor = !this.active ? EditorTheme.BORDER
+                : EditorRenderHelper.lerpColor(EditorTheme.BORDER, EditorTheme.ACCENT, this.hoverProgress);
         graphics.fill(x, y, x + w, y + 1, borderColor);
         graphics.fill(x, y + h - 1, x + w, y + h, borderColor);
         graphics.fill(x, y, x + 1, y + h, borderColor);
@@ -73,6 +85,8 @@ public class EditorButton extends AbstractButton {
         } else {
             textColor = EditorTheme.TEXT_SECONDARY;
         }
+        // 第八轮美化：hover 时文字加阴影，让文字在背景变化时更"浮出"
+        boolean textShadow = this.active && this.isHoveredOrFocused();
 
         // 使用原版滚动文字渲染：文字超长时自动滚动（与原版 Button 行为一致）
         // drawCenteredString 内部的 Font.draw 会优先使用 Component 自带的 Style 颜色，
@@ -91,11 +105,12 @@ public class EditorButton extends AbstractButton {
             double wave = Math.sin((Math.PI / 2) * Math.cos((Math.PI * 2) * time / speed)) / 2.0 + 0.5;
             double offset = Mth.lerp(wave, 0.0, scrollAmount);
             graphics.enableScissor(x + padding, y + 1, x + w - padding, y + h - 1);
-            graphics.drawString(font, message, x + padding - (int) offset, textY, textColor, false);
+            graphics.drawString(font, message, x + padding - (int) offset, textY, textColor, textShadow);
             graphics.disableScissor();
         } else {
-            // 文字不超长：居中显示
-            graphics.drawCenteredString(font, message, x + w / 2, textY, textColor);
+            // 文字不超长：居中显示（drawCenteredString 无 shadow 重载，用 drawString 手动居中）
+            int cx = x + (w - textW) / 2;
+            graphics.drawString(font, message, cx, textY, textColor, textShadow);
         }
     }
 

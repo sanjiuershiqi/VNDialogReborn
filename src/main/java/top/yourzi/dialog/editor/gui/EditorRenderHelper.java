@@ -151,4 +151,97 @@ public final class EditorRenderHelper {
         double t = Mth.clamp((mouseY - trackTop) / Math.max(1, trackBottom - trackTop), 0.0, 1.0);
         return (int) (t * maxScroll);
     }
+
+    // ===== 第八轮视觉美化工具（借鉴 Sparkle-Morpher） =====
+
+    /**
+     * 圆角矩形填充：用四角补背景色小块遮角的方式近似圆角（radius 建议 2，MC GUI 缩放下不宜过大）。
+     * 比 GLSL 圆角 shader 简单，无需 shader 也能让控件边缘柔和。
+     * 实现思路：先整块 fill 目标色，再用背景色（或透明）覆盖四角的小方块——但 GUI 无"挖空"能力，
+     * 故改为：先 fill 中心十字 + 中段两条边，四角不画（露出底层背景），达到圆角视觉。
+     */
+    public static void fillRoundedRect(GuiGraphics g, int x, int y, int w, int h, int radius, int color) {
+        if (w < 1 || h < 1) return;
+        int r = Math.max(0, Math.min(Math.min(radius, w / 2), h / 2));
+        if (r == 0) {
+            g.fill(x, y, x + w, y + h, color);
+            return;
+        }
+        // 顶边（不含左右角各 r 像素）
+        g.fill(x + r, y, x + w - r, y + r, color);
+        // 底边
+        g.fill(x + r, y + h - r, x + w - r, y + h, color);
+        // 中段（满宽）
+        g.fill(x, y + r, x + w, y + h - r, color);
+    }
+
+    /**
+     * 带投影的填充：先在矩形四周外扩 2px 画半透明阴影（向下偏移 1px 模拟光源在上），
+     * 再画实色填充 + 1px 边框。用于浮层/弹窗，制造悬浮感。
+     * 借鉴 Sparkle-Morpher 浮层的阴影纵深思路。
+     */
+    public static void fillWithShadow(GuiGraphics g, int x, int y, int w, int h, int fill, int shadowColor) {
+        if (w < 1 || h < 1) return;
+        // 投影：四周外扩 2px，下方多 1px（光源在上）
+        g.fill(x - 1, y - 1, x + w + 1, y + 1, shadowColor);             // 上
+        g.fill(x - 1, y + h, x + w + 2, y + h + 2, shadowColor);         // 下（多 1px）
+        g.fill(x - 1, y - 1, x, y + h + 1, shadowColor);                 // 左
+        g.fill(x + w, y - 1, x + w + 1, y + h + 1, shadowColor);         // 右
+        // 实色填充 + 边框
+        g.fill(x, y, x + w, y + h, fill);
+        drawBorder(g, x, y, w, h, EditorTheme.BORDER);
+    }
+
+    /**
+     * 玻璃面板：半透明玻璃底 + 半透明亮蓝边框。无 GLSL 模糊也能有磨砂观感，
+     * 借鉴 Sparkle-Morpher RoulettePanelStyle.glassPanel（去 blur 版本）。
+     */
+    public static void fillGlassPanel(GuiGraphics g, int x, int y, int w, int h) {
+        if (w < 1 || h < 1) return;
+        g.fill(x, y, x + w, y + h, EditorTheme.PANEL_GLASS);
+        drawBorder(g, x, y, w, h, EditorTheme.PANEL_GLASS_BORDER);
+    }
+
+    /**
+     * 颜色线性插值：按 t (0~1) 在 from/to 间按通道插值 alpha/R/G/B。
+     * 供 hover 渐变使用，避免布尔硬切换的视觉跳变。
+     */
+    public static int lerpColor(int from, int to, float t) {
+        float tc = Mth.clamp(t, 0f, 1f);
+        int a = (int) (((from >> 24) & 0xFF) + (((to >> 24) & 0xFF) - ((from >> 24) & 0xFF)) * tc);
+        int r = (int) (((from >> 16) & 0xFF) + (((to >> 16) & 0xFF) - ((from >> 16) & 0xFF)) * tc);
+        int gg = (int) (((from >> 8) & 0xFF) + (((to >> 8) & 0xFF) - ((from >> 8) & 0xFF)) * tc);
+        int b = (int) ((from & 0xFF) + ((to & 0xFF) - (from & 0xFF)) * tc);
+        return (a << 24) | (r << 16) | (gg << 8) | b;
+    }
+
+    /**
+     * 提亮颜色：RGB 各 +amount（clamp 0~255），alpha 不变。
+     * 复制 Sparkle OptionRow.blendBg 逻辑，用于 hover 提亮而非硬换色。
+     */
+    public static int brighten(int argb, int amount) {
+        int a = (argb >> 24) & 0xFF;
+        int r = Math.max(0, Math.min(255, ((argb >> 16) & 0xFF) + amount));
+        int gg = Math.max(0, Math.min(255, ((argb >> 8) & 0xFF) + amount));
+        int b = Math.max(0, Math.min(255, (argb & 0xFF) + amount));
+        return (a << 24) | (r << 16) | (gg << 8) | b;
+    }
+
+    /**
+     * 浮点进度 lerp 推进：用与 ScrollState.tick 一致的 1-exp(-dt*18) 系数逼近 target。
+     * 供控件 hoverProgress 等动画状态使用，统一 lerp 节奏。
+     * @param current 当前值
+     * @param target  目标值（如 hover=1，非 hover=0）
+     * @param dt      距上一帧秒数（首帧传 0 直接吸附）
+     * @return 推进后的值
+     */
+    public static float tickProgress(float current, float target, float dt) {
+        if (dt <= 0) {
+            return target;
+        }
+        float lerp = 1.0f - (float) Math.exp(-dt * 18.0f);
+        current += (target - current) * lerp;
+        if (Math.abs(target - current) < 0.01f) current = target;
+        return current;
+    }
 }

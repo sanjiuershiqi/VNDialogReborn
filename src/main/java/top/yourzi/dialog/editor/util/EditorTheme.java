@@ -24,6 +24,20 @@ public class EditorTheme {
     public static final int ACCENT_DIM     = 0xFF2A5A8A;
     public static final int DANGER         = 0xFFE05555;  // 删除/危险
 
+    // ===== 视觉美化色板（第八轮，借鉴 Sparkle-Morpher RoulettePanelStyle/RouletteTheme） =====
+    // 暖米色文字：比纯白柔和耐看，用于标题/重要值（Sparkle 面板主文字色 0xFFEDE1CC）
+    public static final int TEXT_WARM      = 0xFFEDE1CC;
+    // 浮层投影：30% 黑，浮层/弹窗四周外扩阴影，制造悬浮感（借鉴 Sparkle SLICE_SHADOW 思路）
+    public static final int SHADOW_DROP    = 0x4D000000;
+    // 内发光：22% 白，面板顶部 1px 叠层模拟顶光立体感（借鉴 Sparkle SLICE_INNER_GLOW）
+    public static final int SHADOW_INNER_GLOW = 0x36FFFFFF;
+    // 强调发光：25% 蓝，hover 外发光层（比硬描边柔和）
+    public static final int GLOW_ACCENT    = 0x404A9EFF;
+    // 玻璃面板色系：半透明叠层产生磨砂观感（无需 GLSL 模糊也能有玻璃感）
+    public static final int PANEL_GLASS       = 0x60405058;  // 玻璃底（借鉴 Sparkle GLASS）
+    public static final int PANEL_GLASS_HOVER = 0x66576B76;  // 玻璃 hover（借鉴 Sparkle PANEL_HOVER）
+    public static final int PANEL_GLASS_BORDER = 0x6EE4F5FF; // 半透明亮蓝边框（玻璃边缘反光）
+
     // ===== 状态栏语义色（借鉴 Sparkle setStatus 分色，用主题色而非 ChatFormatting） =====
     public static final int STATUS_SUCCESS = 0xFF6AC46A;  // 成功（绿）
     public static final int STATUS_WARNING = 0xFFE0A040;  // 警告（黄/橙）
@@ -69,11 +83,17 @@ public class EditorTheme {
     }
 
     /**
-     * 绘制分节标题栏：带背景条和底部边框线的标题。
+     * 绘制分节标题栏：带背景条、左侧 ACCENT 锚点竖条、底部半透明分割线、暖色阴影标题。
+     * 第八轮美化：文字改暖米色 TEXT_WARM + 阴影、左侧 2px ACCENT 竖条（与 DialogTreeWidget 选中项统一视觉语言）、
+     * 底线改半透明 DIVIDER（更轻盈），借鉴 Sparkle-Morpher 标题用暖色 + 锚点的视觉风格。
      */
     public static void drawSectionHeader(GuiGraphics graphics, Font font, int x, int y, int width, Component title) {
         graphics.fill(x, y, x + width, y + SECTION_HDR_H, BG_ELEVATED);
-        graphics.fill(x, y + SECTION_HDR_H - 1, x + width, y + SECTION_HDR_H, BORDER);
-        graphics.drawString(font, title, x + 4, y + 3, TEXT_SECONDARY);
+        // 左侧 2px ACCENT 竖条：分节锚点，与树选中项竖条呼应
+        graphics.fill(x, y, x + 2, y + SECTION_HDR_H, ACCENT);
+        // 底部分割线：DIVIDER 半透明白，比 BORDER 实色更轻盈
+        graphics.fill(x, y + SECTION_HDR_H - 1, x + width, y + SECTION_HDR_H, DIVIDER);
+        // 标题文字：暖米色 + 阴影，比灰色无阴影更突出
+        graphics.drawString(font, title, x + 6, y + 3, TEXT_WARM, true);
     }
 }

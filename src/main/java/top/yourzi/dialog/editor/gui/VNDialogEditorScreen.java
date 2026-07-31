@@ -822,6 +822,14 @@ public class VNDialogEditorScreen extends Screen {
         // 标签栏背景使用不透明深色
         graphics.fill(0, tabBarTop, this.width, tabBarBottom, EditorTheme.BG_ELEVATED);
         graphics.fill(0, this.height - STATUS_HEIGHT, this.width, this.height, EditorTheme.BG_SURFACE);
+        // 第八轮美化：DIVIDER 半透明分割线，明确各功能区边界
+        // 工具栏与标签栏之间
+        graphics.fill(0, tabBarTop, this.width, tabBarTop + 1, EditorTheme.DIVIDER);
+        // 树与属性面板之间（竖线，贯穿内容区高度）
+        int propX = EditorTheme.TREE_WIDTH;
+        int contentTop = tabBarBottom;
+        int contentBottom = this.height - STATUS_HEIGHT;
+        graphics.fill(propX, contentTop, propX + 1, contentBottom, EditorTheme.DIVIDER);
         // 状态栏：按 statusLevel 选语义色；非错误消息到时自动清空（错误常驻）
         if (this.statusClearTime != 0L && System.nanoTime() > this.statusClearTime) {
             this.statusText = "";
@@ -886,7 +894,10 @@ public class VNDialogEditorScreen extends Screen {
         int panelX = (this.width - panelWidth) / 2;
         int panelY = (this.height - panelHeight) / 2;
         // 面板背景 + 边框
-        EditorRenderHelper.fillWithBorder(graphics, panelX, panelY, panelWidth, panelHeight, EditorTheme.BG_ELEVATED, EditorTheme.ACCENT);
+        // 第八轮美化：浮层投影（项 5），制造悬浮感
+        EditorRenderHelper.fillWithShadow(graphics, panelX, panelY, panelWidth, panelHeight, EditorTheme.BG_ELEVATED, EditorTheme.SHADOW_DROP);
+        // ACCENT 边框保留（fillWithShadow 已画 BORDER 边框，这里叠加 ACCENT 外层强调浮层焦点）
+        EditorRenderHelper.drawBorder(graphics, panelX, panelY, panelWidth, panelHeight, EditorTheme.ACCENT);
         // 标题
         graphics.drawCenteredString(this.font, Component.translatable("gui.vn_edit.help.title"), panelX + panelWidth / 2, panelY + panelPad, EditorTheme.TEXT_PRIMARY);
         int y = panelY + panelPad + titleHeight + 8;

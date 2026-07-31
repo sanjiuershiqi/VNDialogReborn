@@ -62,7 +62,9 @@ public class EditorConfirmScreen extends Screen {
         int panelH = 70;
         int panelX = (this.width - panelW) / 2;
         int panelY = (this.height - panelH) / 2;
-        graphics.fill(panelX, panelY, panelX + panelW, panelY + panelH, EditorTheme.BG_SURFACE);
+        // 第八轮美化：浮层投影（项 5），制造悬浮感
+        EditorRenderHelper.fillWithShadow(graphics, panelX, panelY, panelW, panelH, EditorTheme.BG_SURFACE, EditorTheme.SHADOW_DROP);
+        // BORDER_LIGHT 边框（fillWithShadow 已画 BORDER，这里叠加 BORDER_LIGHT 强调）
         graphics.fill(panelX, panelY, panelX + panelW, panelY + 1, EditorTheme.BORDER_LIGHT);
         graphics.fill(panelX, panelY + panelH - 1, panelX + panelW, panelY + panelH, EditorTheme.BORDER_LIGHT);
         graphics.fill(panelX, panelY, panelX + 1, panelY + panelH, EditorTheme.BORDER_LIGHT);

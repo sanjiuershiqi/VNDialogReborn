@@ -38,6 +38,8 @@ public class PropertyPanel extends AbstractWidget {
     private int scrollOffset = 0;
     /** 滚动条拖拽 + 平滑滚动状态（借鉴 Sparkle OptionScreen）。 */
     private final EditorRenderHelper.ScrollState scrollState = new EditorRenderHelper.ScrollState();
+    /** 标签 hover 渐变进度数组（每标签一个 0~1 值），第八轮美化，借鉴 Sparkle blendBg。 */
+    private float[] tabHoverProgress = new float[0];
     /** 上一帧纳秒时间戳，用于计算 dt 驱动平滑滚动。 */
     private long lastFrameNanos = 0L;
     /** 当前活动页是否有下拉框浮层展开，展开时跳过内容 scissor 避免裁剪浮层。 */
@@ -200,18 +202,37 @@ public class PropertyPanel extends AbstractWidget {
         graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), EditorTheme.BG_SURFACE);
         int tabX = this.getX();
         int tabY = this.getY();
+        // 第八轮美化：标签 hover lerp 推进（项 4），dt 复用上一帧时间戳
+        long nowTab = System.nanoTime();
+        float dtTab = this.lastFrameNanos == 0L ? 0f : Math.min(0.1f, (nowTab - this.lastFrameNanos) / 1.0e9f);
+        if (this.tabHoverProgress.length < this.tabs.size()) {
+            this.tabHoverProgress = new float[this.tabs.size()];
+        }
         for (int i = 0; i < this.tabs.size(); i++) {
             Tab tab = this.tabs.get(i);
             int color = i == this.activeTabIndex ? EditorTheme.TEXT_PRIMARY : EditorTheme.TEXT_SECONDARY;
-            int bgColor = i == this.activeTabIndex ? EditorTheme.BG_SURFACE : EditorTheme.BG_ELEVATED;
+            // hover 检测 + lerp 推进
+            boolean tabHovered = mouseX >= tabX && mouseX <= tabX + TAB_WIDTH && mouseY >= tabY && mouseY <= tabY + TAB_HEIGHT;
+            float targetTabHover = (tabHovered && i != this.activeTabIndex) ? 1f : 0f;
+            this.tabHoverProgress[i] = EditorRenderHelper.tickProgress(this.tabHoverProgress[i], targetTabHover, dtTab);
+            int bgColor;
+            if (i == this.activeTabIndex) {
+                bgColor = EditorTheme.BG_SURFACE;
+            } else {
+                bgColor = EditorRenderHelper.lerpColor(EditorTheme.BG_ELEVATED, EditorTheme.BG_HOVER, this.tabHoverProgress[i]);
+            }
             graphics.fill(tabX, tabY, tabX + TAB_WIDTH, tabY + TAB_HEIGHT, bgColor);
             graphics.drawCenteredString(this.font, tab.title, tabX + TAB_WIDTH / 2, tabY + 4, color);
             if (i == this.activeTabIndex) {
+                // 第八轮美化：活动标签左侧 2px ACCENT 竖条（与 DialogTreeWidget 选中项统一锚点语言）
+                graphics.fill(tabX, tabY, tabX + 2, tabY + TAB_HEIGHT, EditorTheme.ACCENT);
                 graphics.fill(tabX, tabY + TAB_HEIGHT - 2, tabX + TAB_WIDTH, tabY + TAB_HEIGHT, EditorTheme.ACCENT);
             }
             graphics.fill(tabX + TAB_WIDTH, tabY, tabX + TAB_WIDTH + 1, tabY + TAB_HEIGHT, EditorTheme.BORDER);
             tabX += TAB_WIDTH + 1;
         }
+        // 第八轮美化：标签栏与内容区之间画 DIVIDER 竖线（标签栏右侧边界）
+        graphics.fill(this.getX() + TAB_WIDTH + 1, tabY + TAB_HEIGHT, this.getX() + TAB_WIDTH + 2, this.getY() + this.getHeight(), EditorTheme.DIVIDER);
         if (this.activeTabIndex >= 0 && this.activeTabIndex < this.tabs.size()) {
             this.clampScroll();
             int pageTop = this.getPageTop();

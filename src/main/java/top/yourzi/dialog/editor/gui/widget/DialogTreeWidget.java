@@ -494,7 +494,8 @@ public class DialogTreeWidget extends AbstractWidget {
             boolean hovered = mouseX >= this.getX() && mouseX <= this.getX() + this.getWidth()
                     && mouseY >= rowY && mouseY <= rowY + ROW_HEIGHT;
             if (hovered) {
-                graphics.fill(this.getX(), rowY, this.getX() + this.getWidth(), rowY + ROW_HEIGHT, EditorTheme.BG_HOVER);
+                // 第八轮美化：hover 用 HOVER_TINT 半透明提亮叠层（借鉴 Sparkle blendBg），比实色 BG_HOVER 柔和
+                graphics.fill(this.getX(), rowY, this.getX() + this.getWidth(), rowY + ROW_HEIGHT, EditorTheme.HOVER_TINT);
             }
             boolean isSelected = (i == this.selectedIndex);
             if (isSelected) {
@@ -509,7 +510,8 @@ public class DialogTreeWidget extends AbstractWidget {
             int refs = this.refCounts.getOrDefault(node.entry.getId(), 0);
             String refMarker = refs > 1 ? "*" : "";
             String idText = arrow + (node.isOrphan ? "\u26a0 " : "") + icon + " " + node.entry.getId() + refMarker;
-            graphics.drawString(this.font, idText, this.getX() + 4 + indent, rowY + 2, textColor);
+            // 第八轮美化：选中项文字加阴影（项 9），强化视觉锚点
+            graphics.drawString(this.font, idText, this.getX() + 4 + indent, rowY + 2, textColor, isSelected);
             String connectionInfo = this.getConnectionInfo(node.entry);
             if (connectionInfo.isEmpty()) {
                 continue;
