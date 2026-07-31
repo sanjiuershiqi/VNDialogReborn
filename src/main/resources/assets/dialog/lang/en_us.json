@@ -233,5 +233,10 @@
   "gui.vn_edit.tooltip.load": "Load a dialog from file",
   "gui.vn_edit.tooltip.test": "Test current dialog",
   "gui.vn_edit.tooltip.import": "Import a dialog from a resource pack",
-  "gui.vn_edit.tooltip.sequence_props": "Edit sequence properties (title/description/start node, etc.)"
+  "gui.vn_edit.tooltip.sequence_props": "Edit sequence properties (title/description/start node etc.)",
+  "gui.vn_edit.tooltip.add_node": "Add dialog node",
+  "gui.vn_edit.tooltip.add_tab": "New dialog sequence",
+  "gui.vn_edit.tooltip.tab_left": "Scroll tabs left",
+  "gui.vn_edit.tooltip.tab_right": "Scroll tabs right",
+  "gui.vn_edit.tooltip.tab": "Left-click switch / Double-click rename / Right-click close"
 }

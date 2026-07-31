@@ -233,5 +233,10 @@
   "gui.vn_edit.tooltip.load": "从文件读取对话",
   "gui.vn_edit.tooltip.test": "测试当前对话",
   "gui.vn_edit.tooltip.import": "从资源包导入对话",
-  "gui.vn_edit.tooltip.sequence_props": "编辑序列属性（标题/描述/起始节点等）"
+  "gui.vn_edit.tooltip.sequence_props": "编辑序列属性（标题/描述/起始节点等）",
+  "gui.vn_edit.tooltip.add_node": "添加对话节点",
+  "gui.vn_edit.tooltip.add_tab": "新建对话序列",
+  "gui.vn_edit.tooltip.tab_left": "标签左移",
+  "gui.vn_edit.tooltip.tab_right": "标签右移",
+  "gui.vn_edit.tooltip.tab": "左键切换 / 双击重命名 / 右键关闭"
 }

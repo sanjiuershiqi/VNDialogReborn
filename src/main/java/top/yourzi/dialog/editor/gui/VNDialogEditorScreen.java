@@ -52,6 +52,7 @@ public class VNDialogEditorScreen extends Screen {
     private PropertyPanel propertyPanel;
     private final List<TabButton> tabButtons = new ArrayList<>();
     private EditorButton addTabBtn;
+    private EditorButton addNodeBtn;
     private EditorButton tabLeftArrow;
     private EditorButton tabRightArrow;
     /** 顶部工具栏按钮引用，用于 tooltip 检测（顺序：新建/保存/读取/测试/导入/序列属性） */
@@ -62,7 +63,37 @@ public class VNDialogEditorScreen extends Screen {
     /** 跟踪有未保存修改的对话序列 ID */
     private final java.util.Set<String> dirtySequences = new java.util.HashSet<>();
     public String statusText = "";
+    /** 当前状态消息的语义级别，决定状态栏文字颜色。 */
+    private StatusLevel statusLevel = StatusLevel.NEUTRAL;
+    /** 状态消息自动清除时间（纳秒时间戳），0 表示常驻（错误消息）不自动清除。 */
+    private long statusClearTime = 0L;
     private boolean isInitialized = false;
+
+    /**
+     * 状态消息语义级别。借鉴 Sparkle setStatus(Component, ChatFormatting) 的分色思路，
+     * 用 EditorTheme 语义色而非 ChatFormatting，与暗色主题统一。
+     * - NEUTRAL：中性信息（如切换序列），4 秒后消失
+     * - SUCCESS：操作成功（如保存成功），4 秒后消失
+     * - WARNING：警告（如悬空引用），4 秒后消失
+     * - ERROR：错误（如保存失败），常驻直到下次操作，确保用户看到
+     */
+    private enum StatusLevel {
+        NEUTRAL,
+        SUCCESS,
+        WARNING,
+        ERROR
+    }
+
+    /**
+     * 设置状态消息并按语义级别决定颜色与消失时机。
+     * 成功/警告/中性消息 4 秒后自动清除，错误消息常驻直到下次 setStatus 覆盖。
+     */
+    private void setStatus(String text, StatusLevel level) {
+        this.statusText = text;
+        this.statusLevel = level;
+        // ERROR 常驻（0），其余 4 秒后清除
+        this.statusClearTime = level == StatusLevel.ERROR ? 0L : System.nanoTime() + 4_000_000_000L;
+    }
 
     public VNDialogEditorScreen() {
         super(Component.translatable("gui.vn_edit.title"));
@@ -146,9 +177,9 @@ public class VNDialogEditorScreen extends Screen {
         this.addRenderableWidget(this.tabRightArrow);
         this.addRenderableWidget(this.addTabBtn);
         int treeY = TOOLBAR_HEIGHT + TAB_BAR_HEIGHT;
-        EditorButton addNodeBtn = EditorButton.builder(Component.translatable("gui.vn_edit.add_node"), b -> this.onAddNode())
+        this.addNodeBtn = EditorButton.builder(Component.translatable("gui.vn_edit.add_node"), b -> this.onAddNode())
                 .bounds(0, treeY, TREE_WIDTH, EditorTheme.BTN_HEIGHT).build();
-        this.addRenderableWidget(addNodeBtn);
+        this.addRenderableWidget(this.addNodeBtn);
         int treeContentY = treeY + EditorTheme.BTN_HEIGHT;
         int contentHeight = this.height - treeContentY - STATUS_HEIGHT;
         this.treeWidget = new DialogTreeWidget(0, treeContentY, TREE_WIDTH, contentHeight, this.font);
@@ -232,14 +263,14 @@ public class VNDialogEditorScreen extends Screen {
                     }
                 } catch (IOException e) {
                     Dialog.LOGGER.error("Failed to rename dialog file", e);
-                    this.statusText = Component.translatable("gui.vn_edit.rename.failed").getString();
+                    this.setStatus(Component.translatable("gui.vn_edit.rename.failed").getString(), StatusLevel.ERROR);
                 }
                 if (this.activeSequenceIndex == index) {
                     this.currentSequence = seq;
                 }
                 this.saveSession();
                 this.rebuildTabButtons();
-                this.statusText = Component.translatable("gui.vn_edit.rename.success", newId).getString();
+                this.setStatus(Component.translatable("gui.vn_edit.rename.success", newId).getString(), StatusLevel.SUCCESS);
             }
         }, this));
     }
@@ -261,7 +292,7 @@ public class VNDialogEditorScreen extends Screen {
         this.editingEntry = null;
         this.propertyPanel.unbind();
         this.propertyPanel.setVisible(false);
-        this.statusText = Component.translatable("gui.vn_edit.status.switched", this.currentSequence.getId()).getString();
+        this.setStatus(Component.translatable("gui.vn_edit.status.switched", this.currentSequence.getId()).getString(), StatusLevel.NEUTRAL);
     }
 
     private void onNew() {
@@ -279,7 +310,7 @@ public class VNDialogEditorScreen extends Screen {
             this.propertyPanel.unbind();
             this.propertyPanel.setVisible(false);
             this.rebuildTabButtons();
-            this.statusText = Component.translatable("gui.vn_edit.status.new").getString();
+            this.setStatus(Component.translatable("gui.vn_edit.status.new").getString(), StatusLevel.NEUTRAL);
         }, this));
     }
 
@@ -292,7 +323,7 @@ public class VNDialogEditorScreen extends Screen {
                 newId = "node_" + System.currentTimeMillis();
             }
             if (this.currentSequence.findEntryById(newId) != null) {
-                this.statusText = Component.translatable("gui.vn_edit.status.id_exists", newId).getString();
+                this.setStatus(Component.translatable("gui.vn_edit.status.id_exists", newId).getString(), StatusLevel.ERROR);
                 return;
             }
             DialogEntry newEntry = DialogEntry.builder().id(newId).text(new JsonPrimitive("")).build();
@@ -306,7 +337,7 @@ public class VNDialogEditorScreen extends Screen {
             this.propertyPanel.bindTo(this.editingEntry);
             this.propertyPanel.setVisible(true);
             this.markDirty(this.currentSequence);
-            this.statusText = Component.translatable("gui.vn_edit.status.node_added", newId).getString();
+            this.setStatus(Component.translatable("gui.vn_edit.status.node_added", newId).getString(), StatusLevel.SUCCESS);
         }, this));
     }
 
@@ -317,15 +348,20 @@ public class VNDialogEditorScreen extends Screen {
         this.currentSequence.setAllowClose(true);
         // 保存前验证：检测悬空引用（nextId / option.targetId 指向不存在的节点）
         List<String> dangling = this.findDanglingReferences(this.currentSequence);
-        this.saveCurrentSequenceToFile();
+        boolean ok = this.saveCurrentSequenceToFile();
+        if (!ok) {
+            // 保存失败：保留 dirty 标记（*），显示错误（常驻），不 reload，避免用户误以为已保存导致数据丢失
+            this.setStatus(Component.translatable("gui.vn_edit.status.save_failed", this.currentSequence.getId()).getString(), StatusLevel.ERROR);
+            return;
+        }
         this.saveSession();
         this.markClean(this.currentSequence);
         if (dangling.isEmpty()) {
-            this.statusText = Component.translatable("gui.vn_edit.status.saved", this.currentSequence.getId()).getString();
+            this.setStatus(Component.translatable("gui.vn_edit.status.saved", this.currentSequence.getId()).getString(), StatusLevel.SUCCESS);
         } else {
-            // 保存成功但存在悬空引用，附加警告
-            this.statusText = Component.translatable("gui.vn_edit.status.saved_with_warnings",
-                    this.currentSequence.getId(), dangling.size()).getString();
+            // 保存成功但存在悬空引用，附加警告（黄色，4 秒消失）
+            this.setStatus(Component.translatable("gui.vn_edit.status.saved_with_warnings",
+                    this.currentSequence.getId(), dangling.size()).getString(), StatusLevel.WARNING);
         }
         if (Minecraft.getInstance().player != null) {
             NetworkHandler.sendExecuteCommandToServer("dialog reload");
@@ -387,9 +423,13 @@ public class VNDialogEditorScreen extends Screen {
         return !this.dirtySequences.isEmpty();
     }
 
-    private void saveCurrentSequenceToFile() {
+    /**
+     * 保存当前序列到 JSON 文件。
+     * @return true 保存成功；false 保存失败（IOException），调用方据此决定是否 markClean 及反馈
+     */
+    private boolean saveCurrentSequenceToFile() {
         if (this.currentSequence == null) {
-            return;
+            return false;
         }
         String id = this.currentSequence.getId();
         if (id == null || id.isEmpty()) {
@@ -400,8 +440,10 @@ public class VNDialogEditorScreen extends Screen {
         try {
             Files.createDirectories(EditorConfig.DIALOG_JSON_DIR);
             Files.writeString(path, json);
+            return true;
         } catch (IOException e) {
             Dialog.LOGGER.error("Failed to save dialog {}: {}", id, e.getMessage());
+            return false;
         }
     }
 
@@ -420,10 +462,10 @@ public class VNDialogEditorScreen extends Screen {
                 this.propertyPanel.unbind();
                 this.propertyPanel.setVisible(false);
                 this.rebuildTabButtons();
-                this.statusText = Component.translatable("gui.vn_edit.status.loaded", seq.getId()).getString();
+                this.setStatus(Component.translatable("gui.vn_edit.status.loaded", seq.getId()).getString(), StatusLevel.SUCCESS);
             } catch (Exception e) {
                 Dialog.LOGGER.error("Failed to load dialog", e);
-                this.statusText = Component.translatable("gui.vn_edit.status.load_failed").getString();
+                this.setStatus(Component.translatable("gui.vn_edit.status.load_failed").getString(), StatusLevel.ERROR);
             }
         }, this);
     }
@@ -432,7 +474,11 @@ public class VNDialogEditorScreen extends Screen {
         if (this.currentSequence == null) {
             return;
         }
-        this.saveCurrentSequenceToFile();
+        if (!this.saveCurrentSequenceToFile()) {
+            // 保存失败：不进入测试，避免测试的是旧数据。错误消息常驻提示用户先修复保存问题。
+            this.setStatus(Component.translatable("gui.vn_edit.status.save_failed", this.currentSequence.getId()).getString(), StatusLevel.ERROR);
+            return;
+        }
         this.saveSession();
         // 设置测试返回屏幕：对话关闭后回到编辑器界面，无需重新打开
         DialogManager.getInstance().setTestReturnScreen(this);
@@ -443,7 +489,7 @@ public class VNDialogEditorScreen extends Screen {
     private void onImport() {
         Minecraft.getInstance().setScreen(new DialogImportScreen(this, fileName -> {
             if (fileName == null || fileName.isEmpty()) {
-                this.statusText = Component.translatable("gui.vn_edit.import.failed").getString();
+                this.setStatus(Component.translatable("gui.vn_edit.import.failed").getString(), StatusLevel.ERROR);
             } else {
                 Path importedPath = EditorConfig.DIALOG_JSON_DIR.resolve(fileName);
                 this.loadImportedDialog(importedPath);
@@ -457,7 +503,7 @@ public class VNDialogEditorScreen extends Screen {
         }
         SequencePropertiesScreen propsScreen = new SequencePropertiesScreen(this.currentSequence, seq -> {
             this.rebuildTabButtons();
-            this.statusText = Component.translatable("gui.vn_edit.status.props_saved").getString();
+            this.setStatus(Component.translatable("gui.vn_edit.status.props_saved").getString(), StatusLevel.SUCCESS);
         }, this);
         // 注入删除回调：序列属性屏"删除"按钮触发，定位到当前序列索引执行删除文件
         propsScreen.setOnDelete(seq -> {
@@ -484,13 +530,13 @@ public class VNDialogEditorScreen extends Screen {
                 this.propertyPanel.unbind();
                 this.propertyPanel.setVisible(false);
                 this.rebuildTabButtons();
-                this.statusText = Component.translatable("gui.vn_edit.import.success", seq.getId()).getString();
+                this.setStatus(Component.translatable("gui.vn_edit.import.success", seq.getId()).getString(), StatusLevel.SUCCESS);
             } else {
-                this.statusText = Component.translatable("gui.vn_edit.import.invalid_format").getString();
+                this.setStatus(Component.translatable("gui.vn_edit.import.invalid_format").getString(), StatusLevel.ERROR);
             }
         } catch (Exception e) {
             Dialog.LOGGER.error("Import failed", e);
-            this.statusText = Component.translatable("gui.vn_edit.import.failed").getString();
+            this.setStatus(Component.translatable("gui.vn_edit.import.failed").getString(), StatusLevel.ERROR);
         }
     }
 
@@ -560,7 +606,7 @@ public class VNDialogEditorScreen extends Screen {
             }
         }
         this.markDirty(this.currentSequence);
-        this.statusText = Component.translatable("gui.vn_edit.status.node_deleted", entry.getId()).getString();
+        this.setStatus(Component.translatable("gui.vn_edit.status.node_deleted", entry.getId()).getString(), StatusLevel.NEUTRAL);
     }
 
     private void onEntryAddChild(DialogEntry parentEntry) {
@@ -746,7 +792,18 @@ public class VNDialogEditorScreen extends Screen {
         // 标签栏背景使用不透明深色
         graphics.fill(0, tabBarTop, this.width, tabBarBottom, EditorTheme.BG_ELEVATED);
         graphics.fill(0, this.height - STATUS_HEIGHT, this.width, this.height, EditorTheme.BG_SURFACE);
-        graphics.drawString(this.font, this.statusText, 4, this.height - STATUS_HEIGHT + 2, EditorTheme.TEXT_SECONDARY);
+        // 状态栏：按 statusLevel 选语义色；非错误消息到时自动清空（错误常驻）
+        if (this.statusClearTime != 0L && System.nanoTime() > this.statusClearTime) {
+            this.statusText = "";
+            this.statusClearTime = 0L;
+        }
+        int statusColor = switch (this.statusLevel) {
+            case SUCCESS -> EditorTheme.STATUS_SUCCESS;
+            case WARNING -> EditorTheme.STATUS_WARNING;
+            case ERROR -> EditorTheme.STATUS_ERROR;
+            default -> EditorTheme.TEXT_SECONDARY;
+        };
+        graphics.drawString(this.font, this.statusText, 4, this.height - STATUS_HEIGHT + 2, statusColor);
         graphics.enableScissor(TAB_AREA_LEFT, tabBarTop, clipRight, tabBarBottom);
         try {
             for (TabButton btn : this.tabButtons) {
@@ -764,6 +821,7 @@ public class VNDialogEditorScreen extends Screen {
     /**
      * 为顶部工具栏按钮渲染 tooltip。
      * 按钮顺序与 buildWidgets() 中创建顺序一致：新建/保存/读取/测试/导入/序列属性。
+     * 另覆盖添加节点/新增标签/标签滚动箭头/标签页等高频元素，提升可发现性。
      */
     private void renderToolbarTooltips(GuiGraphics graphics, int mouseX, int mouseY) {
         for (int i = 0; i < this.toolbarButtons.size(); i++) {
@@ -781,6 +839,32 @@ public class VNDialogEditorScreen extends Screen {
                 if (tip != null) {
                     graphics.renderTooltip(this.font, tip, mouseX, mouseY);
                 }
+                return;
+            }
+        }
+        // 添加节点按钮
+        if (this.addNodeBtn != null && this.addNodeBtn.isMouseOver(mouseX, mouseY)) {
+            graphics.renderTooltip(this.font, Component.translatable("gui.vn_edit.tooltip.add_node"), mouseX, mouseY);
+            return;
+        }
+        // 新增标签按钮（+）
+        if (this.addTabBtn != null && this.addTabBtn.isMouseOver(mouseX, mouseY)) {
+            graphics.renderTooltip(this.font, Component.translatable("gui.vn_edit.tooltip.add_tab"), mouseX, mouseY);
+            return;
+        }
+        // 标签滚动箭头
+        if (this.tabLeftArrow != null && this.tabLeftArrow.isMouseOver(mouseX, mouseY)) {
+            graphics.renderTooltip(this.font, Component.translatable("gui.vn_edit.tooltip.tab_left"), mouseX, mouseY);
+            return;
+        }
+        if (this.tabRightArrow != null && this.tabRightArrow.isMouseOver(mouseX, mouseY)) {
+            graphics.renderTooltip(this.font, Component.translatable("gui.vn_edit.tooltip.tab_right"), mouseX, mouseY);
+            return;
+        }
+        // 标签页：提示左键切换/双击重命名/右键关闭
+        for (TabButton tabBtn : this.tabButtons) {
+            if (tabBtn.isMouseOver(mouseX, mouseY)) {
+                graphics.renderTooltip(this.font, Component.translatable("gui.vn_edit.tooltip.tab"), mouseX, mouseY);
                 return;
             }
         }
@@ -840,6 +924,7 @@ public class VNDialogEditorScreen extends Screen {
     }
 
     private void doSaveAllAndClose() {
+        int failCount = 0;
         for (DialogSequence seq : this.openSequences) {
             if (seq == null || seq.getId() == null) {
                 continue;
@@ -855,8 +940,12 @@ public class VNDialogEditorScreen extends Screen {
                 Files.writeString(path, json);
             } catch (IOException e) {
                 Dialog.LOGGER.error("Auto-save failed for {}: {}", seq.getId(), e.getMessage());
-                this.statusText = Component.translatable("gui.vn_edit.status.save_failed", seq.getId()).getString();
+                failCount++;
             }
+        }
+        // 批量保存失败统计：仅当有失败时提示（关闭流程仍继续，因用户已确认关闭）
+        if (failCount > 0) {
+            Dialog.LOGGER.error("doSaveAllAndClose: {} sequence(s) failed to save", failCount);
         }
         this.dirtySequences.clear();
         this.saveSession();

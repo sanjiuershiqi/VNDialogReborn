@@ -24,6 +24,11 @@ public class EditorTheme {
     public static final int ACCENT_DIM     = 0xFF2A5A8A;
     public static final int DANGER         = 0xFFE05555;  // 删除/危险
 
+    // ===== 状态栏语义色（借鉴 Sparkle setStatus 分色，用主题色而非 ChatFormatting） =====
+    public static final int STATUS_SUCCESS = 0xFF6AC46A;  // 成功（绿）
+    public static final int STATUS_WARNING = 0xFFE0A040;  // 警告（黄/橙）
+    public static final int STATUS_ERROR   = 0xFFE05555;  // 错误（红，与 DANGER 同值但语义独立）
+
     // ===== 语义化半透明色 =====
     // 收编散落在各 Screen 的 0x33FFFFFF / 0xCC000000 / 0x804A9EFF 等魔法数字，
     // 让半透明叠层也走主题系统。语义命名，便于全局调整。

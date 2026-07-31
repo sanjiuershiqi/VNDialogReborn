@@ -234,10 +234,14 @@ public class DialogTreeWidget extends AbstractWidget {
             if (hovered) {
                 graphics.fill(this.getX(), rowY, this.getX() + this.getWidth(), rowY + ROW_HEIGHT, EditorTheme.BG_HOVER);
             }
-            if (i == this.selectedIndex) {
+            boolean isSelected = (i == this.selectedIndex);
+            if (isSelected) {
                 graphics.fill(this.getX(), rowY, this.getX() + this.getWidth(), rowY + ROW_HEIGHT, EditorTheme.BG_SELECTED);
+                // 选中项左侧 2px 强调色竖条（VS Code 活动标签风格），增强视觉锚点
+                graphics.fill(this.getX(), rowY, this.getX() + 2, rowY + ROW_HEIGHT, EditorTheme.ACCENT);
             }
-            int textColor = EditorTheme.TEXT_SECONDARY;
+            // 选中项文字提亮为纯白，hover/普通保持次要色
+            int textColor = isSelected ? EditorTheme.TEXT_PRIMARY : EditorTheme.TEXT_SECONDARY;
             String arrow = !node.children.isEmpty() ? (node.expanded ? "\u25bc " : "\u25b6 ") : "  ";
             String icon = this.getTypeIcon(node.entry);
             int refs = this.refCounts.getOrDefault(node.entry.getId(), 0);
