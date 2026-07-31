@@ -59,7 +59,6 @@ public class OptionEditScreen extends Screen {
         this.onSave = onSave;
         this.parent = parent;
         this.sequence = sequence;
-        // 初始化草稿，编辑期间只修改草稿，保存时才写回 option
         this.draftText = option.getText("") != null ? option.getText("").getString() : "";
         this.draftTargetId = option.getTargetId() != null ? option.getTargetId() : null;
         this.draftVisibilityCommand = option.getVisibilityCommand() != null ? option.getVisibilityCommand() : "";
@@ -150,14 +149,26 @@ public class OptionEditScreen extends Screen {
     }
 
     private void openNodePicker() {
-        // 只更新草稿，不修改原 option
+        // 切屏前把各输入框实时值同步到草稿字段。NodePicker 返回时本实例被复用
+        //（setScreen(parent) 只重新调用 init()，不重建实例），init() 会从草稿字段
+        // 重建控件，故需先同步以避免输入丢失。
         this.draftText = this.textBox.getValue();
+        if (this.alwaysVisibleCheck.selected()) {
+            this.draftVisibilityCommand = "";
+        } else {
+            this.draftVisibilityCommand = this.visibilityCommandBox.getValue();
+        }
+        this.draftCommands = new ArrayList<>();
+        for (EditBox box : this.commandBoxes) {
+            this.draftCommands.add(box.getValue());
+        }
         if (this.sequence == null) {
             return;
         }
         Minecraft.getInstance().setScreen(new NodePickerScreen(this.sequence, selectedId -> {
+            // 回调在同一实例上执行（返回时 setScreen(parent) 复用本实例），
+            // 直接更新草稿字段，init() 重建后 targetNodeBtn 即显示新值（含清空为 None）
             this.draftTargetId = selectedId.isEmpty() ? null : selectedId;
-            this.targetNodeBtn.setMessage(Component.literal(selectedId.isEmpty() ? Component.translatable("gui.vn_edit.none").getString() : selectedId));
         }, Minecraft.getInstance().screen));
     }
 
