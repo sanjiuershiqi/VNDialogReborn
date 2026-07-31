@@ -431,15 +431,16 @@ public class VNDialogEditorScreen extends Screen {
 
     /** 标记序列为有未保存修改 */
     public void markDirty(DialogSequence seq) {
-        if (seq != null && seq.getId() != null) {
-            this.dirtySequences.add(seq.getId());
+        if (seq != null && seq.getId() != null && this.dirtySequences.add(seq.getId())) {
+            // 状态变化时刷新标签 * 显示（TabButton 为自绘列表，重建开销小）
+            this.rebuildTabButtons();
         }
     }
 
     /** 标记序列为已保存 */
     private void markClean(DialogSequence seq) {
-        if (seq != null && seq.getId() != null) {
-            this.dirtySequences.remove(seq.getId());
+        if (seq != null && seq.getId() != null && this.dirtySequences.remove(seq.getId())) {
+            this.rebuildTabButtons();
         }
     }
 

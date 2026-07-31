@@ -26,10 +26,23 @@ public abstract class AbstractPropertyPage implements PropertyPage {
     protected DialogEntry currentEntry = null;
     /** 字段变脏回调，由主屏注入（markDirty 序列）；Option 构造时引用此字段。 */
     protected Runnable dirtyListener;
+    /** 程序化回填期间（refreshDisplay/unbind/init 构建）为 true，抑制 notifyDirty 误触发 markDirty。 */
+    private boolean refreshing = false;
 
     protected AbstractPropertyPage(Font font) {
         this.font = font;
     }
+
+    /** 通知数据被用户编辑而变脏。程序化回填（refreshing）或未绑定 entry 时静默跳过，避免打开即标记 dirty。 */
+    protected void notifyDirty() {
+        if (!this.refreshing && this.currentEntry != null && this.dirtyListener != null) {
+            this.dirtyListener.run();
+        }
+    }
+
+    /** 标记进入程序化回填阶段，setValue 不应视为用户编辑。子类在 refreshDisplay/unbind 首尾配对调用。 */
+    protected void beginSilentRefresh() { this.refreshing = true; }
+    protected void endSilentRefresh() { this.refreshing = false; }
 
     /**
      * 设置 EditBox 值且不触发 responder 回调。

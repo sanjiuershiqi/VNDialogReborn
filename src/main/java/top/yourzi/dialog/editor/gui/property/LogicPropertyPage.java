@@ -99,14 +99,14 @@ public class LogicPropertyPage extends AbstractPropertyPage {
         this.endDialogOption = new Option<>(
                 () -> this.currentEntry != null && this.currentEntry.isEndDialog(),
                 v -> { if (this.currentEntry != null) this.currentEntry.setEndDialog(v); },
-                () -> { if (this.dirtyListener != null) this.dirtyListener.run(); });
+                () -> { this.notifyDirty(); });
         this.endDialogRow = new BooleanOptionRow(fieldX, endY, fieldW, EditorTheme.FIELD_HEIGHT,
                 Component.translatable("gui.vn_edit.end_dialog"), this.endDialogOption, this.font);
         int skipY = layout.fieldRow();
         this.allowSkipOption = new Option<>(
                 () -> this.currentEntry != null && this.currentEntry.isSkipAllowed(),
                 v -> { if (this.currentEntry != null) this.currentEntry.setAllowSkip(v); },
-                () -> { if (this.dirtyListener != null) this.dirtyListener.run(); });
+                () -> { this.notifyDirty(); });
         this.allowSkipRow = new BooleanOptionRow(fieldX, skipY, fieldW, EditorTheme.FIELD_HEIGHT,
                 Component.translatable("gui.vn_edit.allow_skip"), this.allowSkipOption, this.font);
 
@@ -126,7 +126,7 @@ public class LogicPropertyPage extends AbstractPropertyPage {
             if (this.currentEntry != null) {
                 this.currentEntry.setAudioPath(s.isEmpty() ? null : s);
             }
-            if (this.dirtyListener != null) this.dirtyListener.run();
+            this.notifyDirty();
         });
         int audioBtnOffset = fieldX + audioBoxW + EditorTheme.GAP;
         this.audioBrowseBtn = EditorButton.builder(Component.translatable("gui.vn_edit.browse"), btn -> this.onAudioBrowse())
@@ -153,7 +153,7 @@ public class LogicPropertyPage extends AbstractPropertyPage {
             if (this.currentEntry != null) {
                 this.currentEntry.setVisibilityCommand(s.isEmpty() ? null : s);
             }
-            if (this.dirtyListener != null) this.dirtyListener.run();
+            this.notifyDirty();
         });
 
         // 记录动态分节起始 Y
@@ -182,7 +182,12 @@ public class LogicPropertyPage extends AbstractPropertyPage {
     @Override
     public void bindTo(DialogEntry entry) {
         this.currentEntry = entry;
-        this.refreshDisplay();
+        this.beginSilentRefresh();
+        try {
+            this.refreshDisplay();
+        } finally {
+            this.endSilentRefresh();
+        }
     }
 
     @Override
@@ -318,7 +323,7 @@ public class LogicPropertyPage extends AbstractPropertyPage {
             EditBox box = new EditBox(this.font, fieldX, rowY, boxW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.command"));
             box.setMaxLength(999999999);
             box.setValue(cmds.get(i));
-            box.setResponder(s -> { this.updateCommand(idx, s); if (this.dirtyListener != null) this.dirtyListener.run(); });
+            box.setResponder(s -> { this.updateCommand(idx, s); this.notifyDirty(); });
             this.commandEdits.add(box);
             EditorButton delBtn = EditorButton.builder(Component.literal("X"), btn -> this.deleteCommand(idx))
                     .bounds(fieldX + boxW + EditorTheme.GAP, rowY, 20, EditorTheme.FIELD_HEIGHT).build();
@@ -470,19 +475,19 @@ public class LogicPropertyPage extends AbstractPropertyPage {
             EditBox idBox = new EditBox(this.font, fieldX, rowY, idBoxW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.item_id"));
             idBox.setMaxLength(999999999);
             idBox.setValue(item.getItemId() != null ? item.getItemId() : "");
-            idBox.setResponder(s -> { this.updateItem(idx, "id", s); if (this.dirtyListener != null) this.dirtyListener.run(); });
+            idBox.setResponder(s -> { this.updateItem(idx, "id", s); this.notifyDirty(); });
             this.itemIdEdits.add(idBox);
             int xCursor = fieldX + idBoxW + EditorTheme.GAP;
             EditBox countBox = new EditBox(this.font, xCursor, rowY, countBoxW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.count"));
             countBox.setMaxLength(5);
             countBox.setValue(String.valueOf(item.getCount()));
-            countBox.setResponder(s -> { this.updateItem(idx, "count", s); if (this.dirtyListener != null) this.dirtyListener.run(); });
+            countBox.setResponder(s -> { this.updateItem(idx, "count", s); this.notifyDirty(); });
             this.itemCountEdits.add(countBox);
             xCursor += countBoxW + EditorTheme.GAP;
             EditBox nbtBox = new EditBox(this.font, xCursor, rowY, nbtBoxW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.nbt"));
             nbtBox.setMaxLength(999999999);
             nbtBox.setValue(item.getNbt() != null ? item.getNbt() : "");
-            nbtBox.setResponder(s -> { this.updateItem(idx, "nbt", s); if (this.dirtyListener != null) this.dirtyListener.run(); });
+            nbtBox.setResponder(s -> { this.updateItem(idx, "nbt", s); this.notifyDirty(); });
             this.itemNbtEdits.add(nbtBox);
             xCursor += nbtBoxW + EditorTheme.GAP;
             EditorButton delBtn = EditorButton.builder(Component.literal("X"), btn -> this.deleteItem(idx))
@@ -541,7 +546,7 @@ public class LogicPropertyPage extends AbstractPropertyPage {
             if (this.currentEntry != null) {
                 this.currentEntry.setNextId(selectedId.isEmpty() ? null : selectedId);
             }
-            if (this.dirtyListener != null) this.dirtyListener.run();
+            this.notifyDirty();
             // 活动标签由 EditorScreenState 在 PropertyPanel 构造时恢复，无需手动 recover
         }, Minecraft.getInstance().screen));
     }

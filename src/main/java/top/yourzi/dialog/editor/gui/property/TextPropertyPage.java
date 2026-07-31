@@ -103,7 +103,7 @@ public class TextPropertyPage extends AbstractPropertyPage {
                 MutableComponent component = this.parseFormattingCodesToComponent(s);
                 this.currentEntry.setSpeaker(ComponentJson.toJsonTree(component));
             }
-            if (this.dirtyListener != null) this.dirtyListener.run();
+            this.notifyDirty();
         });
 
         // ===== 正文 / 翻译分节（根据模式不同位置不同）=====
@@ -112,7 +112,7 @@ public class TextPropertyPage extends AbstractPropertyPage {
         int contentY = layout.customRow(EditorTheme.CONTENT_BOX_H);
         this.contentLabelY = contentY + 4;
         this.contentBox = new MultiLineEditBox(this.font, fieldX, contentY, fieldW, EditorTheme.CONTENT_BOX_H);
-        this.contentBox.setResponder(s -> { this.saveTextToEntry(); if (this.dirtyListener != null) this.dirtyListener.run(); });
+        this.contentBox.setResponder(s -> { this.saveTextToEntry(); this.notifyDirty(); });
 
         // 模式切换按钮
         int modeY = layout.fieldRow();
@@ -123,15 +123,15 @@ public class TextPropertyPage extends AbstractPropertyPage {
         int transKeyY = layout.fieldRow();
         this.translationKeyBox = new EditBox(this.font, fieldX, transKeyY, fieldW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.translation_key"));
         this.translationKeyBox.setMaxLength(999999999);
-        this.translationKeyBox.setResponder(s -> { this.saveTranslationToEntry(); if (this.dirtyListener != null) this.dirtyListener.run(); });
+        this.translationKeyBox.setResponder(s -> { this.saveTranslationToEntry(); this.notifyDirty(); });
         int transZhY = layout.fieldRow();
         this.translationZhCnBox = new EditBox(this.font, fieldX, transZhY, fieldW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.translation_zh_cn"));
         this.translationZhCnBox.setMaxLength(999999999);
-        this.translationZhCnBox.setResponder(s -> { this.saveTranslationToEntry(); if (this.dirtyListener != null) this.dirtyListener.run(); });
+        this.translationZhCnBox.setResponder(s -> { this.saveTranslationToEntry(); this.notifyDirty(); });
         int transEnY = layout.fieldRow();
         this.translationEnUsBox = new EditBox(this.font, fieldX, transEnY, fieldW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.translation_en_us"));
         this.translationEnUsBox.setMaxLength(999999999);
-        this.translationEnUsBox.setResponder(s -> { this.saveTranslationToEntry(); if (this.dirtyListener != null) this.dirtyListener.run(); });
+        this.translationEnUsBox.setResponder(s -> { this.saveTranslationToEntry(); this.notifyDirty(); });
         int genLangY = layout.fieldRow();
         this.generateLangBtn = new EditorButton(fieldX, genLangY, 80, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.generate_lang"), b -> this.generateLangFiles());
 
@@ -296,7 +296,13 @@ public class TextPropertyPage extends AbstractPropertyPage {
     @Override
     public void bindTo(DialogEntry entry) {
         this.currentEntry = entry;
-        this.refreshDisplay();
+        // 回填期间抑制 notifyDirty，避免 refreshDisplay 内 setValue 误触发 markDirty（打开即标记 *）
+        this.beginSilentRefresh();
+        try {
+            this.refreshDisplay();
+        } finally {
+            this.endSilentRefresh();
+        }
     }
 
     @Override
