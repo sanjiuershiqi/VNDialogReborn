@@ -105,6 +105,7 @@
   "gui.vn_edit.option_edit.title": "Edit Option",
   "gui.vn_edit.option_text": "Option Text",
   "gui.vn_edit.option_target": "Target Node",
+  "gui.vn_edit.none": "None",
   "gui.vn_edit.always_visible": "Always Visible",
   "gui.vn_edit.add_command": "Add Command",
   "gui.vn_edit.add_option": "Add Option",

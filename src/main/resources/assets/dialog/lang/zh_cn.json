@@ -105,6 +105,7 @@
   "gui.vn_edit.option_edit.title": "编辑选项",
   "gui.vn_edit.option_text": "选项文本",
   "gui.vn_edit.option_target": "目标节点",
+  "gui.vn_edit.none": "无",
   "gui.vn_edit.always_visible": "始终可见",
   "gui.vn_edit.add_command": "添加命令",
   "gui.vn_edit.add_option": "添加选项",

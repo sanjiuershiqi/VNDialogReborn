@@ -326,6 +326,11 @@ public class DialogManager {
         if (currentSequence == null) {
             return;
         }
+        // 目标节点为空：选项不跳转，直接结束当前对话（选项语义：点击即结束）
+        if (targetId == null || targetId.isEmpty()) {
+            closeCurrentDialog();
+            return;
+        }
         DialogEntry targetEntry = currentSequence.findEntryById(targetId);
         if (targetEntry == null) {
             sendPlayerMessage(Component.translatable("dialog.manager.target_not_found", targetId));
