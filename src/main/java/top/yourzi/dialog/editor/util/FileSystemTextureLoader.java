@@ -147,15 +147,18 @@ public class FileSystemTextureLoader {
     /**
      * 用 JDK ImageIO 解码图片字节为 NativeImage。纯 Java 实现，无 native 内存操作。
      * ImageIO 内置支持 JPG/PNG/BMP/GIF/TIFF（不支持 WebP/AVIF/HEIC）。
-     * 用 raster 批量获取像素行，比逐像素 getRGB 快 5-10 倍。
+     *
+     * JPG 颜色模型复杂（灰度1分量、RGB 3分量、CMYK 4分量等），直接操作 raster 易越界。
+     * 这里先把任意颜色模型的 BufferedImage 统一绘制到 TYPE_INT_ARGB 的目标图，
+     * 再用 getRGB 批量获取像素（内部已处理颜色转换），稳定可靠。
      */
     private static NativeImage decodeWithImageIO(byte[] bytes) throws IOException {
-        BufferedImage buffered = ImageIO.read(new ByteArrayInputStream(bytes));
-        if (buffered == null) {
+        BufferedImage src = ImageIO.read(new ByteArrayInputStream(bytes));
+        if (src == null) {
             throw new IOException("ImageIO 无法解码该图片格式（可能是不支持的格式或损坏的文件）");
         }
-        int width = buffered.getWidth();
-        int height = buffered.getHeight();
+        int width = src.getWidth();
+        int height = src.getHeight();
         // 尺寸上限检查，防止超大图片导致 OOM 或 GPU 显存溢出
         if (width > MAX_TEXTURE_DIMENSION || height > MAX_TEXTURE_DIMENSION) {
             throw new IOException("图片尺寸 " + width + "x" + height + " 超过上限 "
@@ -165,31 +168,28 @@ public class FileSystemTextureLoader {
             throw new IOException("图片总像素数 " + (width * height) + " 超过上限 " + MAX_TOTAL_PIXELS + "，请缩小后再使用");
         }
         Dialog.LOGGER.info("decodeToNativeImage: ImageIO decoded {}x{}", width, height);
+        // 统一转换为 TYPE_INT_ARGB，避免 JPG 灰度/CMYK 等复杂颜色模型导致的分量越界
+        BufferedImage argb = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        java.awt.Graphics2D g = argb.createGraphics();
+        try {
+            g.drawImage(src, 0, 0, null);
+        } finally {
+            g.dispose();
+        }
         NativeImage image = new NativeImage(width, height, false);
         try {
-            // 用 raster 批量获取每行像素，避免逐像素 getRGB 的百万次方法调用开销
-            java.awt.image.WritableRaster raster = buffered.getRaster();
-            java.awt.image.ColorModel colorModel = buffered.getColorModel();
-            int[] pixelRow = new int[width];
+            // getRGB 返回 ARGB（int 高位到低位：A R G B），批量获取整行减少调用次数
+            int[] rowPixels = new int[width];
             for (int y = 0; y < height; y++) {
-                raster.getPixels(0, y, width, 1, pixelRow);
+                argb.getRGB(0, y, width, 1, rowPixels, 0, width);
                 for (int x = 0; x < width; x++) {
-                    // raster.getPixels 返回每像素的分量数组（取决于颜色模型分量数）
-                    int idx = x * raster.getNumBands();
-                    int r, g, b, a;
-                    if (colorModel.hasAlpha()) {
-                        r = pixelRow[idx] & 0xFF;
-                        g = pixelRow[idx + 1] & 0xFF;
-                        b = pixelRow[idx + 2] & 0xFF;
-                        a = pixelRow[idx + 3] & 0xFF;
-                    } else {
-                        r = pixelRow[idx] & 0xFF;
-                        g = pixelRow[idx + 1] & 0xFF;
-                        b = pixelRow[idx + 2] & 0xFF;
-                        a = 0xFF;
-                    }
+                    int argbPixel = rowPixels[x];
+                    int a = (argbPixel >> 24) & 0xFF;
+                    int r = (argbPixel >> 16) & 0xFF;
+                    int g2 = (argbPixel >> 8) & 0xFF;
+                    int b = argbPixel & 0xFF;
                     // NativeImage.setPixelRGBA 期望 ABGR (little-endian RGBA)
-                    int abgr = (a << 24) | (b << 16) | (g << 8) | r;
+                    int abgr = (a << 24) | (b << 16) | (g2 << 8) | r;
                     image.setPixelRGBA(x, y, abgr);
                 }
             }
