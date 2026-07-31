@@ -123,9 +123,9 @@ public class DialogTreeWidget extends AbstractWidget {
         this.scrollState.reset(0);
     }
 
-    /** 判断 node 子树中是否有 ID 包含 q 的节点（含自身）。 */
+    /** 判断 node 子树中是否有匹配 q 的节点（含自身）。 */
     private boolean subtreeMatches(TreeNode node, String q) {
-        if (node.entry.getId() != null && node.entry.getId().toLowerCase(Locale.ROOT).contains(q)) {
+        if (this.entryMatches(node.entry, q)) {
             return true;
         }
         for (TreeNode child : node.children) {
@@ -134,6 +134,40 @@ public class DialogTreeWidget extends AbstractWidget {
             }
         }
         return false;
+    }
+
+    /**
+     * 判断节点是否匹配搜索词 q（不区分大小写，包含匹配）。
+     * 搜索范围：节点 ID + 说话人 + 正文 + 选项文本 + 选项目标 + 命令 + 音频路径。
+     * 比"只搜 ID"实用：创作者通常记得"说了什么"而非"节点叫什么"。
+     */
+    private boolean entryMatches(DialogEntry entry, String q) {
+        String haystack = this.searchableText(entry);
+        return haystack.contains(q);
+    }
+
+    /** 拼接节点所有可搜索字段为一个小写文本串。JsonElement 用 toString 兜底提取纯文本。 */
+    private String searchableText(DialogEntry entry) {
+        if (entry == null) return "";
+        StringBuilder sb = new StringBuilder();
+        if (entry.getId() != null) sb.append(entry.getId()).append(' ');
+        if (entry.getSpeaker() != null) sb.append(entry.getSpeaker().toString()).append(' ');
+        if (entry.getText() != null) sb.append(entry.getText().toString()).append(' ');
+        if (entry.getNextId() != null) sb.append(entry.getNextId()).append(' ');
+        if (entry.getAudioPath() != null) sb.append(entry.getAudioPath()).append(' ');
+        if (entry.getOptions() != null) {
+            for (DialogOption opt : entry.getOptions()) {
+                if (opt == null) continue;
+                if (opt.getText() != null) sb.append(opt.getText().toString()).append(' ');
+                if (opt.getTargetId() != null) sb.append(opt.getTargetId()).append(' ');
+            }
+        }
+        if (entry.getCommands() != null) {
+            for (String cmd : entry.getCommands()) {
+                if (cmd != null) sb.append(cmd).append(' ');
+            }
+        }
+        return sb.toString().toLowerCase(Locale.ROOT);
     }
 
     /** 前序输出子树中"自身或后代匹配 q"的节点（含祖先链），保留原 depth 缩进。 */
