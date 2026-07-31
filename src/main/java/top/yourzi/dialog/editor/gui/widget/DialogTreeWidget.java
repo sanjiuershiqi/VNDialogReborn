@@ -9,6 +9,8 @@ import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import top.yourzi.dialog.Dialog;
+import top.yourzi.dialog.editor.gui.EditorRenderHelper;
+import top.yourzi.dialog.editor.gui.EditorScreenState;
 import top.yourzi.dialog.editor.gui.InputDialogScreen;
 import top.yourzi.dialog.editor.util.EditorTheme;
 import top.yourzi.dialog.model.DialogEntry;
@@ -34,6 +36,10 @@ public class DialogTreeWidget extends AbstractWidget {
     private DialogSequence sequence;
     private final List<TreeNode> visibleNodes = new ArrayList<>();
     private int scrollOffset = 0;
+    /** 滚动条拖拽 + 平滑滚动状态（借鉴 Sparkle OptionScreen）。 */
+    private final EditorRenderHelper.ScrollState scrollState = new EditorRenderHelper.ScrollState();
+    /** 上一帧纳秒时间戳，用于计算 dt 驱动平滑滚动。 */
+    private long lastFrameNanos = 0L;
     private int selectedIndex = -1;
     private Consumer<DialogEntry> onEntrySelected;
     private Consumer<DialogEntry> onEntryDelete;
@@ -53,6 +59,20 @@ public class DialogTreeWidget extends AbstractWidget {
         this.selectedIndex = -1;
         this.scrollOffset = 0;
         this.buildTree();
+        // 从状态单例恢复选中节点与滚动位置（子屏返回重建后保持状态）
+        String savedId = EditorScreenState.get().getSelectedNodeId();
+        if (savedId != null && this.visibleNodes != null) {
+            for (int i = 0; i < this.visibleNodes.size(); i++) {
+                if (savedId.equals(this.visibleNodes.get(i).entry.getId())) {
+                    this.selectedIndex = i;
+                    break;
+                }
+            }
+        }
+        int maxScroll = Math.max(0, this.visibleNodes.size() * ROW_HEIGHT - this.getHeight());
+        this.scrollOffset = Mth.clamp(EditorScreenState.get().getTreeScrollOffset(), 0, maxScroll);
+        // 同步 display 到恢复后的 scrollOffset，避免首帧 lerp 跳变
+        this.scrollState.reset(this.scrollOffset);
     }
 
     public void setCallbacks(Consumer<DialogEntry> onSelect, Consumer<DialogEntry> onDelete, Consumer<DialogEntry> onAddChild) {
@@ -196,7 +216,12 @@ public class DialogTreeWidget extends AbstractWidget {
         if (this.scrollOffset < 0) {
             this.scrollOffset = 0;
         }
-        int yOffset = this.getY() - this.scrollOffset;
+        // 计算 dt 驱动平滑滚动（首帧 lastFrameNanos=0 直接吸附）
+        long now = System.nanoTime();
+        float dt = this.lastFrameNanos == 0L ? 0f : Math.min(0.1f, (now - this.lastFrameNanos) / 1.0e9f);
+        this.lastFrameNanos = now;
+        int displayOffset = this.scrollState.tick(this.scrollOffset, dt);
+        int yOffset = this.getY() - displayOffset;
         for (int i = 0; i < this.visibleNodes.size(); i++) {
             TreeNode node = this.visibleNodes.get(i);
             int rowY = yOffset + i * ROW_HEIGHT;
@@ -229,9 +254,10 @@ public class DialogTreeWidget extends AbstractWidget {
         }
         if (this.visibleNodes.size() * ROW_HEIGHT > this.getHeight()) {
             int scrollBarHeight = Math.max(10, this.getHeight() * this.getHeight() / (this.visibleNodes.size() * ROW_HEIGHT));
-            int scrollBarY = this.getY() + (int) ((float) this.scrollOffset / (float) (this.visibleNodes.size() * ROW_HEIGHT - this.getHeight()) * (float) (this.getHeight() - scrollBarHeight));
+            int scrollBarY = this.getY() + (int) ((float) displayOffset / (float) (this.visibleNodes.size() * ROW_HEIGHT - this.getHeight()) * (float) (this.getHeight() - scrollBarHeight));
             graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), 0x33000000);
-            graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, scrollBarY, this.getX() + this.getWidth(), scrollBarY + scrollBarHeight, EditorTheme.TEXT_MUTED);
+            int thumbColor = this.scrollState.dragging ? 0xFFFFFFFF : EditorTheme.TEXT_MUTED;
+            graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, scrollBarY, this.getX() + this.getWidth(), scrollBarY + scrollBarHeight, thumbColor);
         }
         } finally {
             graphics.disableScissor();
@@ -242,6 +268,17 @@ public class DialogTreeWidget extends AbstractWidget {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (!this.isMouseOver(mouseX, mouseY)) {
             return false;
+        }
+        // 滚动条命中：开始拖拽并立即跳到点击位置（优先于节点命中，避免误选节点）
+        int totalH = this.visibleNodes.size() * ROW_HEIGHT;
+        int maxScroll = Math.max(0, totalH - this.getHeight());
+        if (maxScroll > 0 && button == 0) {
+            int trackX = this.getX() + this.getWidth() - SCROLLBAR_WIDTH;
+            if (EditorRenderHelper.isOnVerticalScrollbar(mouseX, mouseY, trackX, this.getY(), SCROLLBAR_WIDTH, this.getHeight())) {
+                this.scrollState.dragging = true;
+                this.scrollOffset = EditorRenderHelper.offsetFromMouseY(mouseY, this.getY(), this.getY() + this.getHeight(), maxScroll);
+                return true;
+            }
         }
         int relY = (int) mouseY - this.getY() + this.scrollOffset;
         int index = relY / ROW_HEIGHT;
@@ -280,6 +317,7 @@ public class DialogTreeWidget extends AbstractWidget {
                         this.buildTree();
                         this.selectedIndex = this.visibleNodes.indexOf(this.visibleNodes.stream()
                                 .filter(n -> n.entry.getId().equals(newId)).findFirst().orElse(null));
+                        EditorScreenState.get().setSelectedNodeId(newId);
                         if (this.onEntrySelected != null) {
                             this.onEntrySelected.accept(node.entry);
                         }
@@ -297,6 +335,7 @@ public class DialogTreeWidget extends AbstractWidget {
                     return true;
                 }
                 this.selectedIndex = index;
+                EditorScreenState.get().setSelectedNodeId(node.entry.getId());
                 if (this.onEntrySelected != null) {
                     this.onEntrySelected.accept(node.entry);
                 }
@@ -310,6 +349,7 @@ public class DialogTreeWidget extends AbstractWidget {
             }
         } else if (button == 0) {
             this.selectedIndex = -1;
+            EditorScreenState.get().setSelectedNodeId(null);
             if (this.onEntrySelected != null) {
                 this.onEntrySelected.accept(null);
             }
@@ -325,7 +365,28 @@ public class DialogTreeWidget extends AbstractWidget {
         }
         this.scrollOffset = Mth.clamp(this.scrollOffset - (int) scrollY * ROW_HEIGHT, 0,
                 Math.max(0, this.visibleNodes.size() * ROW_HEIGHT - this.getHeight()));
+        EditorScreenState.get().setTreeScrollOffset(this.scrollOffset);
         return true;
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dx, double dy) {
+        if (this.scrollState.dragging) {
+            int maxScroll = Math.max(0, this.visibleNodes.size() * ROW_HEIGHT - this.getHeight());
+            this.scrollOffset = EditorRenderHelper.offsetFromMouseY(mouseY, this.getY(), this.getY() + this.getHeight(), maxScroll);
+            EditorScreenState.get().setTreeScrollOffset(this.scrollOffset);
+            return true;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dx, dy);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (this.scrollState.dragging) {
+            this.scrollState.dragging = false;
+            return true;
+        }
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override

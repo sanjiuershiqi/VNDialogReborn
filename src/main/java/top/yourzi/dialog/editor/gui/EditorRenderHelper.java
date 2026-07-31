@@ -1,6 +1,7 @@
 package top.yourzi.dialog.editor.gui;
 
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.util.Mth;
 import top.yourzi.dialog.editor.util.EditorTheme;
 
 /**
@@ -77,5 +78,59 @@ public final class EditorRenderHelper {
     public static int withAlphaRatio(int argb, float ratio) {
         float r = Math.max(0f, Math.min(1f, ratio));
         return withAlpha(argb, (int) (r * 255f + 0.5f));
+    }
+
+    /**
+     * 滚动条交互状态（拖拽标志 + 平滑显示值）。建议作为宿主控件的字段持有。
+     * 借鉴 Sparkle-Morpher OptionScreen 的 draggingXxxScrollbar + scrollDisplay lerp 方案，
+     * 封装为可复用状态对象，避免 PropertyPanel/DialogTreeWidget/PortraitListScreen 三处重复。
+     */
+    public static final class ScrollState {
+        /** 当前是否正在拖拽滚动条滑块。 */
+        public boolean dragging;
+        /** 平滑显示值（浮点），每帧向目标 offset 逼近。 */
+        public float display;
+
+        public ScrollState() {
+        }
+
+        /**
+         * 每帧推进 display 向 offset 逼近，差值<0.5 吸附。
+         * lerp 系数 1 - exp(-dt*18) 与 Sparkle 一致，dt 越大逼近越快。
+         *
+         * @param offset 目标滚动偏移（整型，由滚轮/拖拽产生）
+         * @param dt     距上一帧的秒数（首帧传 0 直接吸附）
+         * @return round 后的显示偏移，供 translate 与鼠标补偿使用
+         */
+        public int tick(float offset, float dt) {
+            if (dt <= 0) {
+                display = offset;
+                return Math.round(offset);
+            }
+            float lerp = 1.0f - (float) Math.exp(-dt * 18.0f);
+            display += (offset - display) * lerp;
+            if (Math.abs(offset - display) < 0.5f) display = offset;
+            return Math.round(display);
+        }
+
+        /** 重置 display 到指定 offset（重置滚动时同步，避免首帧跳变）。 */
+        public void reset(float offset) {
+            display = offset;
+        }
+    }
+
+    /**
+     * 命中检测：鼠标是否在垂直滚动条轨道上。
+     */
+    public static boolean isOnVerticalScrollbar(double mx, double my, int trackX, int trackY, int trackW, int trackH) {
+        return mx >= trackX && mx < trackX + trackW && my >= trackY && my < trackY + trackH;
+    }
+
+    /**
+     * 按鼠标 Y 在轨道中的比例映射到 scrollOffset，返回 clamp 后的目标 offset。
+     */
+    public static int offsetFromMouseY(double mouseY, int trackTop, int trackBottom, int maxScroll) {
+        double t = Mth.clamp((mouseY - trackTop) / Math.max(1, trackBottom - trackTop), 0.0, 1.0);
+        return (int) (t * maxScroll);
     }
 }

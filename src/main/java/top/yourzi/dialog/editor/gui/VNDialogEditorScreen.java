@@ -63,17 +63,9 @@ public class VNDialogEditorScreen extends Screen {
     private final java.util.Set<String> dirtySequences = new java.util.HashSet<>();
     public String statusText = "";
     private boolean isInitialized = false;
-    private int pendingTabIndex = 0;
 
     public VNDialogEditorScreen() {
         super(Component.translatable("gui.vn_edit.title"));
-    }
-
-    public void setPropertyPanelTab(int index) {
-        if (this.propertyPanel != null) {
-            this.propertyPanel.setActiveTab(index);
-        }
-        this.pendingTabIndex = index;
     }
 
     @Override
@@ -104,7 +96,7 @@ public class VNDialogEditorScreen extends Screen {
                 this.propertyPanel.unbind();
             }
         }
-        this.propertyPanel.setActiveTab(this.pendingTabIndex);
+        this.propertyPanel.setActiveTab(EditorScreenState.get().getActivePropertyTab());
         this.propertyPanel.setVisible(this.editingEntry != null);
         this.rebuildTabButtons();
     }
@@ -165,7 +157,6 @@ public class VNDialogEditorScreen extends Screen {
         int propX = TREE_WIDTH + 1;
         int propWidth = this.width - propX;
         this.propertyPanel = new PropertyPanel(propX, treeContentY, propWidth, contentHeight, this.font);
-        this.propertyPanel.setOnTabChangeListener(index -> this.pendingTabIndex = index);
         this.addRenderableWidget(this.propertyPanel);
     }
 
@@ -262,6 +253,9 @@ public class VNDialogEditorScreen extends Screen {
         if (this.currentSequence.getAllowClose() == null) {
             this.currentSequence.setAllowClose(true);
         }
+        // 切换到不同对话序列时清空节点选中与树滚动状态：旧 ID 在新序列中无意义
+        EditorScreenState.get().setSelectedNodeId(null);
+        EditorScreenState.get().setTreeScrollOffset(0);
         this.treeWidget.setSequence(this.currentSequence);
         this.propertyPanel.setSequence(this.currentSequence);
         this.editingEntry = null;

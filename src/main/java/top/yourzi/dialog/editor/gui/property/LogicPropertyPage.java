@@ -7,13 +7,11 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Checkbox;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.events.GuiEventListener;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import top.yourzi.dialog.editor.gui.FileBrowserScreen;
 import top.yourzi.dialog.editor.gui.InventoryItemPickerScreen;
 import top.yourzi.dialog.editor.gui.NodePickerScreen;
 import top.yourzi.dialog.editor.gui.OptionEditScreen;
-import top.yourzi.dialog.editor.gui.VNDialogEditorScreen;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import top.yourzi.dialog.editor.util.AudioPreviewPlayer;
 import top.yourzi.dialog.editor.util.EditorConfig;
@@ -421,7 +419,7 @@ public class LogicPropertyPage extends AbstractPropertyPage {
             items.add(info);
             this.setItemsList(items);
             this.relayoutSections();
-            this.recoverLogicTab();
+            // 活动标签由 EditorScreenState 在 PropertyPanel 构造时恢复，无需手动 recover
         }, Minecraft.getInstance().screen));
     }
 
@@ -536,7 +534,7 @@ public class LogicPropertyPage extends AbstractPropertyPage {
         Consumer<DialogOption> onSave = edited -> {
             this.updateOption(option, edited);
             this.relayoutSections();
-            this.recoverLogicTab();
+            // 活动标签由 EditorScreenState 在 PropertyPanel 构造时恢复，无需手动 recover
         };
         Minecraft.getInstance().setScreen(new OptionEditScreen(option, onSave, Minecraft.getInstance().screen, this.currentSequence));
     }
@@ -544,7 +542,7 @@ public class LogicPropertyPage extends AbstractPropertyPage {
     private void onAudioBrowse() {
         FileBrowserScreen.open(EditorConfig.SOUNDS_DIR.toFile(), new String[]{"wav", "ogg"}, path -> {
             this.audioPathBox.setValue(path);
-            this.recoverLogicTab();
+            // 活动标签由 EditorScreenState 在 PropertyPanel 构造时恢复，无需手动 recover
         }, Minecraft.getInstance().screen);
     }
 
@@ -557,15 +555,8 @@ public class LogicPropertyPage extends AbstractPropertyPage {
             if (this.currentEntry != null) {
                 this.currentEntry.setNextId(selectedId.isEmpty() ? null : selectedId);
             }
-            this.recoverLogicTab();
+            // 活动标签由 EditorScreenState 在 PropertyPanel 构造时恢复，无需手动 recover
         }, Minecraft.getInstance().screen));
-    }
-
-    private void recoverLogicTab() {
-        Screen screen = Minecraft.getInstance().screen;
-        if (screen instanceof VNDialogEditorScreen editor) {
-            editor.setPropertyPanelTab(2);
-        }
     }
 
     @Override

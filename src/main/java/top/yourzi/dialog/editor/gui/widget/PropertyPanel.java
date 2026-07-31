@@ -8,6 +8,7 @@ import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
+import top.yourzi.dialog.editor.gui.EditorRenderHelper;
 import top.yourzi.dialog.editor.gui.EditorScreenState;
 import top.yourzi.dialog.editor.gui.property.AppearancePropertyPage;
 import top.yourzi.dialog.editor.gui.property.LogicPropertyPage;
@@ -35,6 +36,10 @@ public class PropertyPanel extends AbstractWidget {
     private OnTabChangeListener onTabChangeListener;
     // 内容垂直滚动偏移，用于在页面内容超出可视高度时滚动查看
     private int scrollOffset = 0;
+    /** 滚动条拖拽 + 平滑滚动状态（借鉴 Sparkle OptionScreen）。 */
+    private final EditorRenderHelper.ScrollState scrollState = new EditorRenderHelper.ScrollState();
+    /** 上一帧纳秒时间戳，用于计算 dt 驱动平滑滚动。 */
+    private long lastFrameNanos = 0L;
     /** 当前活动页是否有下拉框浮层展开，展开时跳过内容 scissor 避免裁剪浮层。 */
     private boolean popupOpen = false;
 
@@ -71,6 +76,7 @@ public class PropertyPanel extends AbstractWidget {
             this.tabs.get(i).page.setVisible(i == this.activeTabIndex);
         }
         this.scrollOffset = 0;
+        this.scrollState.reset(0);
     }
 
     public void unbind() {
@@ -79,6 +85,7 @@ public class PropertyPanel extends AbstractWidget {
             tab.page.unbind();
         }
         this.scrollOffset = 0;
+        this.scrollState.reset(0);
     }
 
     public void setSequence(DialogSequence sequence) {
@@ -147,6 +154,7 @@ public class PropertyPanel extends AbstractWidget {
             }
             // 切换标签页时重置滚动，避免上一个页面的偏移影响新页面
             this.scrollOffset = 0;
+            this.scrollState.reset(0);
             // 写回状态单例，子屏重建后 PropertyPanel 构造时自动恢复活动标签
             EditorScreenState.get().setActivePropertyTab(index);
             if (this.onTabChangeListener != null) {
@@ -189,6 +197,11 @@ public class PropertyPanel extends AbstractWidget {
             int pageTop = this.getPageTop();
             int pageH = this.getPageHeight();
             int contentH = this.getActiveContentHeight();
+            // 计算 dt 驱动平滑滚动（首帧 lastFrameNanos=0 直接吸附）
+            long now = System.nanoTime();
+            float dt = this.lastFrameNanos == 0L ? 0f : Math.min(0.1f, (now - this.lastFrameNanos) / 1.0e9f);
+            this.lastFrameNanos = now;
+            int displayOffset = this.scrollState.tick(this.scrollOffset, dt);
             // 用 scissor 裁剪页面内容区域，滚动时不会溢出到标签栏上。
             // 当下拉框浮层展开时跳过 scissor，让 DropdownWidget 自渲染的浮层不被裁剪。
             boolean useScissor = !this.popupOpen;
@@ -197,21 +210,22 @@ public class PropertyPanel extends AbstractWidget {
             }
             try {
                 graphics.pose().pushPose();
-                graphics.pose().translate(0, -this.scrollOffset, 0);
+                graphics.pose().translate(0, -displayOffset, 0);
                 // 滚动后鼠标逻辑坐标需要相应补偿，保证悬停/点击对齐
-                this.tabs.get(this.activeTabIndex).page.render(graphics, mouseX, mouseY + this.scrollOffset, partialTick);
+                this.tabs.get(this.activeTabIndex).page.render(graphics, mouseX, mouseY + displayOffset, partialTick);
                 graphics.pose().popPose();
             } finally {
                 if (useScissor) {
                     graphics.disableScissor();
                 }
             }
-            // 滚动条
+            // 滚动条（用 displayOffset 计算 thumbY，拖拽中滑块高亮）
             if (contentH > pageH) {
                 int scrollBarHeight = Math.max(10, pageH * pageH / contentH);
-                int scrollBarY = pageTop + (int) ((float) this.scrollOffset / (float) (contentH - pageH) * (float) (pageH - scrollBarHeight));
+                int scrollBarY = pageTop + (int) ((float) displayOffset / (float) (contentH - pageH) * (float) (pageH - scrollBarHeight));
                 graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, pageTop, this.getX() + this.getWidth(), pageTop + pageH, 0x33000000);
-                graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, scrollBarY, this.getX() + this.getWidth(), scrollBarY + scrollBarHeight, EditorTheme.TEXT_MUTED);
+                int thumbColor = this.scrollState.dragging ? 0xFFFFFFFF : EditorTheme.TEXT_MUTED;
+                graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, scrollBarY, this.getX() + this.getWidth(), scrollBarY + scrollBarHeight, thumbColor);
             }
             // 下拉浮层已由 DropdownWidget.renderWidget 自包含渲染（跟随页面 translate），无需在此手动调用。
         }
@@ -233,6 +247,19 @@ public class PropertyPanel extends AbstractWidget {
                     dd.close();
                     return true;
                 }
+            }
+        }
+        // 滚动条命中：开始拖拽并立即跳到点击位置
+        int maxScroll = this.getMaxScroll();
+        if (maxScroll > 0 && button == 0) {
+            int pageTop = this.getPageTop();
+            int pageH = this.getPageHeight();
+            int trackX = this.getX() + this.getWidth() - SCROLLBAR_WIDTH;
+            if (EditorRenderHelper.isOnVerticalScrollbar(mouseX, mouseY, trackX, pageTop, SCROLLBAR_WIDTH, pageH)) {
+                this.scrollState.dragging = true;
+                this.scrollOffset = EditorRenderHelper.offsetFromMouseY(mouseY, pageTop, pageTop + pageH, maxScroll);
+                this.clampScroll();
+                return true;
             }
         }
         int tabX = this.getX();
@@ -294,6 +321,27 @@ public class PropertyPanel extends AbstractWidget {
         }
         this.scrollOffset = Mth.clamp(this.scrollOffset - (int) scrollY * EditorTheme.FIELD_HEIGHT, 0, max);
         return true;
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dx, double dy) {
+        if (this.scrollState.dragging) {
+            int pageTop = this.getPageTop();
+            int pageH = this.getPageHeight();
+            this.scrollOffset = EditorRenderHelper.offsetFromMouseY(mouseY, pageTop, pageTop + pageH, this.getMaxScroll());
+            this.clampScroll();
+            return true;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dx, dy);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (this.scrollState.dragging) {
+            this.scrollState.dragging = false;
+            return true;
+        }
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override

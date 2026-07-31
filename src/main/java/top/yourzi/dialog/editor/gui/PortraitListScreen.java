@@ -101,6 +101,10 @@ public class PortraitListScreen extends Screen {
     private int selectedIndex = -1;
     private boolean needsLayoutRefresh = true;
     private int scrollOffset = 0;
+    /** 左列表滚动条拖拽 + 平滑滚动状态（借鉴 Sparkle OptionScreen）。 */
+    private final top.yourzi.dialog.editor.gui.EditorRenderHelper.ScrollState scrollState = new top.yourzi.dialog.editor.gui.EditorRenderHelper.ScrollState();
+    /** 上一帧纳秒时间戳，用于计算 dt 驱动平滑滚动。 */
+    private long lastFrameNanos = 0L;
     private ResourceLocation previewTex = null;
     private String previewPath = null;
     private int previewW;
@@ -758,7 +762,12 @@ public class PortraitListScreen extends Screen {
         g.enableScissor(x, y, x + w, y + h);
         int maxScroll = Math.max(0, this.portraits.size() * ROW_H - h);
         this.scrollOffset = Mth.clamp(this.scrollOffset, 0, maxScroll);
-        int curY = y - this.scrollOffset;
+        // 计算 dt 驱动平滑滚动（首帧 lastFrameNanos=0 直接吸附）
+        long now = System.nanoTime();
+        float dt = this.lastFrameNanos == 0L ? 0f : Math.min(0.1f, (now - this.lastFrameNanos) / 1.0e9f);
+        this.lastFrameNanos = now;
+        int displayOffset = this.scrollState.tick(this.scrollOffset, dt);
+        int curY = y - displayOffset;
         for (int i = 0; i < this.portraits.size(); i++) {
             PortraitInfo info = this.portraits.get(i);
             int rowY = curY + i * ROW_H;
@@ -779,9 +788,10 @@ public class PortraitListScreen extends Screen {
         g.disableScissor();
         if (maxScroll > 0) {
             int sbH = Math.max(10, h * h / (this.portraits.size() * ROW_H));
-            int sbY = y + (int) ((float) this.scrollOffset / (float) maxScroll * (float) (h - sbH));
+            int sbY = y + (int) ((float) displayOffset / (float) maxScroll * (float) (h - sbH));
             g.fill(x + w - 4, y, x + w, y + h, 0x33FFFFFF);
-            g.fill(x + w - 4, sbY, x + w, sbY + sbH, EditorTheme.TEXT_MUTED);
+            int thumbColor = this.scrollState.dragging ? 0xFFFFFFFF : EditorTheme.TEXT_MUTED;
+            g.fill(x + w - 4, sbY, x + w, sbY + sbH, thumbColor);
         }
     }
 
@@ -871,6 +881,13 @@ public class PortraitListScreen extends Screen {
             return true;
         }
         int contentH = this.height - HEADER - FOOTER;
+        // 左列表滚动条命中：开始拖拽并立即跳到点击位置（优先于列表项命中）
+        int maxScroll = Math.max(0, this.portraits.size() * ROW_H - contentH);
+        if (maxScroll > 0 && button == 0 && isMouseInRect(mouseX, mouseY, 10 + LEFT_W - 4, HEADER, 4, contentH)) {
+            this.scrollState.dragging = true;
+            this.scrollOffset = top.yourzi.dialog.editor.gui.EditorRenderHelper.offsetFromMouseY(mouseY, HEADER, HEADER + contentH, maxScroll);
+            return true;
+        }
         if (isMouseInRect(mouseX, mouseY, 10, HEADER, LEFT_W, contentH)) {
             int idx = ((int) mouseY - HEADER + this.scrollOffset) / ROW_H;
             if (idx >= 0 && idx < this.portraits.size()) {
@@ -894,6 +911,13 @@ public class PortraitListScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        // 滚动条拖拽中：按鼠标 Y 映射 scrollOffset（优先于立绘拖动）
+        if (this.scrollState.dragging) {
+            int contentH = this.height - HEADER - FOOTER;
+            int maxScroll = Math.max(0, this.portraits.size() * ROW_H - contentH);
+            this.scrollOffset = top.yourzi.dialog.editor.gui.EditorRenderHelper.offsetFromMouseY(mouseY, HEADER, HEADER + contentH, maxScroll);
+            return true;
+        }
         if (this.draggingPortrait && button == 0) {
             PortraitInfo info = this.getSelected();
             if (info != null && this.viewport != null) {
@@ -924,6 +948,10 @@ public class PortraitListScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (this.scrollState.dragging) {
+            this.scrollState.dragging = false;
+            return true;
+        }
         if (this.draggingPortrait && button == 0) {
             this.draggingPortrait = false;
             return true;

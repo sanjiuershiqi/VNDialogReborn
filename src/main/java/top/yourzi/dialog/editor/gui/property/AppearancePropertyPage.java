@@ -6,14 +6,12 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.events.GuiEventListener;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import top.yourzi.dialog.Dialog;
 import top.yourzi.dialog.editor.gui.FileBrowserScreen;
 import top.yourzi.dialog.editor.gui.PortraitListScreen;
 import top.yourzi.dialog.editor.gui.BuiltInTextureBrowserScreen;
-import top.yourzi.dialog.editor.gui.VNDialogEditorScreen;
 import top.yourzi.dialog.editor.gui.widget.DropdownWidget;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import top.yourzi.dialog.editor.util.EditorConfig;
@@ -216,7 +214,7 @@ public class AppearancePropertyPage extends AbstractPropertyPage {
         FileBrowserScreen.open(EditorConfig.BACKGROUNDS_DIR.toFile(), new String[]{"png", "jpg", "jpeg"}, path -> {
             String lowerPath = path.toLowerCase(Locale.ROOT);
             this.backgroundPathBox.setValue(lowerPath);
-            this.recoverAppearanceTab();
+            // 活动标签由 EditorScreenState 在 PropertyPanel 构造时恢复，无需手动 recover
         }, Minecraft.getInstance().screen);
     }
 
@@ -224,7 +222,7 @@ public class AppearancePropertyPage extends AbstractPropertyPage {
         Minecraft.getInstance().setScreen(new BuiltInTextureBrowserScreen("textures/backgrounds/", path -> {
             String lowerPath = path.toLowerCase(Locale.ROOT);
             this.backgroundPathBox.setValue(lowerPath);
-            this.recoverAppearanceTab();
+            // 活动标签由 EditorScreenState 在 PropertyPanel 构造时恢复，无需手动 recover
         }, Minecraft.getInstance().screen));
     }
 
@@ -236,15 +234,8 @@ public class AppearancePropertyPage extends AbstractPropertyPage {
                 ? new ArrayList<>(this.currentEntry.getPortraits()) : new ArrayList<>();
         Minecraft.getInstance().setScreen(new PortraitListScreen(portraits, editedList -> {
             this.currentEntry.setPortraits(editedList.isEmpty() ? null : new ArrayList<>(editedList));
-            this.recoverAppearanceTab();
+            // 活动标签由 EditorScreenState 在 PropertyPanel 构造时恢复，无需手动 recover
         }, Minecraft.getInstance().screen));
-    }
-
-    private void recoverAppearanceTab() {
-        Screen screen = Minecraft.getInstance().screen;
-        if (screen instanceof VNDialogEditorScreen editor) {
-            editor.setPropertyPanelTab(1);
-        }
     }
 
     private void loadBackgroundPreview(String path) {
