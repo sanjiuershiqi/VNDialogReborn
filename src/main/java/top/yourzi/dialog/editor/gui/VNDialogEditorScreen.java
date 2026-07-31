@@ -194,7 +194,7 @@ public class VNDialogEditorScreen extends Screen {
             }
             int index = i;
             TabButton tabBtn = new TabButton(tabX, tabY, width, 18, Component.literal(displayTitle),
-                    b -> this.switchToSequence(index), index, this::onCloseTab, this::onRenameTab);
+                    b -> this.switchToSequence(index), index, this::onTabRightClick, this::onRenameTab);
             this.tabButtons.add(tabBtn);
             tabX += width + 2;
         }
@@ -455,10 +455,18 @@ public class VNDialogEditorScreen extends Screen {
         if (this.currentSequence == null) {
             return;
         }
-        Minecraft.getInstance().setScreen(new SequencePropertiesScreen(this.currentSequence, seq -> {
+        SequencePropertiesScreen propsScreen = new SequencePropertiesScreen(this.currentSequence, seq -> {
             this.rebuildTabButtons();
             this.statusText = Component.translatable("gui.vn_edit.status.props_saved").getString();
-        }, this));
+        }, this);
+        // 注入删除回调：序列属性屏"删除"按钮触发，定位到当前序列索引执行删除文件
+        propsScreen.setOnDelete(seq -> {
+            int idx = this.openSequences.indexOf(seq);
+            if (idx >= 0) {
+                this.onDeleteTab(idx);
+            }
+        });
+        Minecraft.getInstance().setScreen(propsScreen);
     }
 
     private void loadImportedDialog(Path dialogFile) {
@@ -647,7 +655,66 @@ public class VNDialogEditorScreen extends Screen {
         }
     }
 
-    private void onCloseTab(int index) {
+    /**
+     * 右键标签入口：弹出"关闭标签"确认。
+     * 关闭标签仅从编辑器移除，不删除对话文件（与 onDeleteTab 删除文件语义分离）。
+     * 脏序列关闭时提示未保存修改将丢失。
+     */
+    private void onTabRightClick(int index) {
+        if (index < 0 || index >= this.openSequences.size()) {
+            return;
+        }
+        DialogSequence seq = this.openSequences.get(index);
+        boolean dirty = seq.getId() != null && this.dirtySequences.contains(seq.getId());
+        Component message = dirty
+                ? Component.translatable("gui.vn_edit.close_tab.dirty_message", seq.getId())
+                : Component.translatable("gui.vn_edit.close_tab.message", seq.getId());
+        if (this.minecraft != null) {
+            this.minecraft.setScreen(new EditorConfirmScreen(
+                    Component.translatable("gui.vn_edit.close_tab.title"),
+                    message,
+                    confirmed -> {
+                        if (confirmed) {
+                            this.closeTab(index);
+                        }
+                    }, this));
+        }
+    }
+
+    /**
+     * 关闭标签：仅从 openSequences 移除并调整状态，不删除对话文件。
+     * 文件仍保留在磁盘，可通过读取/导入重新打开。
+     */
+    private void closeTab(int index) {
+        if (index < 0 || index >= this.openSequences.size()) {
+            return;
+        }
+        DialogSequence seq = this.openSequences.get(index);
+        if (seq.getId() != null) {
+            this.dirtySequences.remove(seq.getId());
+        }
+        this.openSequences.remove(index);
+        if (this.openSequences.isEmpty()) {
+            this.activeSequenceIndex = -1;
+            this.currentSequence = null;
+            this.treeWidget.setSequence(null);
+            this.propertyPanel.unbind();
+            this.editingEntry = null;
+            this.propertyPanel.setVisible(false);
+        } else if (this.activeSequenceIndex >= index) {
+            this.activeSequenceIndex = Math.min(this.activeSequenceIndex, this.openSequences.size() - 1);
+            this.switchToSequence(this.activeSequenceIndex);
+        } else {
+            this.rebuildTabButtons();
+        }
+        this.saveSession();
+    }
+
+    /**
+     * 删除对话文件（危险操作）：从磁盘删除 JSON 并从编辑器移除。
+     * 入口在序列属性屏的"删除"按钮，避免与"关闭标签"混淆。
+     */
+    private void onDeleteTab(int index) {
         if (index < 0 || index >= this.openSequences.size()) {
             return;
         }
@@ -664,20 +731,7 @@ public class VNDialogEditorScreen extends Screen {
                             } catch (IOException e) {
                                 Dialog.LOGGER.error("Failed to delete file: {}", file);
                             }
-                            this.openSequences.remove(index);
-                            if (this.openSequences.isEmpty()) {
-                                this.activeSequenceIndex = -1;
-                                this.currentSequence = null;
-                                this.treeWidget.setSequence(null);
-                                this.propertyPanel.unbind();
-                                this.editingEntry = null;
-                                this.propertyPanel.setVisible(false);
-                            } else if (this.activeSequenceIndex >= index) {
-                                this.activeSequenceIndex = Math.min(this.activeSequenceIndex, this.openSequences.size() - 1);
-                                this.switchToSequence(this.activeSequenceIndex);
-                            } else {
-                                this.rebuildTabButtons();
-                            }
+                            this.closeTab(index);
                         }
                     }, this));
         }
@@ -824,7 +878,7 @@ public class VNDialogEditorScreen extends Screen {
     }
 
     /**
-     * 标签页按钮：支持单击切换、双击重命名、右键关闭。
+     * 标签页按钮：支持单击切换、双击重命名、右键弹关闭确认（不删文件）。
      * 继承 EditorButton 以统一编辑器风格。
      */
     private static class TabButton extends EditorButton {

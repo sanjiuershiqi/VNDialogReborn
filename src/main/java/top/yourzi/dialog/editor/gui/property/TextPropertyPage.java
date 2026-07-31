@@ -322,7 +322,6 @@ public class TextPropertyPage extends AbstractPropertyPage {
             this.unbind();
             return;
         }
-        this.speakerBox.setResponder(null);
         String speakerStr = "";
         JsonElement speakerJson = this.currentEntry.getSpeaker();
         if (speakerJson != null && !speakerJson.isJsonNull()) {
@@ -333,8 +332,7 @@ public class TextPropertyPage extends AbstractPropertyPage {
                 speakerStr = comp != null ? this.componentToFormattingCodes(comp) : speakerJson.toString();
             }
         }
-        this.speakerBox.setValue(speakerStr);
-        this.speakerBox.setResponder(s -> {
+        this.setBoxSilent(this.speakerBox, speakerStr, s -> {
             if (this.currentEntry != null) {
                 MutableComponent component = this.parseFormattingCodesToComponent(s);
                 this.currentEntry.setSpeaker(ComponentJson.toJsonTree(component));

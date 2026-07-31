@@ -349,9 +349,7 @@ public class AppearancePropertyPage extends AbstractPropertyPage {
         }
         BackgroundImageInfo bgInfo = this.currentEntry.getBackgroundImage();
         String bgPath = bgInfo != null ? bgInfo.getPath() : "";
-        this.backgroundPathBox.setResponder(null);
-        this.backgroundPathBox.setValue(bgPath.toLowerCase(Locale.ROOT));
-        this.backgroundPathBox.setResponder(s -> {
+        this.setBoxSilent(this.backgroundPathBox, bgPath.toLowerCase(Locale.ROOT), s -> {
             String clean = s.toLowerCase(Locale.ROOT);
             this.loadBackgroundPreview(clean);
             if (this.currentEntry != null) {
