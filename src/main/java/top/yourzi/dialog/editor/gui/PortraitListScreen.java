@@ -675,11 +675,10 @@ public class PortraitListScreen extends Screen {
     }
 
     /**
-     * 重置缩放：恢复选中立绘 size 到上次保存状态（originalPortraits 中的值），
+     * 重置缩放：恢复选中立绘到图片默认状态（size=1.0、offset=0、0.0），
      * 同时把预览缩放 previewZoom 归位到 1.0。
      * 原实现仅重置 previewZoom=1.0，若用户从未改过预览缩放则无可见效果，故"没用"。
-     * 现改为恢复实际 size：滚轮直接改 size 后，R 能明显回退到保存值。
-     * 新建未保存的立绘（originalPortraits 中无匹配 path）回退到默认 1.0。
+     * 现改为恢复实际 size/offset 到默认值：滚轮直接改 size 后，R 能明显回退到默认。
      */
     private void resetZoom() {
         this.previewZoom = 1.0f;
@@ -687,17 +686,12 @@ public class PortraitListScreen extends Screen {
         if (info == null) {
             return;
         }
-        float savedSize = 1.0f;
-        if (info.getPath() != null) {
-            for (PortraitInfo saved : this.originalPortraits) {
-                if (saved.getPath() != null && saved.getPath().equalsIgnoreCase(info.getPath())) {
-                    savedSize = saved.getSize();
-                    break;
-                }
-            }
-        }
-        info.setSize(savedSize);
+        info.setSize(1.0f);
+        info.setOffsetX(0.0f);
+        info.setOffsetY(0.0f);
         syncBoxIfNotFocused(this.sizeBox, info.getSize());
+        syncBoxIfNotFocused(this.offsetXBox, info.getOffsetX());
+        syncBoxIfNotFocused(this.offsetYBox, info.getOffsetY());
     }
 
     /**
