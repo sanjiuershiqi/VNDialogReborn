@@ -229,8 +229,6 @@ public class PropertyPanel extends AbstractWidget {
             graphics.fill(tabX + TAB_WIDTH, tabY, tabX + TAB_WIDTH + 1, tabY + TAB_HEIGHT, EditorTheme.BORDER);
             tabX += TAB_WIDTH + 1;
         }
-        // 第八轮美化：标签栏与内容区之间画 DIVIDER 竖线（标签栏右侧边界）
-        graphics.fill(this.getX() + TAB_WIDTH + 1, tabY + TAB_HEIGHT, this.getX() + TAB_WIDTH + 2, this.getY() + this.getHeight(), EditorTheme.DIVIDER);
         if (this.activeTabIndex >= 0 && this.activeTabIndex < this.tabs.size()) {
             this.clampScroll();
             int pageTop = this.getPageTop();

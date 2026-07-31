@@ -822,14 +822,6 @@ public class VNDialogEditorScreen extends Screen {
         // 标签栏背景使用不透明深色
         graphics.fill(0, tabBarTop, this.width, tabBarBottom, EditorTheme.BG_ELEVATED);
         graphics.fill(0, this.height - STATUS_HEIGHT, this.width, this.height, EditorTheme.BG_SURFACE);
-        // 第八轮美化：DIVIDER 半透明分割线，明确各功能区边界
-        // 工具栏与标签栏之间
-        graphics.fill(0, tabBarTop, this.width, tabBarTop + 1, EditorTheme.DIVIDER);
-        // 树与属性面板之间（竖线，贯穿内容区高度）
-        int propX = EditorTheme.TREE_WIDTH;
-        int contentTop = tabBarBottom;
-        int contentBottom = this.height - STATUS_HEIGHT;
-        graphics.fill(propX, contentTop, propX + 1, contentBottom, EditorTheme.DIVIDER);
         // 状态栏：按 statusLevel 选语义色；非错误消息到时自动清空（错误常驻）
         if (this.statusClearTime != 0L && System.nanoTime() > this.statusClearTime) {
             this.statusText = "";
