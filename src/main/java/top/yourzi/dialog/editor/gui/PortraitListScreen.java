@@ -897,15 +897,29 @@ public class PortraitListScreen extends Screen {
         }
         try (FileInputStream fis = new FileInputStream(file)) {
             NativeImage image = FileSystemTextureLoader.decodeToNativeImage(fis);
-            this.previewW = image.getWidth();
-            this.previewH = image.getHeight();
-            DynamicTexture dynamicTexture = new DynamicTexture(image);
-            dynamicTexture.upload();
-            ResourceLocation rl = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "editor_preview/" + safeKey);
-            Minecraft.getInstance().getTextureManager().register(rl, dynamicTexture);
-            textureCache.put(safeKey, rl);
-            sizeCache.put(safeKey, new int[]{this.previewW, this.previewH});
-            return rl;
+            try {
+                this.previewW = image.getWidth();
+                this.previewH = image.getHeight();
+                ResourceLocation rl = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "editor_preview/" + safeKey);
+                DynamicTexture dynamicTexture = new DynamicTexture(image);
+                try {
+                    dynamicTexture.upload();
+                    Minecraft.getInstance().getTextureManager().register(rl, dynamicTexture);
+                } catch (Exception registerEx) {
+                    dynamicTexture.close();
+                    throw registerEx;
+                }
+                textureCache.put(safeKey, rl);
+                sizeCache.put(safeKey, new int[]{this.previewW, this.previewH});
+                return rl;
+            } catch (Exception ex) {
+                try {
+                    image.close();
+                } catch (Exception closeEx) {
+                    Dialog.LOGGER.warn("Failed to close NativeImage: {}", closeEx.toString());
+                }
+                throw ex;
+            }
         } catch (Exception e) {
             Dialog.LOGGER.error("Failed to load preview texture: {}", file, e);
             return null;

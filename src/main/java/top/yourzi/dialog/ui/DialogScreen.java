@@ -813,6 +813,19 @@ public class DialogScreen extends Screen {
         }
     }
 
+    @Override
+    public void removed() {
+        // 兜底释放：当 Screen 被非 onClose 方式移除（如传送、死亡、世界卸载）时，
+        // onClose 不会被调用，dynamicTextures 会泄漏。这里确保无论如何都释放。
+        if (!dynamicTextures.isEmpty()) {
+            for (ResourceLocation tex : dynamicTextures) {
+                Minecraft.getInstance().getTextureManager().release(tex);
+            }
+            dynamicTextures.clear();
+        }
+        super.removed();
+    }
+
     private void toggleAutoPlay() {
         DialogManager.setAutoPlaying(!DialogManager.isAutoPlaying());
         updateAutoPlayButtonText();

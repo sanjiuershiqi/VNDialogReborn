@@ -342,15 +342,29 @@ public class AppearancePropertyPage implements PropertyPage {
         }
         try (FileInputStream fis = new FileInputStream(file)) {
             NativeImage image = FileSystemTextureLoader.decodeToNativeImage(fis);
-            this.backgroundTexWidth = image.getWidth();
-            this.backgroundTexHeight = image.getHeight();
-            DynamicTexture dynamicTexture = new DynamicTexture(image);
-            dynamicTexture.upload();
-            ResourceLocation rl = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "editor_preview/" + safeKey);
-            Minecraft.getInstance().getTextureManager().register(rl, dynamicTexture);
-            textureCache.put(safeKey, rl);
-            sizeCache.put(safeKey, new int[]{this.backgroundTexWidth, this.backgroundTexHeight});
-            return rl;
+            try {
+                this.backgroundTexWidth = image.getWidth();
+                this.backgroundTexHeight = image.getHeight();
+                ResourceLocation rl = ResourceLocation.fromNamespaceAndPath(Dialog.MODID, "editor_preview/" + safeKey);
+                DynamicTexture dynamicTexture = new DynamicTexture(image);
+                try {
+                    dynamicTexture.upload();
+                    Minecraft.getInstance().getTextureManager().register(rl, dynamicTexture);
+                } catch (Exception registerEx) {
+                    dynamicTexture.close();
+                    throw registerEx;
+                }
+                textureCache.put(safeKey, rl);
+                sizeCache.put(safeKey, new int[]{this.backgroundTexWidth, this.backgroundTexHeight});
+                return rl;
+            } catch (Exception ex) {
+                try {
+                    image.close();
+                } catch (Exception closeEx) {
+                    Dialog.LOGGER.warn("Failed to close NativeImage: {}", closeEx.toString());
+                }
+                throw ex;
+            }
         } catch (Exception e) {
             Dialog.LOGGER.error("Failed to load preview texture: {}", file, e);
             return null;
