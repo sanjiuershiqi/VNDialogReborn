@@ -72,7 +72,8 @@ public class SequencePropertiesScreen extends Screen {
         // 用 fieldRow 推进输入框 Y，标签 Y 取输入框 Y - 12（标签在输入框上方）。
         this.titleLabelY = this.layout.currentY();
         int titleY = this.layout.customRow(EditorTheme.FIELD_HEIGHT + 12);
-        this.titleBox = new EditBox(this.font, fieldX, titleY, FIELD_WIDTH, 16, Component.translatable("gui.vn_edit.sequence_title"));
+        // customRow 返回行顶部 Y（= 标签 Y），输入框在标签下方 12px，否则标签文字画进输入框里
+        this.titleBox = new EditBox(this.font, fieldX, titleY + 12, FIELD_WIDTH, 16, Component.translatable("gui.vn_edit.sequence_title"));
         this.titleBox.setMaxLength(999999999);
         this.titleBox.setValue(curTitle != null ? curTitle : (this.sequence.getTitle() != null ? this.sequence.getTitle() : ""));
         this.addRenderableWidget(this.titleBox);
@@ -80,7 +81,7 @@ public class SequencePropertiesScreen extends Screen {
 
         this.descLabelY = this.layout.currentY();
         int descY = this.layout.customRow(EditorTheme.FIELD_HEIGHT + 12);
-        this.descriptionBox = new EditBox(this.font, fieldX, descY, FIELD_WIDTH, 16, Component.translatable("gui.vn_edit.sequence_description"));
+        this.descriptionBox = new EditBox(this.font, fieldX, descY + 12, FIELD_WIDTH, 16, Component.translatable("gui.vn_edit.sequence_description"));
         this.descriptionBox.setMaxLength(999999999);
         this.descriptionBox.setValue(curDesc != null ? curDesc : (this.sequence.getDescription() != null ? this.sequence.getDescription() : ""));
         this.addRenderableWidget(this.descriptionBox);
@@ -88,7 +89,7 @@ public class SequencePropertiesScreen extends Screen {
 
         this.effectLabelY = this.layout.currentY();
         int effectY = this.layout.customRow(EditorTheme.FIELD_HEIGHT + 12);
-        this.effectBox = new EditBox(this.font, fieldX, effectY, FIELD_WIDTH, 16, Component.translatable("gui.vn_edit.sequence_effect"));
+        this.effectBox = new EditBox(this.font, fieldX, effectY + 12, FIELD_WIDTH, 16, Component.translatable("gui.vn_edit.sequence_effect"));
         this.effectBox.setMaxLength(999999999);
         this.effectBox.setValue(curEffect != null ? curEffect : (this.sequence.getEffect() != null ? this.sequence.getEffect() : ""));
         this.addRenderableWidget(this.effectBox);
@@ -96,13 +97,13 @@ public class SequencePropertiesScreen extends Screen {
 
         this.startLabelY = this.layout.currentY();
         int startY = this.layout.customRow(EditorTheme.FIELD_HEIGHT + 12);
-        this.startIdBox = new EditBox(this.font, fieldX, startY, FIELD_WIDTH - 60, 16, Component.translatable("gui.vn_edit.sequence_start"));
+        this.startIdBox = new EditBox(this.font, fieldX, startY + 12, FIELD_WIDTH - 60, 16, Component.translatable("gui.vn_edit.sequence_start"));
         this.startIdBox.setMaxLength(999999999);
         this.startIdBox.setValue(curStart != null ? curStart : (this.sequence.getStartId() != null ? this.sequence.getStartId() : ""));
         this.startIdBox.setResponder(s -> {});
         this.addRenderableWidget(this.startIdBox);
         this.startPickerBtn = EditorButton.builder(Component.translatable("gui.vn_edit.pick"), btn -> this.openStartNodePicker())
-                .bounds(fieldX + FIELD_WIDTH - 55, startY, 50, 16).build();
+                .bounds(fieldX + FIELD_WIDTH - 55, startY + 12, 50, 16).build();
         this.addRenderableWidget(this.startPickerBtn);
 
         int bottomY = this.height - 30;
