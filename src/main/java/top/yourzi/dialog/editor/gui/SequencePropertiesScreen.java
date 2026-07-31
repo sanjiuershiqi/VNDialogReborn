@@ -37,26 +37,32 @@ public class SequencePropertiesScreen extends Screen {
     @Override
     protected void init() {
         super.init();
+        // 暂存当前输入框值：子屏（如 NodePickerScreen）返回时 init() 会被重新调用，
+        // 此时需优先保留用户已输入的内容与子屏选择结果，而不是用 sequence 的旧值覆盖。
+        String curTitle = this.titleBox != null ? this.titleBox.getValue() : null;
+        String curDesc = this.descriptionBox != null ? this.descriptionBox.getValue() : null;
+        String curEffect = this.effectBox != null ? this.effectBox.getValue() : null;
+        String curStart = this.startIdBox != null ? this.startIdBox.getValue() : null;
         int fieldX = (this.width - FIELD_WIDTH) / 2;
         int y = 30;
         this.titleBox = new EditBox(this.font, fieldX, y + 12, FIELD_WIDTH, 16, Component.translatable("gui.vn_edit.sequence_title"));
         this.titleBox.setMaxLength(999999999);
-        this.titleBox.setValue(this.sequence.getTitle() != null ? this.sequence.getTitle() : "");
+        this.titleBox.setValue(curTitle != null ? curTitle : (this.sequence.getTitle() != null ? this.sequence.getTitle() : ""));
         this.addRenderableWidget(this.titleBox);
         y += 38;
         this.descriptionBox = new EditBox(this.font, fieldX, y + 12, FIELD_WIDTH, 16, Component.translatable("gui.vn_edit.sequence_description"));
         this.descriptionBox.setMaxLength(999999999);
-        this.descriptionBox.setValue(this.sequence.getDescription() != null ? this.sequence.getDescription() : "");
+        this.descriptionBox.setValue(curDesc != null ? curDesc : (this.sequence.getDescription() != null ? this.sequence.getDescription() : ""));
         this.addRenderableWidget(this.descriptionBox);
         y += 38;
         this.effectBox = new EditBox(this.font, fieldX, y + 12, FIELD_WIDTH, 16, Component.translatable("gui.vn_edit.sequence_effect"));
         this.effectBox.setMaxLength(999999999);
-        this.effectBox.setValue(this.sequence.getEffect() != null ? this.sequence.getEffect() : "");
+        this.effectBox.setValue(curEffect != null ? curEffect : (this.sequence.getEffect() != null ? this.sequence.getEffect() : ""));
         this.addRenderableWidget(this.effectBox);
         y += 38;
         this.startIdBox = new EditBox(this.font, fieldX, y + 12, FIELD_WIDTH - 60, 16, Component.translatable("gui.vn_edit.sequence_start"));
         this.startIdBox.setMaxLength(999999999);
-        this.startIdBox.setValue(this.sequence.getStartId() != null ? this.sequence.getStartId() : "");
+        this.startIdBox.setValue(curStart != null ? curStart : (this.sequence.getStartId() != null ? this.sequence.getStartId() : ""));
         this.startIdBox.setResponder(s -> {});
         this.addRenderableWidget(this.startIdBox);
         this.startPickerBtn = EditorButton.builder(Component.translatable("gui.vn_edit.pick"), btn -> this.openStartNodePicker())

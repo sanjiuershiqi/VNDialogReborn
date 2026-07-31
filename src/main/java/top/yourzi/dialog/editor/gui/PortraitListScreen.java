@@ -55,6 +55,8 @@ public class PortraitListScreen extends Screen {
     private static final java.util.Map<String, int[]> sizeCache = new java.util.LinkedHashMap<>();
 
     private final List<PortraitInfo> portraits;
+    /** 原始立绘列表的深拷贝，取消时用于恢复未修改状态。 */
+    private final List<PortraitInfo> originalPortraits;
     private final Consumer<List<PortraitInfo>> onSave;
     private final Screen parent;
     private int selectedIndex = -1;
@@ -100,20 +102,42 @@ public class PortraitListScreen extends Screen {
     public PortraitListScreen(List<PortraitInfo> portraits, Consumer<List<PortraitInfo>> onSave, Screen parent) {
         super(Component.translatable("gui.vn_edit.portrait_list.title"));
         this.portraits = new ArrayList<>(portraits);
+        // 深拷贝原始列表，取消编辑时用于恢复调用方的数据
+        this.originalPortraits = deepCopyPortraits(portraits);
         this.onSave = onSave;
         this.parent = parent;
+    }
+
+    /** 深拷贝立绘列表，保证编辑过程中的修改不影响原始副本。 */
+    private static List<PortraitInfo> deepCopyPortraits(List<PortraitInfo> src) {
+        List<PortraitInfo> copy = new ArrayList<>();
+        if (src == null) {
+            return copy;
+        }
+        for (PortraitInfo p : src) {
+            if (p == null) {
+                continue;
+            }
+            copy.add(new PortraitInfo(p.getPath(), p.getPosition(), p.getBrightness(),
+                    p.getAnimationType(), p.getSize(), p.getOffsetX(), p.getOffsetY()));
+        }
+        return copy;
     }
 
     @Override
     protected void init() {
         super.init();
+        // 子屏（FileBrowserScreen/BuiltInTextureBrowserScreen）返回时 init() 会被重新调用，
+        // 此时控件全部重建位置归零，必须强制刷新布局，否则取消返回后控件停在 (0,0)。
+        // 输入框值由 PortraitInfo 实时同步（responder），重建时用 info 值设值不会丢数据。
+        this.needsLayoutRefresh = true;
         this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.add_portrait"), b -> this.openFileBrowser())
                 .bounds(10, this.height - 25, 80, 20).build());
         this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.builtin_portrait"), b -> this.openBuiltInBrowser())
                 .bounds(95, this.height - 25, 60, 20).build());
-        this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.save"), b -> this.onClose())
+        this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.save"), b -> this.onSaveAndClose())
                 .bounds(this.width / 2 - 105, this.height - 25, 100, 20).build());
-        this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.cancel"), b -> this.onClose())
+        this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.cancel"), b -> this.onCancelAndClose())
                 .bounds(this.width / 2 + 5, this.height - 25, 100, 20).build());
         this.posDropdown = this.addRenderableWidget(new DropdownWidget(this.font, 0, 0, 100, 16, new ArrayList<>(POS_ITEMS), selected -> {
             PortraitInfo info = this.getSelected();
@@ -782,8 +806,8 @@ public class PortraitListScreen extends Screen {
         graphics.fill(0, 0, this.width, this.height, EditorTheme.BG_DEEPEST);
     }
 
-    @Override
-    public void onClose() {
+    /** 保存按钮：回写编辑后的立绘列表并返回。 */
+    private void onSaveAndClose() {
         this.clearPreviewRef();
         if (this.onSave != null) {
             this.onSave.accept(this.portraits);
@@ -791,5 +815,22 @@ public class PortraitListScreen extends Screen {
         if (this.minecraft != null) {
             this.minecraft.setScreen(this.parent);
         }
+    }
+
+    /** 取消按钮 / ESC：丢弃编辑结果，用原始数据回写并返回。 */
+    private void onCancelAndClose() {
+        this.clearPreviewRef();
+        if (this.onSave != null) {
+            this.onSave.accept(this.originalPortraits);
+        }
+        if (this.minecraft != null) {
+            this.minecraft.setScreen(this.parent);
+        }
+    }
+
+    @Override
+    public void onClose() {
+        // ESC 视为取消
+        this.onCancelAndClose();
     }
 }

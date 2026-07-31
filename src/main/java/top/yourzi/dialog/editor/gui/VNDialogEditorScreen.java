@@ -812,6 +812,9 @@ public class VNDialogEditorScreen extends Screen {
         this.dirtySequences.clear();
         this.saveSession();
         AppearancePropertyPage.releaseTextures();
+        // PortraitListScreen 的预览纹理由静态 LRU 缓存管理，子屏关闭时不释放；
+        // 必须在主编辑器关闭时统一释放，否则会一直占用显存直到游戏退出。
+        PortraitListScreen.releaseTextures();
         super.onClose();
     }
 
