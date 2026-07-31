@@ -197,7 +197,9 @@ public class PortraitListScreen extends Screen {
                 .bounds(this.width / 2 - 105, this.height - 25, 100, 20).build());
         this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.cancel"), b -> this.onCancelAndClose())
                 .bounds(this.width / 2 + 5, this.height - 25, 100, 20).build());
-        this.posDropdown = this.addRenderableWidget(new DropdownWidget(this.font, 0, 0, 100, 16, new ArrayList<>(POS_ITEMS), selected -> {
+        // 下拉框先创建但不加入渲染列表，最后再加入以确保弹出浮层渲染在输入框之上
+        // （MC Screen.render 按 addRenderableWidget 顺序绘制，后添加的组件渲染在顶层）
+        this.posDropdown = new DropdownWidget(this.font, 0, 0, 100, 16, new ArrayList<>(POS_ITEMS), selected -> {
             PortraitInfo info = this.getSelected();
             if (info != null) {
                 int idx = POS_ITEMS.indexOf(selected);
@@ -205,8 +207,8 @@ public class PortraitListScreen extends Screen {
                     info.setPosition(POS_VALUES[idx]);
                 }
             }
-        }));
-        this.animDropdown = this.addRenderableWidget(new DropdownWidget(this.font, 0, 0, 100, 16, new ArrayList<>(ANIM_ITEMS), selected -> {
+        });
+        this.animDropdown = new DropdownWidget(this.font, 0, 0, 100, 16, new ArrayList<>(ANIM_ITEMS), selected -> {
             PortraitInfo info = this.getSelected();
             if (info != null) {
                 int idx = ANIM_ITEMS.indexOf(selected);
@@ -214,7 +216,7 @@ public class PortraitListScreen extends Screen {
                     info.setAnimationType(ANIM_VALUES[idx]);
                 }
             }
-        }));
+        });
         // 动画类型有 9 项，超过默认 MAX_VISIBLE=8，需显示全部避免闪光选项被滚动隐藏
         this.animDropdown.setMaxVisible(ANIM_ITEMS.size());
         this.sizeBox = this.addRenderableWidget(new EditBox(this.font, 0, 0, 80, 16, Component.translatable("gui.vn_edit.size")));
@@ -300,6 +302,9 @@ public class PortraitListScreen extends Screen {
         }).bounds(0, 0, 20, 16).build());
         this.folderBtn = this.addRenderableWidget(EditorButton.builder(Component.literal("\uD83D\uDCC2"), b -> EditorConfig.openFolder(EditorConfig.PORTRAITS_DIR))
                 .bounds(this.width - 30, 25, 25, 16).build());
+        // 下拉框最后加入渲染列表，使其弹出浮层渲染在所有输入框之上，避免浮层被输入框覆盖
+        this.addRenderableWidget(this.posDropdown);
+        this.addRenderableWidget(this.animDropdown);
         this.updateDynamicButtons();
     }
 
@@ -806,13 +811,15 @@ public class PortraitListScreen extends Screen {
             return;
         }
         // 位置/动画下拉框上方的小标签（下拉框并排于 y=42）
-        g.drawString(this.font, Component.translatable("gui.vn_edit.position"), x + 5, 32, EditorTheme.TEXT_SECONDARY);
-        g.drawString(this.font, Component.translatable("gui.vn_edit.animation"), x + 93, 32, EditorTheme.TEXT_SECONDARY);
+        g.drawString(this.font, this.fitLabel(Component.translatable("gui.vn_edit.position"), 82), x + 5, 32, EditorTheme.TEXT_SECONDARY);
+        g.drawString(this.font, this.fitLabel(Component.translatable("gui.vn_edit.animation"), 82), x + 93, 32, EditorTheme.TEXT_SECONDARY);
         // 下方输入框标签（输入框 y 分别为 70/95/120/145，标签 y 对齐输入框垂直中心）
-        g.drawString(this.font, Component.translatable("gui.vn_edit.size"), x + 5, 74, EditorTheme.TEXT_SECONDARY);
-        g.drawString(this.font, Component.translatable("gui.vn_edit.brightness"), x + 5, 99, EditorTheme.TEXT_SECONDARY);
-        g.drawString(this.font, Component.translatable("gui.vn_edit.offset_x"), x + 5, 124, EditorTheme.TEXT_SECONDARY);
-        g.drawString(this.font, Component.translatable("gui.vn_edit.offset_y"), x + 5, 149, EditorTheme.TEXT_SECONDARY);
+        // 标签区域宽度 = 输入框 x(200) - 标签 x(145) - 2px 间隙 = 53px，超宽截断防溢入输入框
+        int labelMaxW = 200 - (x + 5) - 2;
+        g.drawString(this.font, this.fitLabel(Component.translatable("gui.vn_edit.size"), labelMaxW), x + 5, 74, EditorTheme.TEXT_SECONDARY);
+        g.drawString(this.font, this.fitLabel(Component.translatable("gui.vn_edit.brightness"), labelMaxW), x + 5, 99, EditorTheme.TEXT_SECONDARY);
+        g.drawString(this.font, this.fitLabel(Component.translatable("gui.vn_edit.offset_x"), labelMaxW), x + 5, 124, EditorTheme.TEXT_SECONDARY);
+        g.drawString(this.font, this.fitLabel(Component.translatable("gui.vn_edit.offset_y"), labelMaxW), x + 5, 149, EditorTheme.TEXT_SECONDARY);
     }
 
     private boolean isMouseInStage(double mx, double my) {
@@ -821,6 +828,15 @@ public class PortraitListScreen extends Screen {
         int w = stageWidth();
         int h = this.height - HEADER - FOOTER;
         return mx >= x && mx <= x + w && my >= y && my <= y + h;
+    }
+
+    /** 截断标签文字至指定像素宽度，防止长标签溢入相邻输入框。 */
+    private Component fitLabel(Component label, int maxWidth) {
+        String text = label.getString();
+        if (this.font.width(text) <= maxWidth) {
+            return label;
+        }
+        return Component.literal(this.font.plainSubstrByWidth(text, maxWidth - 6) + "...");
     }
 
     @Override
