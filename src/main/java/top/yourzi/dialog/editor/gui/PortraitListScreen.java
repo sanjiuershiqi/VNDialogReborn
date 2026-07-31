@@ -206,6 +206,8 @@ public class PortraitListScreen extends Screen {
                 }
             }
         }));
+        // 动画类型有 9 项，超过默认 MAX_VISIBLE=8，需显示全部避免闪光选项被滚动隐藏
+        this.animDropdown.setMaxVisible(ANIM_ITEMS.size());
         this.sizeBox = this.addRenderableWidget(new EditBox(this.font, 0, 0, 80, 16, Component.translatable("gui.vn_edit.size")));
         this.sizeBox.setMaxLength(10);
         this.sizeBox.setResponder(s -> {
@@ -825,13 +827,14 @@ public class PortraitListScreen extends Screen {
 
     /**
      * 加载立绘预览。先尝试配置目录文件，再回退内置纹理资源。
+     * 优化：用静态缓存 key 检查命中，避免每次 screen 重建都反复解码同一图片导致 native 内存堆积崩溃。
      */
     private void loadPreview(String path) {
         if (path == null || path.isEmpty()) {
             this.clearPreviewRef();
             return;
         }
-        if (path.equals(this.previewPath)) {
+        if (path.equals(this.previewPath) && this.previewTex != null) {
             return;
         }
         this.clearPreviewRef();
@@ -862,9 +865,12 @@ public class PortraitListScreen extends Screen {
 
     /**
      * 加载纹理：静态缓存复用，命中时恢复尺寸，未命中时解码并注册。
+     * 缓存 key 基于文件绝对路径的稳定 hash，避免中文文件名经 replaceAll 后产生冲突。
      */
     private ResourceLocation loadTexture(File file, String cacheKey) {
-        String safeKey = cacheKey.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9/._-]", "_");
+        // 用文件绝对路径 + 最后修改时间作为缓存 key，避免不同中文文件名被替换成相同 key 导致缓存冲突
+        String stableKey = file.getAbsolutePath().toLowerCase(Locale.ROOT) + "|" + file.lastModified();
+        String safeKey = stableKey.replaceAll("[^a-z0-9/._-]", "_");
         if (textureCache.containsKey(safeKey)) {
             int[] size = sizeCache.get(safeKey);
             if (size != null) {

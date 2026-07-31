@@ -25,6 +25,8 @@ public class DropdownWidget extends AbstractWidget {
     private boolean expanded = false;
     private final Consumer<String> onSelected;
     private static final int MAX_VISIBLE = 8;
+    /** 当前实例的最大可见项数，默认 MAX_VISIBLE，可通过 setMaxVisible 调整。 */
+    private int maxVisible = MAX_VISIBLE;
     private int scrollOffset = 0;
     private static final int ITEM_HEIGHT = 12;
     /** 弹出列表是否向上展开（用于避免覆盖下方的输入框等控件）。 */
@@ -35,6 +37,11 @@ public class DropdownWidget extends AbstractWidget {
         this.font = font;
         this.items = items;
         this.onSelected = onSelected;
+    }
+
+    /** 设置最大可见项数，用于选项数超过默认值 8 的场景（如 9 项动画列表需显示全部）。 */
+    public void setMaxVisible(int max) {
+        this.maxVisible = Math.max(1, max);
     }
 
     /** 设置弹出方向：true=向上展开（适合下方有其他控件的场景），false=向下展开（默认）。 */
@@ -72,14 +79,14 @@ public class DropdownWidget extends AbstractWidget {
 
     /** 弹出列表顶部 Y 坐标（含边框）。向下展开=按钮底部；向上展开=按钮顶部-列表高度。 */
     private int getPopupTop() {
-        int visibleCount = Math.min(MAX_VISIBLE, this.items.size());
+        int visibleCount = Math.min(this.maxVisible, this.items.size());
         int totalHeight = visibleCount * ITEM_HEIGHT + 2;
         return this.popupAbove ? this.getY() - totalHeight : this.getY() + this.getHeight();
     }
 
     /** 弹出列表底部 Y 坐标（含边框）。 */
     private int getPopupBottom() {
-        int visibleCount = Math.min(MAX_VISIBLE, this.items.size());
+        int visibleCount = Math.min(this.maxVisible, this.items.size());
         int totalHeight = visibleCount * ITEM_HEIGHT + 2;
         return this.getPopupTop() + totalHeight;
     }
@@ -110,7 +117,7 @@ public class DropdownWidget extends AbstractWidget {
         }
         int dropY = this.getPopupTop();
         int dropBottom = this.getPopupBottom();
-        int visibleCount = Math.min(MAX_VISIBLE, this.items.size());
+        int visibleCount = Math.min(this.maxVisible, this.items.size());
         int totalHeight = visibleCount * ITEM_HEIGHT;
         // 完全不透明背景，确保下方控件/文字不会透出
         graphics.fill(this.getX(), dropY, this.getX() + this.getWidth(), dropBottom, 0xFF181818);
@@ -184,7 +191,7 @@ public class DropdownWidget extends AbstractWidget {
             this.expanded = true;
             // 确保选中项在可见范围内
             if (this.selectedIndex >= 0) {
-                this.scrollOffset = Mth.clamp(this.scrollOffset, Math.max(0, this.selectedIndex - MAX_VISIBLE + 1), Math.min(this.selectedIndex, Math.max(0, this.items.size() - MAX_VISIBLE)));
+                this.scrollOffset = Mth.clamp(this.scrollOffset, Math.max(0, this.selectedIndex - this.maxVisible + 1), Math.min(this.selectedIndex, Math.max(0, this.items.size() - this.maxVisible)));
             }
             return true;
         }
@@ -194,7 +201,7 @@ public class DropdownWidget extends AbstractWidget {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (this.expanded) {
-            this.scrollOffset = Mth.clamp(this.scrollOffset - (int) scrollY, 0, Math.max(0, this.items.size() - MAX_VISIBLE));
+            this.scrollOffset = Mth.clamp(this.scrollOffset - (int) scrollY, 0, Math.max(0, this.items.size() - this.maxVisible));
             return true;
         }
         return false;
