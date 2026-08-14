@@ -15,6 +15,7 @@ import top.yourzi.dialog.editor.gui.BuiltInTextureBrowserScreen;
 import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.editor.util.EditorTheme;
 import top.yourzi.dialog.editor.util.TextureCacheService;
+import top.yourzi.dialog.editor.gui.EditorRenderHelper;
 import top.yourzi.dialog.model.PortraitAnimationType;
 import top.yourzi.dialog.model.PortraitInfo;
 import top.yourzi.dialog.model.PortraitPosition;
@@ -393,7 +394,7 @@ public class PortraitListScreen extends Screen {
         // 视口区域（实际屏幕等比映射区）：用更深的颜色区分，并画边框
         g.fill(this.viewport.viewX, this.viewport.viewY,
                this.viewport.viewX + this.viewport.viewW, this.viewport.viewY + this.viewport.viewH,
-               0xFF101010);
+               EditorTheme.CANVAS_BG);
         int frameColor = EditorTheme.BORDER_LIGHT;
         g.fill(this.viewport.viewX, this.viewport.viewY,
                this.viewport.viewX + this.viewport.viewW, this.viewport.viewY + 1, frameColor);
@@ -419,7 +420,7 @@ public class PortraitListScreen extends Screen {
      * 基于视口映射，与实际屏幕比例一致。1px 半透明白色，仅作对齐辅助不干扰主视觉。
      */
     private void renderRuleOfThirdsGrid(GuiGraphics g) {
-        int gridColor = 0x33FFFFFF;
+        int gridColor = EditorTheme.HOVER_TINT;
         // 三分线在实际屏幕坐标的 1/3、2/3 处，映射到视口
         int x1 = this.viewport.mapX(this.width / 3);
         int x2 = this.viewport.mapX(this.width * 2 / 3);
@@ -459,7 +460,7 @@ public class PortraitListScreen extends Screen {
         int boxW = this.viewport.mapSize(realBoxW);
         int boxH = this.viewport.mapSize(realBoxH);
         // 对话框底色：深色半透明（模拟实际对话框底色）
-        g.fill(boxX, boxY, boxX + boxW, boxY + boxH, 0xCC000000);
+        g.fill(boxX, boxY, boxX + boxW, boxY + boxH, EditorTheme.OVERLAY_MASK);
         // 醒目边框（强调色 2px 厚）
         int borderColor = EditorTheme.ACCENT;
         g.fill(boxX, boxY, boxX + boxW, boxY + 2, borderColor);
@@ -468,7 +469,7 @@ public class PortraitListScreen extends Screen {
         g.fill(boxX + boxW - 2, boxY, boxX + boxW, boxY + boxH, borderColor);
         // 内边距参考线（虚线感）：实际 padding 映射到视口
         int pad = Math.max(2, this.viewport.mapSize(cfgPad));
-        int padColor = 0x40FFFFFF;
+        int padColor = EditorTheme.DIVIDER;
         g.fill(boxX + pad, boxY + pad, boxX + boxW - pad, boxY + pad + 1, padColor);
         g.fill(boxX + pad, boxY + boxH - pad - 1, boxX + boxW - pad, boxY + boxH - pad, padColor);
         g.fill(boxX + pad, boxY + pad, boxX + pad + 1, boxY + boxH - pad, padColor);
@@ -476,7 +477,7 @@ public class PortraitListScreen extends Screen {
         // 框内标注：仅当框足够大时显示，避免小框文字溢出
         if (boxW > 60 && boxH > 20) {
             g.drawCenteredString(this.font, Component.translatable("gui.vn_edit.dialog_box_preview"),
-                    boxX + boxW / 2, boxY + boxH / 2 - 4, 0xFFFFFFFF);
+                    boxX + boxW / 2, boxY + boxH / 2 - 4, EditorTheme.TEXT_PRIMARY);
         }
     }
 
@@ -552,7 +553,7 @@ public class PortraitListScreen extends Screen {
             if (this.draggingPortrait) {
                 int centerX = renderX + portraitW / 2;
                 int centerY = renderY + portraitH / 2;
-                int crossColor = 0x804A9EFF;
+                int crossColor = EditorTheme.ACCENT_TINT;
                 int left = this.viewport.viewX;
                 int right = this.viewport.viewX + this.viewport.viewW;
                 int top = this.viewport.viewY;
@@ -610,7 +611,7 @@ public class PortraitListScreen extends Screen {
         boolean ctrlSize = hasControlDown();
         int modeColor = ctrlSize ? EditorTheme.DANGER : EditorTheme.ACCENT;
         // 背景胶囊（半透明深色 + 模式色边框）
-        g.fill(cx - 1, cy - 1, cx + totalW + 1, cy + ZOOM_CTRL_H + 1, 0xE6000000);
+        g.fill(cx - 1, cy - 1, cx + totalW + 1, cy + ZOOM_CTRL_H + 1, EditorRenderHelper.withAlphaRatio(EditorTheme.BG_DEEPEST, 0.9f));
         g.fill(cx, cy, cx + totalW, cy + ZOOM_CTRL_H, EditorTheme.BG_ELEVATED);
         // 模式边框（1px，Ctrl 时橙色，否则蓝色；非默认状态才画边框以提示模式）
         if (ctrlSize || this.previewZoom != 1.0f) {
@@ -782,8 +783,8 @@ public class PortraitListScreen extends Screen {
         if (maxScroll > 0) {
             int sbH = Math.max(10, h * h / (this.portraits.size() * ROW_H));
             int sbY = y + (int) ((float) displayOffset / (float) maxScroll * (float) (h - sbH));
-            g.fill(x + w - 4, y, x + w, y + h, 0x33FFFFFF);
-            int thumbColor = this.scrollState.dragging ? 0xFFFFFFFF : EditorTheme.TEXT_MUTED;
+            g.fill(x + w - 4, y, x + w, y + h, EditorTheme.SCROLLBAR_TRACK);
+            int thumbColor = this.scrollState.dragging ? EditorTheme.TEXT_PRIMARY : EditorTheme.SCROLLBAR_THUMB;
             g.fill(x + w - 4, sbY, x + w, sbY + sbH, thumbColor);
         }
     }

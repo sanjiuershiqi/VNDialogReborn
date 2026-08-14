@@ -4,7 +4,8 @@ import com.google.gson.JsonPrimitive;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
-import net.minecraft.client.gui.components.Checkbox;
+import top.yourzi.dialog.editor.gui.widget.BooleanOptionRow;
+import top.yourzi.dialog.editor.gui.property.Option;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -37,7 +38,9 @@ public class OptionEditScreen extends Screen {
     private List<String> draftCommands;
     private EditBox textBox;
     private EditorButton targetNodeBtn;
-    private Checkbox alwaysVisibleCheck;
+    /** 始终可见开关：用编辑器统一风格的 BooleanOptionRow 替代原生 Checkbox（与逻辑属性页视觉一致）。 */
+    private BooleanOptionRow alwaysVisibleRow;
+    private Option<Boolean> alwaysVisibleOption;
     private EditBox visibilityCommandBox;
     private final List<EditBox> commandBoxes = new ArrayList<>();
     private final List<EditorButton> commandDeleteButtons = new ArrayList<>();
@@ -88,23 +91,24 @@ public class OptionEditScreen extends Screen {
                 .bounds(fieldX, targetBtnY, FIELD_WIDTH, INPUT_HEIGHT).build();
         this.addRenderableWidget(this.targetNodeBtn);
         cursorY = this.targetBtnY + INPUT_HEIGHT + ROW_GAP;
-        // 始终可见 checkbox
-        boolean isAlwaysVisible = this.draftVisibilityCommand == null || this.draftVisibilityCommand.isEmpty();
+        // 始终可见开关：BooleanOptionRow 与编辑器其他复选行风格统一
         this.checkboxY = cursorY;
-        this.alwaysVisibleCheck = Checkbox.builder(Component.translatable("gui.vn_edit.always_visible"), this.font)
-                .pos(fieldX, checkboxY)
-                .maxWidth(FIELD_WIDTH)
-                .selected(isAlwaysVisible)
-                .build();
-        this.addRenderableWidget(this.alwaysVisibleCheck);
-        cursorY = this.checkboxY + 20 + ROW_GAP;
+        this.alwaysVisibleOption = new Option<>(
+                this::isAlwaysVisible,
+                v -> { if (Boolean.TRUE.equals(v)) this.draftVisibilityCommand = ""; },
+                null);
+        this.alwaysVisibleRow = new BooleanOptionRow(fieldX, checkboxY, FIELD_WIDTH, INPUT_HEIGHT,
+                Component.translatable("gui.vn_edit.always_visible"), this.alwaysVisibleOption, this.font);
+        this.addRenderableWidget(this.alwaysVisibleRow);
+        this.alwaysVisibleOption.snapshot();
+        cursorY = this.checkboxY + INPUT_HEIGHT + ROW_GAP;
         // 可见性命令：标签在输入框上方
         this.visibilityLabelY = cursorY;
         this.visibilityBoxY = cursorY + LABEL_GAP;
         this.visibilityCommandBox = new EditBox(this.font, fieldX, visibilityBoxY, FIELD_WIDTH, INPUT_HEIGHT, Component.translatable("gui.vn_edit.visibility_command"));
         this.visibilityCommandBox.setMaxLength(999999999);
         this.visibilityCommandBox.setValue(this.draftVisibilityCommand != null ? this.draftVisibilityCommand : "");
-        this.visibilityCommandBox.setVisible(!isAlwaysVisible);
+        this.visibilityCommandBox.setVisible(!this.isAlwaysVisible());
         this.addRenderableWidget(this.visibilityCommandBox);
         cursorY = this.visibilityBoxY + INPUT_HEIGHT + ROW_GAP;
         // 添加命令按钮 + 命令列表
@@ -122,7 +126,7 @@ public class OptionEditScreen extends Screen {
             // 保存时才将草稿写回原 option
             this.draftText = this.textBox.getValue();
             this.option.setText(new JsonPrimitive(this.draftText));
-            if (this.alwaysVisibleCheck.selected()) {
+            if (this.isAlwaysVisible()) {
                 this.option.setVisibilityCommand(null);
             } else {
                 String visCmd = this.visibilityCommandBox.getValue().trim();
@@ -148,12 +152,17 @@ public class OptionEditScreen extends Screen {
         this.addRenderableWidget(cancelBtn);
     }
 
+    /** 当前草稿是否"始终可见"（可见性命令为空）。 */
+    private boolean isAlwaysVisible() {
+        return this.draftVisibilityCommand == null || this.draftVisibilityCommand.isEmpty();
+    }
+
     private void openNodePicker() {
         // 切屏前把各输入框实时值同步到草稿字段。NodePicker 返回时本实例被复用
         //（setScreen(parent) 只重新调用 init()，不重建实例），init() 会从草稿字段
         // 重建控件，故需先同步以避免输入丢失。
         this.draftText = this.textBox.getValue();
-        if (this.alwaysVisibleCheck.selected()) {
+            if (this.isAlwaysVisible()) {
             this.draftVisibilityCommand = "";
         } else {
             this.draftVisibilityCommand = this.visibilityCommandBox.getValue();
@@ -212,10 +221,10 @@ public class OptionEditScreen extends Screen {
         // 用 init() 共享的 Y 字段绘制标签，消除双套游标错位
         graphics.drawString(this.font, Component.translatable("gui.vn_edit.option_text"), this.fieldX, this.textLabelY, EditorTheme.TEXT_SECONDARY);
         graphics.drawString(this.font, Component.translatable("gui.vn_edit.option_target"), this.fieldX, this.targetLabelY, EditorTheme.TEXT_SECONDARY);
-        if (!this.alwaysVisibleCheck.selected()) {
+        if (!this.isAlwaysVisible()) {
             graphics.drawString(this.font, Component.translatable("gui.vn_edit.visibility_command"), this.fieldX, this.visibilityLabelY, EditorTheme.TEXT_SECONDARY);
         }
-        this.visibilityCommandBox.setVisible(!this.alwaysVisibleCheck.selected());
+        this.visibilityCommandBox.setVisible(!this.isAlwaysVisible());
         super.render(graphics, mouseX, mouseY, partialTick);
         EditorRenderHelper.drawFocusedEditBoxBorders(graphics, this.children());
     }

@@ -536,8 +536,8 @@ public class DialogTreeWidget extends AbstractWidget {
         if (this.visibleNodes.size() * ROW_HEIGHT > this.getHeight()) {
             int scrollBarHeight = Math.max(10, this.getHeight() * this.getHeight() / (this.visibleNodes.size() * ROW_HEIGHT));
             int scrollBarY = this.getY() + (int) ((float) displayOffset / (float) (this.visibleNodes.size() * ROW_HEIGHT - this.getHeight()) * (float) (this.getHeight() - scrollBarHeight));
-            graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), 0x33000000);
-            int thumbColor = this.scrollState.dragging ? 0xFFFFFFFF : EditorTheme.TEXT_MUTED;
+            graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), EditorTheme.SCROLLBAR_TRACK);
+            int thumbColor = this.scrollState.dragging ? EditorTheme.TEXT_PRIMARY : EditorTheme.SCROLLBAR_THUMB;
             graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, scrollBarY, this.getX() + this.getWidth(), scrollBarY + scrollBarHeight, thumbColor);
         }
         } finally {

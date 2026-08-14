@@ -260,8 +260,8 @@ public class PropertyPanel extends AbstractWidget {
             if (contentH > pageH) {
                 int scrollBarHeight = Math.max(10, pageH * pageH / contentH);
                 int scrollBarY = pageTop + (int) ((float) displayOffset / (float) (contentH - pageH) * (float) (pageH - scrollBarHeight));
-                graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, pageTop, this.getX() + this.getWidth(), pageTop + pageH, 0x33000000);
-                int thumbColor = this.scrollState.dragging ? 0xFFFFFFFF : EditorTheme.TEXT_MUTED;
+                graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, pageTop, this.getX() + this.getWidth(), pageTop + pageH, EditorTheme.SCROLLBAR_TRACK);
+                int thumbColor = this.scrollState.dragging ? EditorTheme.TEXT_PRIMARY : EditorTheme.SCROLLBAR_THUMB;
                 graphics.fill(this.getX() + this.getWidth() - SCROLLBAR_WIDTH, scrollBarY, this.getX() + this.getWidth(), scrollBarY + scrollBarHeight, thumbColor);
             }
             // 下拉浮层已由 DropdownWidget.renderWidget 自包含渲染（跟随页面 translate），无需在此手动调用。

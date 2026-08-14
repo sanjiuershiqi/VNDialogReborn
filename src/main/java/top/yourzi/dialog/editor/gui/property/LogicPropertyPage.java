@@ -67,6 +67,9 @@ public class LogicPropertyPage extends AbstractPropertyPage {
     private final List<EditBox> itemCountEdits = new ArrayList<>();
     private final List<EditBox> itemNbtEdits = new ArrayList<>();
     private final List<EditorButton> itemDeleteBtns = new ArrayList<>();
+    /** 物品行上移/下移按钮：与命令/选项行交互一致（此前物品行缺排序，属交互不一致）。 */
+    private final List<EditorButton> itemUpBtns = new ArrayList<>();
+    private final List<EditorButton> itemDownBtns = new ArrayList<>();
     private int optionListStartY;
     private int commandListStartY;
     private int displayItemsStartY;
@@ -495,6 +498,25 @@ public class LogicPropertyPage extends AbstractPropertyPage {
         this.itemCountEdits.clear();
         this.itemNbtEdits.clear();
         this.itemDeleteBtns.clear();
+        this.itemUpBtns.clear();
+        this.itemDownBtns.clear();
+    }
+
+    /** 交换物品列表中 i、j 两个位置，重建控件并标记 dirty（与命令/选项排序逻辑一致）。 */
+    private void swapItem(int i, int j) {
+        if (this.currentEntry == null) {
+            return;
+        }
+        List<DisplayItemInfo> items = this.getItemsList();
+        if (i < 0 || j < 0 || i >= items.size() || j >= items.size() || i == j) {
+            return;
+        }
+        DisplayItemInfo tmp = items.get(i);
+        items.set(i, items.get(j));
+        items.set(j, tmp);
+        this.setItemsList(items);
+        this.relayoutSections();
+        this.notifyDirty();
     }
 
     private void rebuildItemWidgets() {
@@ -505,11 +527,12 @@ public class LogicPropertyPage extends AbstractPropertyPage {
         List<DisplayItemInfo> items = this.getItemsList();
         int fieldX = this.x + LABEL_WIDTH + EditorTheme.GAP;
         int fieldW = Math.max(40, this.width - LABEL_WIDTH - EditorTheme.GAP * 2);
-        // 计算各列宽度，确保不溢出
+        // 计算各列宽度，确保不溢出：从右往左 ✕(20) ▼(14) ▲(14)，余量分给 id/count/nbt
         int delBtnW = 20;
-        int nbtBoxW = Math.max(30, fieldW / 3);
+        int sortBtnW = 14;
+        int nbtBoxW = Math.max(30, fieldW / 4);
         int countBoxW = 30;
-        int idBoxW = Math.max(40, fieldW - nbtBoxW - countBoxW - delBtnW - EditorTheme.GAP * 3);
+        int idBoxW = Math.max(36, fieldW - nbtBoxW - countBoxW - delBtnW - sortBtnW * 2 - EditorTheme.GAP * 5);
         for (int i = 0; i < items.size(); i++) {
             int idx = i;
             DisplayItemInfo item = items.get(i);
@@ -532,9 +555,19 @@ public class LogicPropertyPage extends AbstractPropertyPage {
             nbtBox.setResponder(s -> { this.updateItem(idx, "nbt", s); this.notifyDirty(); });
             this.itemNbtEdits.add(nbtBox);
             xCursor += nbtBoxW + EditorTheme.GAP;
+            // 从右往左排：✕ → ▼ → ▲（与命令行排序按钮布局一致）
             EditorButton delBtn = EditorButton.builder(Component.literal("X"), btn -> this.deleteItem(idx))
-                    .bounds(xCursor, rowY, delBtnW, EditorTheme.FIELD_HEIGHT).build();
+                    .bounds(fieldX + fieldW - delBtnW, rowY, delBtnW, EditorTheme.FIELD_HEIGHT).build();
             this.itemDeleteBtns.add(delBtn);
+            int downX = fieldX + fieldW - delBtnW - EditorTheme.GAP - sortBtnW;
+            EditorButton downBtn = EditorButton.builder(Component.literal("\u25bc"), btn -> this.swapItem(idx, idx + 1))
+                    .bounds(downX, rowY, sortBtnW, EditorTheme.FIELD_HEIGHT).build();
+            downBtn.active = idx < items.size() - 1;
+            this.itemDownBtns.add(downBtn);
+            EditorButton upBtn = EditorButton.builder(Component.literal("\u25b2"), btn -> this.swapItem(idx, idx - 1))
+                    .bounds(downX - EditorTheme.GAP - sortBtnW, rowY, sortBtnW, EditorTheme.FIELD_HEIGHT).build();
+            upBtn.active = idx > 0;
+            this.itemUpBtns.add(upBtn);
         }
     }
 
@@ -685,6 +718,12 @@ public class LogicPropertyPage extends AbstractPropertyPage {
         for (EditorButton btn : this.itemDeleteBtns) {
             btn.render(graphics, mouseX, mouseY, partialTick);
         }
+        for (EditorButton btn : this.itemUpBtns) {
+            btn.render(graphics, mouseX, mouseY, partialTick);
+        }
+        for (EditorButton btn : this.itemDownBtns) {
+            btn.render(graphics, mouseX, mouseY, partialTick);
+        }
 
         int itemCount = this.currentEntry != null ? this.getItemsList().size() : 0;
         int optionsContentH = itemCount * (COMMAND_ROW_HEIGHT + EditorTheme.ROW_GAP);
@@ -736,6 +775,8 @@ public class LogicPropertyPage extends AbstractPropertyPage {
         list.addAll(this.itemCountEdits);
         list.addAll(this.itemNbtEdits);
         list.addAll(this.itemDeleteBtns);
+        list.addAll(this.itemUpBtns);
+        list.addAll(this.itemDownBtns);
         list.addAll(this.editOptionButtons);
         list.addAll(this.deleteOptionButtons);
         list.addAll(this.optionUpBtns);
@@ -766,6 +807,8 @@ public class LogicPropertyPage extends AbstractPropertyPage {
         this.itemCountEdits.forEach(b -> b.setVisible(visible));
         this.itemNbtEdits.forEach(b -> b.setVisible(visible));
         this.itemDeleteBtns.forEach(b -> b.visible = visible);
+        this.itemUpBtns.forEach(b -> b.visible = visible);
+        this.itemDownBtns.forEach(b -> b.visible = visible);
         this.editOptionButtons.forEach(b -> b.visible = visible);
         this.deleteOptionButtons.forEach(b -> b.visible = visible);
         this.optionUpBtns.forEach(b -> b.visible = visible);

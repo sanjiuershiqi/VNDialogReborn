@@ -52,6 +52,18 @@ public class EditorTheme {
     public static final int DIVIDER         = 0x40FFFFFF;  // 分隔线/网格辅助线
     public static final int SCROLLBAR_TRACK = 0x33000000;  // 滚动条轨道
     public static final int SCROLLBAR_THUMB = 0x80B0B0B0;  // 滚动条滑块
+    // 浮层/弹出面板底色：比 BG_SURFACE 更暗一档，与投影配合区分层级（收编 DropdownWidget 硬编码 0xFF181818）
+    public static final int POPUP_BG       = 0xFF181818;
+
+    // ===== 画布专用色（节点画布视图） =====
+    public static final int CANVAS_BG      = 0xFF161616;  // 画布底色（比 BG_SURFACE 更深，衬托节点卡片）
+    public static final int EDGE_NEXT      = 0xFF4A9EFF;  // 显式 next 边（与 ACCENT 同值但语义独立）
+    public static final int EDGE_IMPLICIT  = 0xFF707070;  // 隐式顺序边（数组顺序回退，虚线）
+    /** 选项边调色板：按选项索引取色，与节点端口圆点一一对应。 */
+    public static final int[] OPTION_PALETTE = {
+            0xFF6AC46A, 0xFFE0A040, 0xFFE070B8, 0xFF58C8D8,
+            0xFFB08CFF, 0xFFE05555, 0xFF98D86A, 0xFFD8A858
+    };
 
     // ===== 间距 =====
     public static final int PADDING      = 6;

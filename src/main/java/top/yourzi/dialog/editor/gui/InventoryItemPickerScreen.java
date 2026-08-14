@@ -9,6 +9,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
+import top.yourzi.dialog.editor.gui.EditorRenderHelper;
 import top.yourzi.dialog.editor.util.EditorTheme;
 import top.yourzi.dialog.model.DisplayItemInfo;
 
@@ -112,7 +113,7 @@ public class InventoryItemPickerScreen extends Screen {
 
         boolean hovered = mx >= x + 1 && mx < x + SLOT_SIZE - 1 && my >= y + 1 && my < y + SLOT_SIZE - 1;
         if (hovered && !stack.isEmpty()) {
-            g.fill(x + 1, y + 1, x + SLOT_SIZE - 1, y + SLOT_SIZE - 1, 0x55FFFFFF);
+            g.fill(x + 1, y + 1, x + SLOT_SIZE - 1, y + SLOT_SIZE - 1, EditorRenderHelper.withAlphaRatio(EditorTheme.TEXT_PRIMARY, 0.33f));
         }
 
         if (!stack.isEmpty()) {

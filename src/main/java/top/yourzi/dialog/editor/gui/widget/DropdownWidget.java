@@ -174,7 +174,7 @@ public class DropdownWidget extends AbstractWidget {
         int dropBottom = this.getPopupBottom();
         int pw = this.getWidth();
         // 第八轮美化：浮层投影，制造悬浮感（项 5）
-        EditorRenderHelper.fillWithShadow(graphics, this.getX(), dropY, pw, dropBottom - dropY, 0xFF181818, EditorTheme.SHADOW_DROP);
+        EditorRenderHelper.fillWithShadow(graphics, this.getX(), dropY, pw, dropBottom - dropY, EditorTheme.POPUP_BG, EditorTheme.SHADOW_DROP);
         // 边框
         graphics.fill(this.getX(), dropY, this.getX() + pw, dropY + 1, EditorTheme.BORDER);
         graphics.fill(this.getX(), dropBottom - 1, this.getX() + pw, dropBottom, EditorTheme.BORDER);

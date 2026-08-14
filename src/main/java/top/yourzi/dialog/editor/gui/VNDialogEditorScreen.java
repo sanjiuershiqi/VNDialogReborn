@@ -13,6 +13,7 @@ import net.minecraft.util.Mth;
 import top.yourzi.dialog.Dialog;
 import top.yourzi.dialog.DialogManager;
 import top.yourzi.dialog.editor.gui.property.AppearancePropertyPage;
+import top.yourzi.dialog.editor.gui.widget.DialogCanvasWidget;
 import top.yourzi.dialog.editor.gui.widget.DialogTreeWidget;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import top.yourzi.dialog.editor.gui.widget.PropertyPanel;
@@ -65,6 +66,10 @@ public class VNDialogEditorScreen extends Screen {
     private int tabScrollOffset = 0;
     private DialogSequence currentSequence;
     private DialogEntry editingEntry;
+    /** 节点画布视图（大纲↔画布切换，状态存 EditorScreenState.canvasMode）。 */
+    private DialogCanvasWidget canvasWidget;
+    /** 工具栏右侧视图切换按钮：大纲 ↔ 画布。 */
+    private EditorButton viewToggleBtn;
     /** 跟踪有未保存修改的对话序列 ID */
     private final java.util.Set<String> dirtySequences = new java.util.HashSet<>();
     public String statusText = "";
@@ -139,6 +144,8 @@ public class VNDialogEditorScreen extends Screen {
         this.propertyPanel.setActiveTab(EditorScreenState.get().getActivePropertyTab());
         this.propertyPanel.setVisible(this.editingEntry != null);
         this.rebuildTabButtons();
+        // 视图模式恢复（大纲/画布）并按模式绑定序列与控件可见性
+        this.applyViewMode();
     }
 
     private void buildWidgets() {
@@ -212,10 +219,99 @@ public class VNDialogEditorScreen extends Screen {
         this.addRenderableWidget(this.treeWidget);
         int propX = TREE_WIDTH + 1;
         int propWidth = this.width - propX;
+        // 画布：占满整个内容区（含树列），渲染在属性面板之下、事件经排除区避让面板。
+        // 画布模式下树列隐藏、属性面板浮在画布右侧（位置不变，无需重排）。
+        this.canvasWidget = new DialogCanvasWidget(0, treeContentY, this.width, contentHeight, this.font);
+        this.canvasWidget.setCallbacks(
+                this::onEntrySelected,        // 选中 → 联动属性面板
+                this::onEntryDelete,          // 右键删除 → 确认框
+                this::onEntryAddChild,        // 右键添加后继节点
+                this::startRenameEntry,       // 右键重命名
+                () -> {                       // 双击/菜单编辑属性 → 打开属性面板
+                    DialogEntry sel = this.getActiveSelectedEntry();
+                    if (sel != null) {
+                        this.onEntrySelected(sel);
+                    }
+                },
+                this::onAddNode,              // 空白右键新建节点
+                this::copySelectedNode,       // 菜单复制
+                this::pasteNode);             // 菜单粘贴
+        this.addRenderableWidget(this.canvasWidget);
         this.propertyPanel = new PropertyPanel(propX, treeContentY, propWidth, contentHeight, this.font);
         this.addRenderableWidget(this.propertyPanel);
         // 注入字段变脏回调：属性页内 Option 变脏时标记当前序列为未保存，使字段编辑联动标签页 * 标记
         this.propertyPanel.setDirtyListener(() -> this.markDirty(this.currentSequence));
+        // 工具栏右侧视图切换按钮（固定位置，标签箭头在下一行不冲突）
+        this.viewToggleBtn = EditorButton.builder(Component.translatable("gui.vn_edit.view.canvas"), b -> this.onToggleView())
+                .bounds(this.width - 46, btnY, 44, btnHeight).build();
+        this.addRenderableWidget(this.viewToggleBtn);
+    }
+
+    /** 切换 大纲 ↔ 画布 视图（状态持久化到 EditorScreenState，重建后恢复）。 */
+    private void onToggleView() {
+        EditorScreenState state = EditorScreenState.get();
+        state.setCanvasMode(!state.isCanvasMode());
+        this.applyViewMode();
+    }
+
+    /**
+     * 按当前视图模式应用控件可见性与序列绑定：
+     * 大纲模式显示树列（添加按钮/搜索/树），画布模式显示画布并隐藏树列；
+     * 属性面板位置不变——画布模式下浮动在画布右侧（画布通过排除区避让）。
+     */
+    private void applyViewMode() {
+        boolean canvas = EditorScreenState.get().isCanvasMode();
+        this.treeSearchBox.setVisible(!canvas);
+        this.addNodeBtn.setVisible(!canvas);
+        this.treeWidget.setVisible(!canvas);
+        this.canvasWidget.setVisible(canvas);
+        if (canvas) {
+            // 绑定当前序列：恢复该序列的节点布局与相机（聚焦起点）
+            this.canvasWidget.setSequence(this.currentSequence);
+        } else {
+            // 回到大纲：重建树并从状态单例恢复选中/滚动（画布选中已写入状态单例）
+            this.treeWidget.setSequence(this.currentSequence);
+        }
+        this.viewToggleBtn.setMessage(Component.translatable(canvas ? "gui.vn_edit.view.outline" : "gui.vn_edit.view.canvas"));
+        this.updateCanvasAvoidance();
+    }
+
+    /**
+     * 同步画布序列绑定（序列切换/加载后调用）：画布可见时重绑以恢复该序列布局。
+     * 结构级变化（增删节点/改引用）走 markDirty → canvasWidget.refresh()，保留用户布局。
+     */
+    private void syncCanvasSequence() {
+        if (this.canvasWidget != null && this.canvasWidget.isVisible()) {
+            this.canvasWidget.setSequence(this.currentSequence);
+            this.updateCanvasAvoidance();
+        }
+    }
+
+    /**
+     * 更新画布对浮动属性面板的避让：面板可见时 HUD 按钮左移 + 设置输入排除区；
+     * 面板隐藏时恢复全画布可交互。在视图切换与选中变化（面板显隐）后调用。
+     */
+    private void updateCanvasAvoidance() {
+        if (this.canvasWidget == null || this.propertyPanel == null) {
+            return;
+        }
+        boolean panelShown = this.propertyPanel.isVisible() && this.editingEntry != null;
+        if (panelShown) {
+            this.canvasWidget.setOverlayAvoidance(
+                    this.width - this.propertyPanel.getX() + 6,
+                    this.propertyPanel.getX(), this.propertyPanel.getY(),
+                    this.propertyPanel.getWidth(), this.propertyPanel.getHeight());
+        } else {
+            this.canvasWidget.setOverlayAvoidance(0, 0, 0, 0, 0);
+        }
+    }
+
+    /** 当前激活视图（大纲=树 / 画布）选中的节点，供 Delete/F2/Ctrl+C/D 等快捷键定位目标。 */
+    private DialogEntry getActiveSelectedEntry() {
+        if (EditorScreenState.get().isCanvasMode() && this.canvasWidget != null) {
+            return this.canvasWidget.getSelectedEntry();
+        }
+        return this.treeWidget != null ? this.treeWidget.getSelectedEntry() : null;
     }
 
     private void scrollTabs(int delta) {
@@ -316,9 +412,11 @@ public class VNDialogEditorScreen extends Screen {
         EditorScreenState.get().setTreeScrollOffset(0);
         this.treeWidget.setSequence(this.currentSequence);
         this.propertyPanel.setSequence(this.currentSequence);
+        this.syncCanvasSequence();
         this.editingEntry = null;
         this.propertyPanel.unbind();
         this.propertyPanel.setVisible(false);
+        this.updateCanvasAvoidance();
         this.setStatus(Component.translatable("gui.vn_edit.status.switched", this.currentSequence.getId()).getString(), StatusLevel.NEUTRAL);
     }
 
@@ -333,7 +431,8 @@ public class VNDialogEditorScreen extends Screen {
             this.currentSequence = seq;
             this.treeWidget.setSequence(this.currentSequence);
             this.propertyPanel.setSequence(this.currentSequence);
-            this.editingEntry = null;
+        this.syncCanvasSequence();
+        this.editingEntry = null;
             this.propertyPanel.unbind();
             this.propertyPanel.setVisible(false);
             this.rebuildTabButtons();
@@ -363,7 +462,11 @@ public class VNDialogEditorScreen extends Screen {
             this.editingEntry = newEntry;
             this.propertyPanel.bindTo(this.editingEntry);
             this.propertyPanel.setVisible(true);
+            EditorScreenState.get().setSelectedNodeId(newId);
             this.markDirty(this.currentSequence);
+            if (this.canvasWidget.isVisible()) {
+                this.canvasWidget.selectEntryById(newId);
+            }
             this.setStatus(Component.translatable("gui.vn_edit.status.node_added", newId).getString(), StatusLevel.SUCCESS);
         }, this));
     }
@@ -438,6 +541,10 @@ public class VNDialogEditorScreen extends Screen {
         if (seq != null && seq.getId() != null && this.dirtySequences.add(seq.getId())) {
             // 状态变化时刷新标签 * 显示（TabButton 为自绘列表，重建开销小）
             this.rebuildTabButtons();
+        }
+        // 画布可见时同步刷新缓存（入度/卡片高度/新节点落点），保留用户布局
+        if (this.canvasWidget != null && this.canvasWidget.isVisible()) {
+            this.canvasWidget.refresh();
         }
     }
 
@@ -581,6 +688,8 @@ public class VNDialogEditorScreen extends Screen {
                 this.propertyPanel.setVisible(false);
             }
         }
+        // 面板显隐变化 → 更新画布 HUD 内缩与输入排除区
+        this.updateCanvasAvoidance();
     }
 
     private void onEntryDelete(DialogEntry entry) {
@@ -636,11 +745,41 @@ public class VNDialogEditorScreen extends Screen {
             }
         }
         this.markDirty(this.currentSequence);
+        this.updateCanvasAvoidance();
         this.setStatus(Component.translatable("gui.vn_edit.status.node_deleted", entry.getId()).getString(), StatusLevel.NEUTRAL);
     }
 
+    /**
+     * 添加后继节点：新建节点插入父节点数组位置之后，并在父节点无分支时建立显式 next 边
+     * （画布右键"添加后继节点"入口；父节点已有选项分支时不自动连线，避免改变分支语义）。
+     */
     private void onEntryAddChild(DialogEntry parentEntry) {
-        // 当前未实现：原模组也为空实现，保留以备未来扩展。
+        if (this.currentSequence == null || parentEntry == null) {
+            return;
+        }
+        String newId = this.generateUniqueNodeId(parentEntry.getId() + "_next");
+        DialogEntry child = DialogEntry.builder().id(newId).text(new JsonPrimitive("")).build();
+        DialogEntry[] entries = this.currentSequence.getEntries();
+        ArrayList<DialogEntry> list = entries != null ? new ArrayList<>(List.of(entries)) : new ArrayList<>();
+        // 插到父节点之后：无显式引用时运行时按数组顺序回退，隐式顺序边天然成立
+        int insertAt = list.indexOf(parentEntry);
+        list.add(insertAt >= 0 ? insertAt + 1 : list.size(), child);
+        this.currentSequence.setEntries(list.toArray(new DialogEntry[0]));
+        boolean parentHasBranch = parentEntry.getOptions() != null && parentEntry.getOptions().length > 0;
+        if (!parentHasBranch && (parentEntry.getNextId() == null || parentEntry.getNextId().isEmpty())) {
+            parentEntry.setNextId(newId);
+        }
+        this.treeWidget.setSequence(this.currentSequence);
+        this.propertyPanel.setSequence(this.currentSequence);
+        this.editingEntry = child;
+        this.propertyPanel.bindTo(child);
+        this.propertyPanel.setVisible(true);
+        EditorScreenState.get().setSelectedNodeId(newId);
+        this.markDirty(this.currentSequence);
+        if (this.canvasWidget.isVisible()) {
+            this.canvasWidget.selectEntryById(newId);
+        }
+        this.setStatus(Component.translatable("gui.vn_edit.status.node_added", newId).getString(), StatusLevel.SUCCESS);
     }
 
     private void saveSession() {
@@ -777,6 +916,8 @@ public class VNDialogEditorScreen extends Screen {
             this.propertyPanel.unbind();
             this.editingEntry = null;
             this.propertyPanel.setVisible(false);
+            this.syncCanvasSequence();
+            this.updateCanvasAvoidance();
         } else if (this.activeSequenceIndex >= index) {
             this.activeSequenceIndex = Math.min(this.activeSequenceIndex, this.openSequences.size() - 1);
             this.switchToSequence(this.activeSequenceIndex);
@@ -935,6 +1076,11 @@ public class VNDialogEditorScreen extends Screen {
                 return;
             }
         }
+        // 视图切换按钮
+        if (this.viewToggleBtn != null && this.viewToggleBtn.isMouseOver(mouseX, mouseY)) {
+            graphics.renderTooltip(this.font, Component.translatable("gui.vn_edit.tooltip.view_toggle"), mouseX, mouseY);
+            return;
+        }
         // 添加节点按钮
         if (this.addNodeBtn != null && this.addNodeBtn.isMouseOver(mouseX, mouseY)) {
             graphics.renderTooltip(this.font, Component.translatable("gui.vn_edit.tooltip.add_node"), mouseX, mouseY);
@@ -1027,17 +1173,32 @@ public class VNDialogEditorScreen extends Screen {
                 if (keyCode == GLFW.GLFW_KEY_D) { this.duplicateSelectedNode(); return true; }
             }
             if (keyCode == GLFW.GLFW_KEY_DELETE) {
-                DialogEntry sel = this.treeWidget.getSelectedEntry();
+                DialogEntry sel = this.getActiveSelectedEntry();
                 if (sel != null) { this.onEntryDelete(sel); return true; }
             }
             if (keyCode == GLFW.GLFW_KEY_F2) {
-                DialogEntry sel = this.treeWidget.getSelectedEntry();
+                DialogEntry sel = this.getActiveSelectedEntry();
                 if (sel != null) { this.startRenameEntry(sel); return true; }
             }
             if (keyCode == GLFW.GLFW_KEY_INSERT) {
                 this.onAddNode();
                 return true;
             }
+            if (EditorScreenState.get().isCanvasMode() && this.canvasWidget != null) {
+                // 画布键盘：方向键平移、Enter 打开属性面板、+/- 缩放
+                if (keyCode == GLFW.GLFW_KEY_ENTER) {
+                    DialogEntry sel = this.getActiveSelectedEntry();
+                    if (sel != null) { this.onEntrySelected(sel); return true; }
+                }
+                if (keyCode == GLFW.GLFW_KEY_UP || keyCode == GLFW.GLFW_KEY_DOWN
+                        || keyCode == GLFW.GLFW_KEY_LEFT || keyCode == GLFW.GLFW_KEY_RIGHT
+                        || keyCode == GLFW.GLFW_KEY_EQUAL || keyCode == GLFW.GLFW_KEY_KP_ADD
+                        || keyCode == GLFW.GLFW_KEY_MINUS || keyCode == GLFW.GLFW_KEY_KP_SUBTRACT) {
+                    if (this.canvasWidget.keyPressed(keyCode)) {
+                        return true;
+                    }
+                }
+            } else
             // 树键盘导航：方向键移动选中、左右折叠展开、Enter 打开属性面板
             if (keyCode == GLFW.GLFW_KEY_UP || keyCode == GLFW.GLFW_KEY_DOWN
                     || keyCode == GLFW.GLFW_KEY_LEFT || keyCode == GLFW.GLFW_KEY_RIGHT
@@ -1050,9 +1211,9 @@ public class VNDialogEditorScreen extends Screen {
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
-    /** Ctrl+C：复制选中节点的深拷贝到静态剪贴板。 */
+    /** Ctrl+C：复制选中节点的深拷贝到静态剪贴板（选中来源跟随当前视图：树/画布）。 */
     private void copySelectedNode() {
-        DialogEntry sel = this.treeWidget.getSelectedEntry();
+        DialogEntry sel = this.getActiveSelectedEntry();
         if (sel == null) {
             this.setStatus(Component.translatable("gui.vn_edit.status.copy_no_selection").getString(), StatusLevel.WARNING);
             return;
@@ -1080,15 +1241,19 @@ public class VNDialogEditorScreen extends Screen {
         this.currentSequence.setEntries(list.toArray(new DialogEntry[0]));
         this.treeWidget.setSequence(this.currentSequence);
         this.propertyPanel.setSequence(this.currentSequence);
-        // selectEntryById 内部会触发 onEntrySelected 回调（设 editingEntry + bindTo）并滚动到可见
-        this.treeWidget.selectEntryById(newId);
         this.markDirty(this.currentSequence);
+        // selectEntryById 内部会触发 onEntrySelected 回调（设 editingEntry + bindTo）并定位/滚动到可见
+        if (this.canvasWidget.isVisible()) {
+            this.canvasWidget.selectEntryById(newId);
+        } else {
+            this.treeWidget.selectEntryById(newId);
+        }
         this.setStatus(Component.translatable("gui.vn_edit.status.node_pasted", newId).getString(), StatusLevel.SUCCESS);
     }
 
     /** Ctrl+D：复制并立即粘贴选中节点（一步完成）。 */
     private void duplicateSelectedNode() {
-        DialogEntry sel = this.treeWidget.getSelectedEntry();
+        DialogEntry sel = this.getActiveSelectedEntry();
         if (sel == null) {
             this.setStatus(Component.translatable("gui.vn_edit.status.copy_no_selection").getString(), StatusLevel.WARNING);
             return;
@@ -1120,8 +1285,9 @@ public class VNDialogEditorScreen extends Screen {
     }
 
     /**
-     * F2 重命名选中节点：弹出 InputDialogScreen，确认后调 treeWidget.renameSelectedEntry。
-     * 失败（ID 冲突）时显示状态栏警告，修复原双击重命名失败无 UI 反馈的缺陷。
+     * 重命名指定节点（F2 / 画布右键菜单入口）：弹出 InputDialogScreen，确认后直接改数据模型
+     * 并同步更新全部 nextId/option.targetId 引用，随后刷新树与画布两个视图（画布迁移节点坐标）。
+     * 失败（ID 冲突）时显示状态栏警告。
      */
     private void startRenameEntry(DialogEntry entry) {
         Minecraft.getInstance().setScreen(new InputDialogScreen(
@@ -1129,13 +1295,58 @@ public class VNDialogEditorScreen extends Screen {
             if (newId.isEmpty() || newId.equals(entry.getId())) {
                 return;
             }
-            if (!this.treeWidget.renameSelectedEntry(newId)) {
+            if (!this.renameEntry(entry, newId)) {
                 this.setStatus(Component.translatable("gui.vn_edit.rename.failed").getString(), StatusLevel.WARNING);
             } else {
                 this.setStatus(Component.translatable("gui.vn_edit.rename.success", newId).getString(), StatusLevel.SUCCESS);
                 this.markDirty(this.currentSequence);
             }
         }, this));
+    }
+
+    /**
+     * 重命名节点并更新引用：不依赖树视图的选中状态（画布右键重命名时树选中可能不同步）。
+     * @return false 表示新 ID 已存在（冲突）
+     */
+    private boolean renameEntry(DialogEntry entry, String newId) {
+        if (this.currentSequence == null || this.currentSequence.findEntryById(newId) != null) {
+            return false;
+        }
+        String oldId = entry.getId();
+        entry.setId(newId);
+        for (DialogEntry e : this.currentSequence.getEntries()) {
+            if (oldId.equals(e.getNextId())) {
+                e.setNextId(newId);
+            }
+            DialogOption[] options = e.getOptions();
+            if (options == null) {
+                continue;
+            }
+            for (DialogOption opt : options) {
+                if (oldId.equals(opt.getTargetId())) {
+                    opt.setTargetId(newId);
+                }
+            }
+        }
+        EditorScreenState.get().setSelectedNodeId(newId);
+        this.treeWidget.setSequence(this.currentSequence);
+        this.treeWidget.selectEntryById(newId);
+        // 迁移已保存的画布布局坐标（旧 ID → 新 ID）：之后切到画布视图节点仍在原位
+        if (this.currentSequence.getId() != null) {
+            java.util.Map<String, int[]> layout = EditorScreenState.get().getCanvasLayout(this.currentSequence.getId());
+            int[] pos = layout.remove(oldId);
+            if (pos != null) {
+                layout.put(newId, pos);
+                EditorScreenState.get().setCanvasLayout(this.currentSequence.getId(), layout);
+            }
+        }
+        // 画布可见时同步刷新：refresh 为新 ID 生成落点，renameNode 再迁移到旧坐标（节点留在原位）
+        if (this.canvasWidget.isVisible()) {
+            this.canvasWidget.refresh();
+            this.canvasWidget.renameNode(oldId, newId);
+            this.canvasWidget.selectEntryById(newId);
+        }
+        return true;
     }
 
     @Override
