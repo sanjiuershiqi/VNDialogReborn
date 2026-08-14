@@ -262,9 +262,9 @@ public class VNDialogEditorScreen extends Screen {
     private void applyViewMode() {
         boolean canvas = EditorScreenState.get().isCanvasMode();
         this.treeSearchBox.setVisible(!canvas);
-        this.addNodeBtn.setVisible(!canvas);
-        this.treeWidget.setVisible(!canvas);
-        this.canvasWidget.setVisible(canvas);
+        this.addNodeBtn.visible = !canvas;
+        this.treeWidget.visible = !canvas;
+        this.canvasWidget.visible = canvas;
         if (canvas) {
             // 绑定当前序列：恢复该序列的节点布局与相机（聚焦起点）
             this.canvasWidget.setSequence(this.currentSequence);
@@ -281,7 +281,7 @@ public class VNDialogEditorScreen extends Screen {
      * 结构级变化（增删节点/改引用）走 markDirty → canvasWidget.refresh()，保留用户布局。
      */
     private void syncCanvasSequence() {
-        if (this.canvasWidget != null && this.canvasWidget.isVisible()) {
+        if (this.canvasWidget != null && this.canvasWidget.visible) {
             this.canvasWidget.setSequence(this.currentSequence);
             this.updateCanvasAvoidance();
         }
@@ -295,7 +295,7 @@ public class VNDialogEditorScreen extends Screen {
         if (this.canvasWidget == null || this.propertyPanel == null) {
             return;
         }
-        boolean panelShown = this.propertyPanel.isVisible() && this.editingEntry != null;
+        boolean panelShown = this.propertyPanel.visible && this.editingEntry != null;
         if (panelShown) {
             this.canvasWidget.setOverlayAvoidance(
                     this.width - this.propertyPanel.getX() + 6,
@@ -464,7 +464,7 @@ public class VNDialogEditorScreen extends Screen {
             this.propertyPanel.setVisible(true);
             EditorScreenState.get().setSelectedNodeId(newId);
             this.markDirty(this.currentSequence);
-            if (this.canvasWidget.isVisible()) {
+            if (this.canvasWidget.visible) {
                 this.canvasWidget.selectEntryById(newId);
             }
             this.setStatus(Component.translatable("gui.vn_edit.status.node_added", newId).getString(), StatusLevel.SUCCESS);
@@ -543,7 +543,7 @@ public class VNDialogEditorScreen extends Screen {
             this.rebuildTabButtons();
         }
         // 画布可见时同步刷新缓存（入度/卡片高度/新节点落点），保留用户布局
-        if (this.canvasWidget != null && this.canvasWidget.isVisible()) {
+        if (this.canvasWidget != null && this.canvasWidget.visible) {
             this.canvasWidget.refresh();
         }
     }
@@ -776,7 +776,7 @@ public class VNDialogEditorScreen extends Screen {
         this.propertyPanel.setVisible(true);
         EditorScreenState.get().setSelectedNodeId(newId);
         this.markDirty(this.currentSequence);
-        if (this.canvasWidget.isVisible()) {
+        if (this.canvasWidget.visible) {
             this.canvasWidget.selectEntryById(newId);
         }
         this.setStatus(Component.translatable("gui.vn_edit.status.node_added", newId).getString(), StatusLevel.SUCCESS);
@@ -1243,7 +1243,7 @@ public class VNDialogEditorScreen extends Screen {
         this.propertyPanel.setSequence(this.currentSequence);
         this.markDirty(this.currentSequence);
         // selectEntryById 内部会触发 onEntrySelected 回调（设 editingEntry + bindTo）并定位/滚动到可见
-        if (this.canvasWidget.isVisible()) {
+        if (this.canvasWidget.visible) {
             this.canvasWidget.selectEntryById(newId);
         } else {
             this.treeWidget.selectEntryById(newId);
@@ -1341,7 +1341,7 @@ public class VNDialogEditorScreen extends Screen {
             }
         }
         // 画布可见时同步刷新：refresh 为新 ID 生成落点，renameNode 再迁移到旧坐标（节点留在原位）
-        if (this.canvasWidget.isVisible()) {
+        if (this.canvasWidget.visible) {
             this.canvasWidget.refresh();
             this.canvasWidget.renameNode(oldId, newId);
             this.canvasWidget.selectEntryById(newId);
