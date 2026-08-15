@@ -288,5 +288,10 @@
   "gui.vn_edit.status.node_copied": "已复制节点：%s",
   "gui.vn_edit.status.node_pasted": "已粘贴节点：%s",
   "gui.vn_edit.status.copy_no_selection": "未选中节点",
-  "gui.vn_edit.status.paste_empty": "剪贴板为空，先 Ctrl+C 复制节点"
+  "gui.vn_edit.status.paste_empty": "剪贴板为空，先 Ctrl+C 复制节点",
+  "gui.vn_edit.status.connected": "已连接：%s → %s",
+  "gui.vn_edit.status.disconnected": "已断开：%s 的连线",
+  "gui.vn_edit.status.undone": "已撤销",
+  "gui.vn_edit.status.redone": "已重做",
+  "gui.vn_edit.canvas.ctx.disconnect": "断开连线：%s"
 }

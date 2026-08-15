@@ -288,5 +288,10 @@
   "gui.vn_edit.status.node_copied": "Copied node: %s",
   "gui.vn_edit.status.node_pasted": "Pasted node: %s",
   "gui.vn_edit.status.copy_no_selection": "No node selected",
-  "gui.vn_edit.status.paste_empty": "Clipboard empty, press Ctrl+C to copy a node first"
+  "gui.vn_edit.status.paste_empty": "Clipboard empty, press Ctrl+C to copy a node first",
+  "gui.vn_edit.status.connected": "Connected: %s → %s",
+  "gui.vn_edit.status.disconnected": "Disconnected link from: %s",
+  "gui.vn_edit.status.undone": "Undone",
+  "gui.vn_edit.status.redone": "Redone",
+  "gui.vn_edit.canvas.ctx.disconnect": "Disconnect link: %s"
 }
