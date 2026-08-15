@@ -18,6 +18,7 @@ import top.yourzi.dialog.editor.gui.widget.DialogTreeWidget;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import top.yourzi.dialog.editor.gui.widget.PropertyPanel;
 import top.yourzi.dialog.editor.util.EditorConfig;
+import top.yourzi.dialog.editor.util.EditorHistory;
 import top.yourzi.dialog.editor.util.EditorTheme;
 import top.yourzi.dialog.editor.util.TextureCacheService;
 import top.yourzi.dialog.model.DialogEntry;
@@ -70,6 +71,8 @@ public class VNDialogEditorScreen extends Screen {
     private DialogEntry editingEntry;
     /** 节点画布视图（大纲↔画布切换，状态存 EditorScreenState.canvasMode）。 */
     private DialogCanvasWidget canvasWidget;
+    /** 当前序列的结构级撤销/重做历史（JSON 快照式，借鉴 MainGraph HistoryManager）。 */
+    private final EditorHistory history = new EditorHistory();
     /** 工具栏右侧视图切换按钮：大纲 ↔ 画布。 */
     private EditorButton viewToggleBtn;
     /** 跟踪有未保存修改的对话序列 ID */
@@ -236,7 +239,9 @@ public class VNDialogEditorScreen extends Screen {
                 },
                 this::onAddNode,              // 空白右键新建节点
                 this::copySelectedNode,       // 菜单复制
-                this::pasteNode);             // 菜单粘贴
+                this::pasteNode,              // 菜单粘贴
+                this::onCanvasConnect,        // 端口拖拽建边
+                this::onCanvasDisconnect);    // 右键连线断开
         this.addRenderableWidget(this.canvasWidget);
         this.propertyPanel = new PropertyPanel(propX, treeContentY, propWidth, contentHeight, this.font);
         this.addRenderableWidget(this.propertyPanel);
@@ -428,6 +433,8 @@ public class VNDialogEditorScreen extends Screen {
         }
         this.activeSequenceIndex = index;
         this.currentSequence = this.openSequences.get(index);
+        // 历史栈跟随序列：切换即清空（快照属于旧序列，跨序列还原会错乱）
+        this.history.clear();
         if (this.currentSequence.getAllowClose() == null) {
             this.currentSequence.setAllowClose(true);
         }
@@ -479,6 +486,7 @@ public class VNDialogEditorScreen extends Screen {
             DialogEntry newEntry = DialogEntry.builder().id(newId).text(new JsonPrimitive("")).build();
             DialogEntry[] entries = this.currentSequence.getEntries();
             ArrayList<DialogEntry> list = entries != null ? new ArrayList<>(List.of(entries)) : new ArrayList<>();
+            this.pushHistory();
             list.add(newEntry);
             this.currentSequence.setEntries(list.toArray(new DialogEntry[0]));
             this.treeWidget.setSequence(this.currentSequence);
@@ -700,6 +708,136 @@ public class VNDialogEditorScreen extends Screen {
     }
 
     /**
+     * 画布端口拖拽建边（借鉴 MainGraph BlueprintConnectionHandler）：
+     * optionIndex=-1 设置 nextId，>=0 设置对应选项 targetId。自连已在画布层禁止。
+     */
+    private void onCanvasConnect(String sourceId, int optionIndex, String targetId) {
+        if (this.currentSequence == null || sourceId == null || targetId == null) {
+            return;
+        }
+        DialogEntry source = this.currentSequence.findEntryById(sourceId);
+        DialogEntry target = this.currentSequence.findEntryById(targetId);
+        if (source == null || target == null) {
+            return;
+        }
+        this.pushHistory();
+        if (optionIndex < 0) {
+            source.setNextId(targetId);
+        } else if (source.getOptions() != null && optionIndex < source.getOptions().length) {
+            source.getOptions()[optionIndex].setTargetId(targetId);
+        } else {
+            return;
+        }
+        this.afterGraphMutation();
+        this.setStatus(Component.translatable("gui.vn_edit.status.connected", sourceId, targetId).getString(), StatusLevel.SUCCESS);
+    }
+
+    /** 画布右键连线断开：optionIndex=-1 清 nextId，>=0 清对应选项 targetId。 */
+    private void onCanvasDisconnect(String sourceId, int optionIndex, String targetId) {
+        if (this.currentSequence == null || sourceId == null) {
+            return;
+        }
+        DialogEntry source = this.currentSequence.findEntryById(sourceId);
+        if (source == null) {
+            return;
+        }
+        this.pushHistory();
+        if (optionIndex < 0) {
+            source.setNextId(null);
+        } else if (source.getOptions() != null && optionIndex < source.getOptions().length) {
+            source.getOptions()[optionIndex].setTargetId(null);
+        } else {
+            return;
+        }
+        this.afterGraphMutation();
+        this.setStatus(Component.translatable("gui.vn_edit.status.disconnected", sourceId).getString(), StatusLevel.SUCCESS);
+    }
+
+    /** 图结构变更（建边/断边）后的联动刷新：树/画布重绘、绑定中的属性页重绑、标脏。 */
+    private void afterGraphMutation() {
+        this.markDirty(this.currentSequence);
+        this.treeWidget.setSequence(this.currentSequence);
+        if (this.propertyPanel.visible && this.editingEntry != null) {
+            // 正在编辑的节点若就是变更源/目标，重绑以刷新逻辑页的下拉显示
+            this.propertyPanel.bindTo(this.editingEntry);
+        }
+    }
+
+    // ===== 撤销/重做（JSON 快照式，借鉴 MainGraph HistoryManager） =====
+
+    /** 序列结构快照：entries 数组 JSON（DialogManager.GSON 与存盘同配置，可无损还原）。 */
+    private String snapshotSequence() {
+        if (this.currentSequence == null || this.currentSequence.getEntries() == null) {
+            return null;
+        }
+        return DialogManager.GSON.toJson(this.currentSequence.getEntries());
+    }
+
+    /** 结构变更前压入历史（栈顶去重，push 会清空 redo 栈）。 */
+    private void pushHistory() {
+        String snapshot = this.snapshotSequence();
+        if (snapshot != null) {
+            this.history.push(snapshot);
+        }
+    }
+
+    /** 撤销：还原上一个快照。返回 false 表示无可撤销。 */
+    private boolean performUndo() {
+        if (this.currentSequence == null) {
+            return false;
+        }
+        String snapshot = this.history.undo(this.snapshotSequence());
+        if (snapshot == null) {
+            return false;
+        }
+        this.applyHistorySnapshot(snapshot);
+        this.setStatus(Component.translatable("gui.vn_edit.status.undone").getString(), StatusLevel.INFO);
+        return true;
+    }
+
+    /** 重做：还原下一个快照。返回 false 表示无可重做。 */
+    private boolean performRedo() {
+        if (this.currentSequence == null) {
+            return false;
+        }
+        String snapshot = this.history.redo(this.snapshotSequence());
+        if (snapshot == null) {
+            return false;
+        }
+        this.applyHistorySnapshot(snapshot);
+        this.setStatus(Component.translatable("gui.vn_edit.status.redone").getString(), StatusLevel.INFO);
+        return true;
+    }
+
+    /** 应用历史快照：还原 entries 并联动刷新树/画布/属性面板（选中节点按 ID 重新定位）。 */
+    private void applyHistorySnapshot(String snapshot) {
+        DialogEntry[] entries = DialogManager.GSON.fromJson(snapshot, DialogEntry[].class);
+        if (entries == null) {
+            return;
+        }
+        this.currentSequence.setEntries(entries);
+        this.markDirty(this.currentSequence);
+        this.treeWidget.setSequence(this.currentSequence);
+        this.propertyPanel.setSequence(this.currentSequence);
+        // 属性面板绑定节点可能已被删除/重建：按 ID 重新定位，找不到则收起
+        String editingId = this.editingEntry != null ? this.editingEntry.getId() : null;
+        DialogEntry rebound = editingId != null ? this.currentSequence.findEntryById(editingId) : null;
+        if (rebound != null) {
+            this.editingEntry = rebound;
+            this.propertyPanel.bindTo(rebound);
+        } else if (this.propertyPanel.visible) {
+            this.editingEntry = null;
+            this.propertyPanel.unbind();
+            this.propertyPanel.setVisible(false);
+            this.applyPanelLayout();
+        }
+        // 画布保持当前布局缓存，仅重算节点高度/入度等派生数据
+        if (this.canvasWidget != null && this.canvasWidget.visible) {
+            this.canvasWidget.refresh();
+        }
+    }
+
+    /**
      * 画布单击选中（轻量回调）：单击只做选中高亮 + 状态同步，不打开编辑面板——
      * 上一版单击即弹全宽面板把画布盖掉大半，属误开；编辑入口改为双击/右键菜单。
      * entry=null 表示点击空白：关闭停靠面板并恢复画布全宽。
@@ -753,6 +891,7 @@ public class VNDialogEditorScreen extends Screen {
     private void performDeleteEntry(DialogEntry entry) {
         DialogEntry[] entries = this.currentSequence.getEntries();
         ArrayList<DialogEntry> list = new ArrayList<>(List.of(entries));
+        this.pushHistory();
         list.remove(entry);
         for (DialogEntry e : list) {
             DialogOption[] options;
@@ -803,6 +942,7 @@ public class VNDialogEditorScreen extends Screen {
         DialogEntry child = DialogEntry.builder().id(newId).text(new JsonPrimitive("")).build();
         DialogEntry[] entries = this.currentSequence.getEntries();
         ArrayList<DialogEntry> list = entries != null ? new ArrayList<>(List.of(entries)) : new ArrayList<>();
+        this.pushHistory();
         // 插到父节点之后：无显式引用时运行时按数组顺序回退，隐式顺序边天然成立
         int insertAt = list.indexOf(parentEntry);
         list.add(insertAt >= 0 ? insertAt + 1 : list.size(), child);
@@ -1211,6 +1351,12 @@ public class VNDialogEditorScreen extends Screen {
                 if (keyCode == GLFW.GLFW_KEY_C) { this.copySelectedNode(); return true; }
                 if (keyCode == GLFW.GLFW_KEY_V) { this.pasteNode(); return true; }
                 if (keyCode == GLFW.GLFW_KEY_D) { this.duplicateSelectedNode(); return true; }
+                // Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y 撤销重做（EditBox 聚焦时不拦截，避免打字误触整图回滚）
+                if (keyCode == GLFW.GLFW_KEY_Z) {
+                    if (Screen.hasShiftDown()) { this.performRedo(); } else { this.performUndo(); }
+                    return true;
+                }
+                if (keyCode == GLFW.GLFW_KEY_Y) { this.performRedo(); return true; }
             }
             if (keyCode == GLFW.GLFW_KEY_DELETE) {
                 DialogEntry sel = this.getActiveSelectedEntry();
@@ -1277,6 +1423,7 @@ public class VNDialogEditorScreen extends Screen {
         copy.setId(newId);
         DialogEntry[] entries = this.currentSequence.getEntries();
         ArrayList<DialogEntry> list = entries != null ? new ArrayList<>(List.of(entries)) : new ArrayList<>();
+        this.pushHistory();
         list.add(copy);
         this.currentSequence.setEntries(list.toArray(new DialogEntry[0]));
         this.treeWidget.setSequence(this.currentSequence);
@@ -1353,6 +1500,7 @@ public class VNDialogEditorScreen extends Screen {
             return false;
         }
         String oldId = entry.getId();
+        this.pushHistory();
         entry.setId(newId);
         for (DialogEntry e : this.currentSequence.getEntries()) {
             if (oldId.equals(e.getNextId())) {

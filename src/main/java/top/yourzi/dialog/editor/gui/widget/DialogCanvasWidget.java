@@ -8,6 +8,7 @@ import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
+import com.mojang.math.Axis;
 import top.yourzi.dialog.editor.gui.EditorRenderHelper;
 import top.yourzi.dialog.editor.gui.EditorScreenState;
 import top.yourzi.dialog.editor.util.EditorTheme;
@@ -95,12 +96,21 @@ public class DialogCanvasWidget extends AbstractWidget {
     private int dragOffsetY = 0;
     private String lastClickNodeId = null;
     private long lastClickTime = 0L;
+    // ===== 端口拖拽建边（借鉴 MainGraph BlueprintConnectionHandler） =====
+    /** 拖拽中的连线源节点 ID；null=无拖拽。 */
+    private String connDragSource = null;
+    /** 拖拽连线的源端口：-1=next 头部端口，>=0=选项索引端口。 */
+    private int connDragPort = -1;
+    /** 悬停命中的边（右键断开用）：null=无；implicit=true 不可断（由数组顺序推导）。 */
+    private String hoveredEdgeSource = null;
+    private int hoveredEdgePort = -1;
+    private boolean hoveredEdgeImplicit = false;
     // ===== 右键菜单 =====
     private boolean menuOpen = false;
     private int menuX = 0;
     private int menuY = 0;
     private final List<MenuItem> menuItems = new ArrayList<>();
-    private record MenuItem(Component label, Runnable action) {
+    private record MenuItem(Component label, Runnable action, boolean danger) {
     }
     // ===== 回调（由宿主 Screen 注入） =====
     private Consumer<DialogEntry> onSelect;
@@ -111,6 +121,15 @@ public class DialogCanvasWidget extends AbstractWidget {
     private Runnable onAddNode;
     private Runnable onCopy;
     private Runnable onPaste;
+    /** 端口拖拽建边回调：optionIndex=-1 表示 next 边，>=0 表示该索引选项边。 */
+    private EdgeListener onConnect;
+    /** 断边回调（右键连线菜单）：optionIndex 语义同上。 */
+    private EdgeListener onDisconnect;
+
+    /** 边级回调参数：源节点 + 端口索引(-1=next) + 目标节点。 */
+    public interface EdgeListener {
+        void accept(String sourceId, int optionIndex, String targetId);
+    }
 
     public DialogCanvasWidget(int x, int y, int width, int height, Font font) {
         super(x, y, width, height, Component.translatable("gui.vn_edit.canvas"));
@@ -120,7 +139,8 @@ public class DialogCanvasWidget extends AbstractWidget {
     public void setCallbacks(Consumer<DialogEntry> onSelect, Consumer<DialogEntry> onDelete,
                              Consumer<DialogEntry> onAddChild, Consumer<DialogEntry> onRename,
                              Runnable onEditProperties, Runnable onAddNode,
-                             Runnable onCopy, Runnable onPaste) {
+                             Runnable onCopy, Runnable onPaste,
+                             EdgeListener onConnect, EdgeListener onDisconnect) {
         this.onSelect = onSelect;
         this.onDelete = onDelete;
         this.onAddChild = onAddChild;
@@ -129,6 +149,8 @@ public class DialogCanvasWidget extends AbstractWidget {
         this.onAddNode = onAddNode;
         this.onCopy = onCopy;
         this.onPaste = onPaste;
+        this.onConnect = onConnect;
+        this.onDisconnect = onDisconnect;
     }
 
     // =====================================================================
@@ -509,8 +531,12 @@ public class DialogCanvasWidget extends AbstractWidget {
             graphics.pose().scale(this.scale, this.scale, 1.0f);
             try {
                 this.renderGrid(graphics);
-                this.renderEdges(graphics);
+                this.renderEdges(graphics, mouseX, mouseY);
                 this.renderNodes(graphics, mouseX, mouseY);
+                // 端口拖拽中的临时连线（画在节点之上，跟随鼠标）
+                if (this.connDragSource != null) {
+                    this.renderDragConnection(graphics, mouseX, mouseY);
+                }
             } finally {
                 graphics.pose().popPose();
             }
@@ -548,11 +574,18 @@ public class DialogCanvasWidget extends AbstractWidget {
         }
     }
 
-    /** 渲染三种边：显式 next（实线）、隐式顺序（虚线）、选项边（调色板）。先画边再画节点。 */
-    private void renderEdges(GuiGraphics graphics) {
+    /** 渲染三种边：显式 next（实线）、隐式顺序（虚线）、选项边（调色板）。先画边再画节点。
+     *  同时做鼠标悬停命中检测（右键断开连线用），命中边提亮加粗。 */
+    private void renderEdges(GuiGraphics graphics, int mouseX, int mouseY) {
         if (!this.hasEntries()) {
             return;
         }
+        this.hoveredEdgeSource = null;
+        this.hoveredEdgePort = -1;
+        this.hoveredEdgeImplicit = false;
+        float mwx = this.mouseWorldX(mouseX);
+        float mwy = this.mouseWorldY(mouseY);
+        float hitTol = 5f / this.scale;
         DialogEntry[] entries = this.sequence.getEntries();
         for (int i = 0; i < entries.length; i++) {
             DialogEntry e = entries[i];
@@ -562,13 +595,22 @@ public class DialogCanvasWidget extends AbstractWidget {
             boolean hot = e.getId().equals(this.selectedId);
             // 1) 显式 next
             if (e.getNextId() != null && !e.getNextId().isEmpty()) {
-                this.drawEdge(graphics, e.getId(), e.getNextId(), EditorTheme.EDGE_NEXT, false, hot);
+                boolean hov = this.drawEdge(graphics, e.getId(), e.getNextId(), EditorTheme.EDGE_NEXT, false, hot, mwx, mwy, hitTol);
+                if (hov) {
+                    this.hoveredEdgeSource = e.getId();
+                    this.hoveredEdgePort = -1;
+                }
             } else if ((e.getOptions() == null || e.getOptions().length == 0)
                     && !e.isEndDialog() && i < entries.length - 1) {
                 // 2) 隐式顺序边：复刻运行时 getNextEntry 的数组顺序回退
                 DialogEntry next = entries[i + 1];
                 if (next != null && next.getId() != null) {
-                    this.drawEdge(graphics, e.getId(), next.getId(), EditorTheme.EDGE_IMPLICIT, true, hot);
+                    boolean hov = this.drawEdge(graphics, e.getId(), next.getId(), EditorTheme.EDGE_IMPLICIT, true, hot, mwx, mwy, hitTol);
+                    if (hov) {
+                        this.hoveredEdgeSource = e.getId();
+                        this.hoveredEdgePort = -1;
+                        this.hoveredEdgeImplicit = true;
+                    }
                 }
             }
             // 3) 选项边
@@ -579,7 +621,11 @@ public class DialogCanvasWidget extends AbstractWidget {
                         continue;
                     }
                     int color = EditorTheme.OPTION_PALETTE[oi % EditorTheme.OPTION_PALETTE.length];
-                    this.drawEdge(graphics, e.getId(), opt.getTargetId(), color, false, hot);
+                    boolean hov = this.drawEdge(graphics, e.getId(), opt.getTargetId(), color, false, hot, mwx, mwy, hitTol);
+                    if (hov) {
+                        this.hoveredEdgeSource = e.getId();
+                        this.hoveredEdgePort = oi;
+                    }
                 }
             }
         }
@@ -587,33 +633,38 @@ public class DialogCanvasWidget extends AbstractWidget {
 
     /**
      * 画一条从 source 到 target 的三次贝塞尔边（水平切线控制点）。
-     * 细线：逐像素步进的 th×th 小方块逼近（MC GuiGraphics 只有轴对齐 fill，
-     * 若按段画包围盒，斜线段会糊成实心块——上一版视觉事故的根因）。
-     * dashed=true 时 2 段画 2 段跳模拟虚线；端点选中时 2px 提亮，平时 1px。
+     * 细线方案（借鉴 MainGraph BlueprintRenderer.drawLine）：把任意角度线段转为
+     * "平移+旋转后的水平细矩形"一次 fill 画出，斜线不糊块且每段仅 1 次绘制调用。
+     * 采样段数按屏幕距离自适应（LOD）：clamp(dist*scale/7, 6, 36)，近多远少。
+     * 悬停命中：采样点与鼠标距离 < hitTol 时返回 true（供右键断边菜单）。
      */
-    private void drawEdge(GuiGraphics graphics, String sourceId, String targetId, int color, boolean dashed, boolean hot) {
+    private boolean drawEdge(GuiGraphics graphics, String sourceId, String targetId, int color,
+                             boolean dashed, boolean hot, float mwx, float mwy, float hitTol) {
         int[] sp = this.positions.get(sourceId);
         int[] tp = this.positions.get(targetId);
         DialogEntry source = this.sequence.findEntryById(sourceId);
         if (sp == null || tp == null) {
-            return; // 悬空引用：不画（节点卡片上的 ⚠ 已表达）
+            return false; // 悬空引用：不画（节点卡片上的 ⚠ 已表达）
         }
         boolean targetHot = targetId.equals(this.selectedId);
-        int th = this.lineThickness(hot || targetHot ? 2f : 1f);
-        int edgeColor = hot || targetHot ? EditorRenderHelper.brighten(color, 40) : color;
-        DialogEntry targetEntry = this.sequence.findEntryById(targetId);
-        int sy = optionPortWorldY(source, sourceId, targetId);
         int sx = sp[0] + NODE_W;
+        int sy = optionPortWorldY(source, sourceId, targetId);
+        DialogEntry targetEntry = this.sequence.findEntryById(targetId);
         int ty = tp[1] + (targetEntry != null
                 ? this.nodeHeights.getOrDefault(targetId, BASE_NODE_H) / 2
                 : BASE_NODE_H / 2);
         int tx = tp[0];
+        // 命中检测在前（悬停时也要画线）
+        boolean hovered = isPointNearEdge(mwx, mwy, sx, sy, tx, ty, hitTol);
+        int th = this.lineThickness(hovered || hot || targetHot ? 2f : 1f);
+        int edgeColor = hovered ? EditorTheme.TEXT_PRIMARY
+                : hot || targetHot ? EditorRenderHelper.brighten(color, 40) : color;
         // 水平切线三次贝塞尔
         float dx = Math.abs(tx - sx);
         float ext = Math.max(24f, dx * 0.5f);
         float c1x = sx + ext, c1y = sy;
         float c2x = tx - ext, c2y = ty;
-        int segments = 24;
+        int segments = Mth.clamp(Mth.ceil(Math.max(dx, Math.abs(ty - sy)) * this.scale / 7f), 6, 36);
         float prevX = sx, prevY = sy;
         for (int s = 1; s <= segments; s++) {
             float t = s / (float) segments;
@@ -629,29 +680,49 @@ public class DialogCanvasWidget extends AbstractWidget {
         // 端口方块：源端口（右缘）+ 目标端口（左缘）
         graphics.fill(sx - PORT_SZ, sy - PORT_SZ / 2, sx, sy + (PORT_SZ + 1) / 2, edgeColor);
         graphics.fill(tx, ty - PORT_SZ / 2, tx + PORT_SZ, ty + (PORT_SZ + 1) / 2, edgeColor);
+        return hovered;
+    }
+
+    /** 鼠标世界坐标是否贴近贝塞尔边（采样距离 < tol）。 */
+    private boolean isPointNearEdge(float mwx, float mwy, int sx, int sy, int tx, int ty, float tol) {
+        float dx = Math.abs(tx - sx);
+        float ext = Math.max(24f, dx * 0.5f);
+        float c1x = sx + ext, c1y = sy;
+        float c2x = tx - ext, c2y = ty;
+        int segments = 24;
+        float tolSq = tol * tol;
+        for (int s = 0; s <= segments; s++) {
+            float t = s / (float) segments;
+            float mt = 1 - t;
+            float x = mt * mt * mt * sx + 3 * mt * mt * t * c1x + 3 * mt * t * t * c2x + t * t * t * tx;
+            float y = mt * mt * mt * sy + 3 * mt * mt * t * c1y + 3 * mt * t * t * c2y + t * t * t * ty;
+            float ddx = x - mwx;
+            float ddy = y - mwy;
+            if (ddx * ddx + ddy * ddy < tolSq) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
-     * 细线段（世界坐标）：沿线每 1 世界像素步进画 th×th 方块，
-     * 视觉上连续且粗细恒定，避免包围盒 fill 把斜线糊成多边形色块。
+     * 细线段（世界坐标，借鉴 MainGraph 的旋转矩形法）：pushPose → 平移到起点 →
+     * 绕 Z 旋转 atan2(dy,dx) → fill 一个长度=len、粗细=th 的水平细矩形 → popPose。
+     * 每段一次绘制调用，替代逐像素步进（快且斜线干净不糊块）。
      */
     private void fillLine(GuiGraphics graphics, float x0, float y0, float x1, float y1, int th, int color) {
         float dx = x1 - x0;
         float dy = y1 - y0;
-        int steps = Math.max(1, Mth.ceil(Math.max(Math.abs(dx), Math.abs(dy))));
-        float half = th / 2f;
-        int prevIx = Integer.MIN_VALUE;
-        int prevIy = Integer.MIN_VALUE;
-        for (int i = 0; i <= steps; i++) {
-            float t = i / (float) steps;
-            int ix = Mth.floor(x0 + dx * t - half);
-            int iy = Mth.floor(y0 + dy * t - half);
-            if (ix != prevIx || iy != prevIy) { // 相邻步落在同一像素时跳过重绘
-                graphics.fill(ix, iy, ix + th, iy + th, color);
-                prevIx = ix;
-                prevIy = iy;
-            }
+        float len = Mth.sqrt(dx * dx + dy * dy);
+        if (len < 0.01f) {
+            return;
         }
+        var pose = graphics.pose();
+        pose.pushPose();
+        pose.translate(x0, y0, 0);
+        pose.mulPose(Axis.ZP.rotation((float) Math.atan2(dy, dx)));
+        graphics.fill(0, -(th / 2), Mth.ceil(len), (th + 1) / 2, color);
+        pose.popPose();
     }
 
     /** 计算从 source 指向 targetId 的边在源节点右缘的端口世界 Y：next 用头部端口，选项用对应索引端口。 */
@@ -672,7 +743,97 @@ public class DialogCanvasWidget extends AbstractWidget {
         return baseY;
     }
 
-    /** 渲染节点卡片：头部（类型图标+ID）+ 两行摘要 + 右缘端口 + 状态标记（起点/孤儿/汇合）。 */
+    /**
+     * 端口拖拽建边：从源端口画一条半透明贝塞尔跟随鼠标（MainGraph 的 temp connection）。
+     * 释放到目标节点上时由 mouseReleased 调 onConnect 完成数据层连线。
+     */
+    private void renderDragConnection(GuiGraphics graphics, int mouseX, int mouseY) {
+        int[] sp = this.positions.get(this.connDragSource);
+        DialogEntry source = this.sequence.findEntryById(this.connDragSource);
+        if (sp == null || source == null) {
+            return;
+        }
+        int sx = sp[0] + NODE_W;
+        int sy = this.connDragPort < 0
+                ? sp[1] + HEADER_H / 2 + 1
+                : sp[1] + HEADER_H + 6 + this.connDragPort * PORT_SPACING;
+        int color = this.connDragPort < 0 ? EditorTheme.EDGE_NEXT
+                : EditorTheme.OPTION_PALETTE[this.connDragPort % EditorTheme.OPTION_PALETTE.length];
+        float tx = this.mouseWorldX(mouseX);
+        float ty = this.mouseWorldY(mouseY);
+        // 半透明跟随线（提亮 + 70% 不透明度区分正式边）
+        int tempColor = EditorRenderHelper.withAlphaRatio(EditorRenderHelper.brighten(color, 60), 0.7f);
+        float ext = Math.max(24f, Math.abs(tx - sx) * 0.5f);
+        float c1x = sx + ext, c1y = sy;
+        float c2x = tx - ext, c2y = ty;
+        int segments = 24;
+        int th = this.lineThickness(2f);
+        float prevX = sx, prevY = sy;
+        for (int s = 1; s <= segments; s++) {
+            float t = s / (float) segments;
+            float mt = 1 - t;
+            float x = mt * mt * mt * sx + 3 * mt * mt * t * c1x + 3 * mt * t * t * c2x + t * t * t * tx;
+            float y = mt * mt * mt * sy + 3 * mt * mt * t * c1y + 3 * mt * t * t * c2y + t * t * t * ty;
+            this.fillLine(graphics, prevX, prevY, x, y, th, tempColor);
+            prevX = x;
+            prevY = y;
+        }
+        // 源端口高亮
+        graphics.fill(sx - PORT_SZ - 1, sy - PORT_SZ, sx + 1, sy + PORT_SZ + 1, tempColor);
+        // 悬停目标节点提示：命中目标时目标左缘端口高亮
+        String target = this.hitNode(mouseX, mouseY);
+        if (target != null && !target.equals(this.connDragSource)) {
+            int[] tp = this.positions.get(target);
+            DialogEntry te = this.sequence.findEntryById(target);
+            int tyy = tp[1] + (te != null ? this.nodeHeights.getOrDefault(target, BASE_NODE_H) / 2 : BASE_NODE_H / 2);
+            graphics.fill(tp[0] - PORT_SZ - 1, tyy - PORT_SZ, tp[0] + PORT_SZ, tyy + PORT_SZ + 1, tempColor);
+        }
+    }
+
+    /**
+     * 命中源端口（节点右缘）：返回 [nodeId, portIndex]（portIndex -1=next 头部端口，>=0=选项索引）；
+     * 未命中返回 null。容差随缩放换算到世界坐标（屏幕约 5px），借鉴 MainGraph 的端口命中。
+     */
+    private String[] hitPort(double mouseX, double mouseY) {
+        if (!this.hasEntries()) {
+            return null;
+        }
+        float wx = this.mouseWorldX(mouseX);
+        float wy = this.mouseWorldY(mouseY);
+        float tol = 5f / this.scale;
+        DialogEntry[] entries = this.sequence.getEntries();
+        for (int i = entries.length - 1; i >= 0; i--) {
+            DialogEntry e = entries[i];
+            if (e == null || e.getId() == null) {
+                continue;
+            }
+            int[] pos = this.positions.get(e.getId());
+            if (pos == null) {
+                continue;
+            }
+            int px = pos[0] + NODE_W;
+            // next 头部端口（有选项分支的节点 next 无效，仍允许拖出？选项分支时 next 不生效——不提供）
+            if (e.getOptions() == null || e.getOptions().length == 0) {
+                int py = pos[1] + HEADER_H / 2 + 1;
+                if (Math.abs(wx - px) <= tol && Math.abs(wy - py) <= tol) {
+                    return new String[]{e.getId(), "-1"};
+                }
+            }
+            // 选项端口
+            if (e.getOptions() != null) {
+                for (int oi = 0; oi < e.getOptions().length; oi++) {
+                    int py = pos[1] + HEADER_H + 6 + oi * PORT_SPACING;
+                    if (Math.abs(wx - px) <= tol && Math.abs(wy - py) <= tol) {
+                        return new String[]{e.getId(), String.valueOf(oi)};
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /** 渲染节点卡片：头部（类型图标+ID）+ 两行摘要 + 右缘端口 + 状态标记（起点/孤儿/汇合）。
+     *  视口剔除 + LOD：屏外节点跳过；缩小到一定程度时省略摘要文字/徽标等次级细节（借鉴 MainGraph）。 */
     private void renderNodes(GuiGraphics graphics, int mouseX, int mouseY) {
         if (!this.hasEntries()) {
             return;
@@ -680,6 +841,14 @@ public class DialogCanvasWidget extends AbstractWidget {
         float wmx = this.mouseWorldX(mouseX);
         float wmy = this.mouseWorldY(mouseY);
         int border = this.lineThickness(1f);
+        // 可视世界矩形（剔除用）
+        float viewL = this.screenToWorldX(0) - NODE_W;
+        float viewR = this.screenToWorldX(this.getWidth()) + NODE_W;
+        float viewT = this.screenToWorldY(0) - 64;
+        float viewB = this.screenToWorldY(this.getHeight()) + 64;
+        // LOD：缩小后省略次级细节，保住帧率与可读性
+        boolean showText = this.scale >= 0.65f;
+        boolean showBadges = this.scale >= 0.55f;
         DialogEntry start = this.sequence.getFirstEntry();
         String startId = start != null ? start.getId() : null;
         for (DialogEntry e : this.sequence.getEntries()) {
@@ -689,6 +858,10 @@ public class DialogCanvasWidget extends AbstractWidget {
             int[] pos = this.positions.get(e.getId());
             if (pos == null) {
                 continue;
+            }
+            int nodeH0 = this.nodeHeights.getOrDefault(e.getId(), BASE_NODE_H);
+            if (pos[0] > viewR || pos[0] < viewL || pos[1] > viewB || pos[1] + nodeH0 < viewT) {
+                continue; // 视口剔除
             }
             boolean isStart = e.getId().equals(startId);
             boolean isOrphan = this.isOrphan(e.getId());
@@ -720,14 +893,28 @@ public class DialogCanvasWidget extends AbstractWidget {
             String clippedId = this.font.plainSubstrByWidth(idText, NODE_W - 14);
             graphics.drawString(this.font, clippedId, pos[0] + 4, pos[1] + 2,
                     selected ? EditorTheme.TEXT_PRIMARY : EditorTheme.TEXT_SECONDARY, selected);
-            // 汇合标记：入度>1 时头部右侧显示 ↓n
+            // 汇合标记：入度>1 时头部右侧显示 ↓n（LOD：缩小后省略）
             int indeg = this.inDegree.getOrDefault(e.getId(), 0);
-            if (indeg > 1) {
+            if (indeg > 1 && showBadges) {
                 String badge = "\u2193" + indeg;
                 graphics.drawString(this.font, badge, pos[0] + NODE_W - this.font.width(badge) - 3,
                         pos[1] + 2, EditorTheme.TEXT_MUTED);
             }
-            // 摘要两行：说话人 / 正文
+            // 摘要两行：说话人 / 正文（LOD：缩小后省略，只留头部 ID）
+            if (!showText) {
+                // 选项端口圆点仍保留（连线锚点参考）
+                if (e.getOptions() != null) {
+                    for (int oi = 0; oi < e.getOptions().length; oi++) {
+                        int py = pos[1] + HEADER_H + 6 + oi * PORT_SPACING;
+                        int color = EditorTheme.OPTION_PALETTE[oi % EditorTheme.OPTION_PALETTE.length];
+                        graphics.fill(pos[0] + NODE_W - PORT_SZ, py - PORT_SZ / 2, pos[0] + NODE_W, py + (PORT_SZ + 1) / 2, color);
+                    }
+                }
+                if (hovered && !selected) {
+                    graphics.fill(pos[0], pos[1], pos[0] + NODE_W, pos[1] + nodeH, EditorTheme.HOVER_TINT);
+                }
+                continue;
+            }
             int textMaxW = NODE_W - 8;
             String speaker = this.plainText(e.getSpeaker(), 40);
             String text = this.plainText(e.getText(), 80);
@@ -908,29 +1095,45 @@ public class DialogCanvasWidget extends AbstractWidget {
             }
             this.menuItems.add(new MenuItem(Component.translatable("gui.vn_edit.canvas.ctx.edit"), () -> {
                 if (this.onEditProperties != null) this.onEditProperties.run();
-            }));
+            }, false));
             this.menuItems.add(new MenuItem(Component.translatable("gui.vn_edit.canvas.ctx.add_child"), () -> {
                 if (this.onAddChild != null) this.onAddChild.accept(entry);
-            }));
+            }, false));
             this.menuItems.add(new MenuItem(Component.translatable("gui.vn_edit.canvas.ctx.rename"), () -> {
                 if (this.onRename != null) this.onRename.accept(entry);
-            }));
+            }, false));
             this.menuItems.add(new MenuItem(Component.translatable("gui.vn_edit.canvas.ctx.copy"), () -> {
                 if (this.onCopy != null) this.onCopy.run();
-            }));
+            }, false));
             this.menuItems.add(new MenuItem(Component.translatable("gui.vn_edit.canvas.ctx.delete"), () -> {
                 if (this.onDelete != null) this.onDelete.accept(entry);
-            }));
+            }, true));
         } else {
             if (this.onAddNode != null) {
-                this.menuItems.add(new MenuItem(Component.translatable("gui.vn_edit.canvas.ctx.add_node"), this.onAddNode));
+                this.menuItems.add(new MenuItem(Component.translatable("gui.vn_edit.canvas.ctx.add_node"), this.onAddNode, false));
             }
             if (this.onPaste != null) {
-                this.menuItems.add(new MenuItem(Component.translatable("gui.vn_edit.canvas.ctx.paste"), this.onPaste));
+                this.menuItems.add(new MenuItem(Component.translatable("gui.vn_edit.canvas.ctx.paste"), this.onPaste, false));
             }
-            this.menuItems.add(new MenuItem(Component.translatable("gui.vn_edit.canvas.auto_layout"), () -> this.autoLayout(true)));
-            this.menuItems.add(new MenuItem(Component.translatable("gui.vn_edit.canvas.focus_start"), this::focusStart));
+            this.menuItems.add(new MenuItem(Component.translatable("gui.vn_edit.canvas.auto_layout"), () -> this.autoLayout(true), false));
+            this.menuItems.add(new MenuItem(Component.translatable("gui.vn_edit.canvas.focus_start"), this::focusStart, false));
         }
+        this.placeMenu(mouseX, mouseY);
+    }
+
+    /** 连线右键菜单：断开该边（隐式顺序边由数组顺序推导，不可断）。 */
+    private void openEdgeMenu(double mouseX, double mouseY, String sourceId, int optionIndex) {
+        this.menuItems.clear();
+        String src = sourceId;
+        int port = optionIndex;
+        this.menuItems.add(new MenuItem(Component.translatable("gui.vn_edit.canvas.ctx.disconnect", src), () -> {
+            if (this.onDisconnect != null) this.onDisconnect.accept(src, port, null);
+        }, true));
+        this.placeMenu(mouseX, mouseY);
+    }
+
+    /** 计算菜单宽度/位置并展开（各 openXxxMenu 共用）。 */
+    private void placeMenu(double mouseX, double mouseY) {
         // 菜单宽度与位置（屏幕坐标，夹在组件范围内）
         int width = 90;
         for (MenuItem item : this.menuItems) {
@@ -966,10 +1169,9 @@ public class DialogCanvasWidget extends AbstractWidget {
             if (hovered) {
                 graphics.fill(this.menuX + 1, itemY, this.menuX + width - 1, itemY + 15, EditorTheme.BG_HOVER);
             }
-            boolean danger = this.menuItems.get(i).label().getString().equals(
-                    Component.translatable("gui.vn_edit.canvas.ctx.delete").getString());
-            graphics.drawString(this.font, this.menuItems.get(i).label(), this.menuX + 8, itemY + 3,
-                    danger ? EditorTheme.DANGER : hovered ? EditorTheme.TEXT_PRIMARY : EditorTheme.TEXT_SECONDARY, hovered);
+            MenuItem item = this.menuItems.get(i);
+            graphics.drawString(this.font, item.label(), this.menuX + 8, itemY + 3,
+                    item.danger() ? EditorTheme.DANGER : hovered ? EditorTheme.TEXT_PRIMARY : EditorTheme.TEXT_SECONDARY, hovered);
         }
     }
 
@@ -1053,15 +1255,27 @@ public class DialogCanvasWidget extends AbstractWidget {
             }
         }
         if (button == 1) {
-            // 右键：节点/空白上下文菜单
+            // 右键：节点 > 连线 > 空白 三级上下文菜单
             String nodeId = this.hitNode(mouseX, mouseY);
             if (nodeId != null) {
                 this.selectNode(nodeId, this.sequence.findEntryById(nodeId));
+                this.openMenu(mouseX, mouseY, nodeId);
+            } else if (this.hoveredEdgeSource != null && !this.hoveredEdgeImplicit) {
+                this.openEdgeMenu(mouseX, mouseY, this.hoveredEdgeSource, this.hoveredEdgePort);
+            } else {
+                this.openMenu(mouseX, mouseY, null);
             }
-            this.openMenu(mouseX, mouseY, nodeId);
             return true;
         }
         if (button == 0 || button == 2) {
+            // 端口拖拽建边优先于节点选中/拖拽（端口在节点右缘，两者命中区重叠）
+            String[] port = button == 0 ? this.hitPort(mouseX, mouseY) : null;
+            if (port != null) {
+                this.connDragSource = port[0];
+                this.connDragPort = Integer.parseInt(port[1]);
+                this.menuOpen = false;
+                return true;
+            }
             String nodeId = button == 0 ? this.hitNode(mouseX, mouseY) : null;
             if (button == 0 && nodeId != null) {
                 DialogEntry entry = this.sequence.findEntryById(nodeId);
@@ -1100,6 +1314,10 @@ public class DialogCanvasWidget extends AbstractWidget {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        // 连线拖拽：临时线在 render 中跟随鼠标，无需更新状态
+        if (this.connDragSource != null) {
+            return true;
+        }
         if (this.dragMode == DragMode.NONE) {
             return false;
         }
@@ -1123,6 +1341,16 @@ public class DialogCanvasWidget extends AbstractWidget {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        // 连线拖拽释放：命中目标节点则建边（自连禁止——运行时死循环）
+        if (this.connDragSource != null) {
+            String target = this.hitNode(mouseX, mouseY);
+            if (target != null && !target.equals(this.connDragSource) && this.onConnect != null) {
+                this.onConnect.accept(this.connDragSource, this.connDragPort, target);
+            }
+            this.connDragSource = null;
+            this.connDragPort = -1;
+            return true;
+        }
         if (this.dragMode == DragMode.NODE) {
             this.saveLayout();
         }
