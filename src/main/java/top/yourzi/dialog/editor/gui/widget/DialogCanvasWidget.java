@@ -82,7 +82,7 @@ public class DialogCanvasWidget extends AbstractWidget {
     private final Map<String, Integer> nodeHeights = new HashMap<>();
     private String selectedId = null;
     // ===== 交互状态 =====
-    private enum DragMode { NONE, PAN, NODE, CONNECT }
+    private enum DragMode { NONE, PAN, NODE }
     private DragMode dragMode = DragMode.NONE;
     private double lastMouseX = 0;
     private double lastMouseY = 0;
@@ -90,13 +90,6 @@ public class DialogCanvasWidget extends AbstractWidget {
     private boolean pressOnEmpty = false;
     /** 本次拖拽累计位移（屏幕像素），<4 视为点击。 */
     private float dragDist = 0f;
-    // ===== 端口拖拽连线（NodeGraph/QuestCraft 范式：拖到节点=建边，拖到空白=新建并连接） =====
-    /** 连线拖拽源节点 ID。 */
-    private String connectSourceId = null;
-    /** 连线拖拽源端口：-1=next 头部端口，>=0=选项索引端口。 */
-    private int connectPortIndex = -1;
-    /** 渲染帧 hover 的节点 ID（悬停聚焦：相关边高亮、其余变暗，FTB Quests 范式）。 */
-    private String hoveredNodeId = null;
     private String dragNodeId = null;
     private int dragOffsetX = 0;
     private int dragOffsetY = 0;
