@@ -275,7 +275,7 @@
   "gui.vn_edit.tooltip.view_toggle": "切换 大纲/画布 视图",
   "gui.vn_edit.canvas": "对话画布",
   "gui.vn_edit.canvas.empty": "该序列暂无节点，右键新建",
-  "gui.vn_edit.canvas.hint": "滚轮平移 · Ctrl+滚轮缩放 · 右键菜单",
+  "gui.vn_edit.canvas.hint": "双击节点编辑 · 滚轮平移 · Ctrl+滚轮缩放 · 右键菜单",
   "gui.vn_edit.canvas.auto_layout": "自动布局",
   "gui.vn_edit.canvas.focus_start": "回到起点",
   "gui.vn_edit.canvas.ctx.edit": "编辑属性",

@@ -81,19 +81,15 @@ public class DialogCanvasWidget extends AbstractWidget {
     /** 节点 ID → 卡片高度（取决于选项数）。 */
     private final Map<String, Integer> nodeHeights = new HashMap<>();
     private String selectedId = null;
-    // ===== 浮层避让（浮动属性面板区域，屏幕坐标） =====
-    /** HUD 按钮相对画布右缘的额外内缩（面板可见时左移，避免被面板遮住）。 */
-    private int hudInset = 0;
-    /** 输入排除区：该矩形内的鼠标事件让给浮在上层的浮动面板，画布不抢。 */
-    private int excludeX = 0;
-    private int excludeY = 0;
-    private int excludeW = 0;
-    private int excludeH = 0;
     // ===== 交互状态 =====
     private enum DragMode { NONE, PAN, NODE }
     private DragMode dragMode = DragMode.NONE;
     private double lastMouseX = 0;
     private double lastMouseY = 0;
+    /** 左键按下时是否落在空白（用于区分"点击空白取消选中"与"拖拽平移"，拖拽不取消选中）。 */
+    private boolean pressOnEmpty = false;
+    /** 本次拖拽累计位移（屏幕像素），<4 视为点击。 */
+    private float dragDist = 0f;
     private String dragNodeId = null;
     private int dragOffsetX = 0;
     private int dragOffsetY = 0;
@@ -440,22 +436,32 @@ public class DialogCanvasWidget extends AbstractWidget {
     }
 
     /**
-     * 设置浮动面板避让：HUD 内缩 + 输入排除区（屏幕坐标矩形）。
-     * 面板隐藏时传 (0,0,0,0) 恢复全画布可交互。
+     * 平移相机使节点完整进入可视区（不改变缩放，四周留 24px 边距）。
+     * 画布模式右侧停靠面板展开/收起导致画布宽度变化后，由宿主调用防止选中节点被裁出视野。
      */
-    public void setOverlayAvoidance(int hudInset, int x, int y, int w, int h) {
-        this.hudInset = hudInset;
-        this.excludeX = x;
-        this.excludeY = y;
-        this.excludeW = w;
-        this.excludeH = h;
-    }
-
-    /** 鼠标（屏幕坐标）是否落在输入排除区内（浮动面板区域）。 */
-    private boolean inExclusion(double mx, double my) {
-        return this.excludeW > 0 && this.excludeH > 0
-                && mx >= this.excludeX && mx < this.excludeX + this.excludeW
-                && my >= this.excludeY && my < this.excludeY + this.excludeH;
+    public void ensureVisible(String id) {
+        int[] pos = this.positions.get(id);
+        if (pos == null) {
+            return;
+        }
+        int nodeH = this.nodeHeights.getOrDefault(id, BASE_NODE_H);
+        float sx0 = pos[0] * this.scale + this.panX;
+        float sy0 = pos[1] * this.scale + this.panY;
+        float sx1 = (pos[0] + NODE_W) * this.scale + this.panX;
+        float sy1 = (pos[1] + nodeH) * this.scale + this.panY;
+        float margin = 24f;
+        if (sx0 < margin) {
+            this.panX += margin - sx0;
+        }
+        if (sy0 < margin) {
+            this.panY += margin - sy0;
+        }
+        if (sx1 > this.getWidth() - margin) {
+            this.panX -= sx1 - (this.getWidth() - margin);
+        }
+        if (sy1 > this.getHeight() - margin) {
+            this.panY -= sy1 - (this.getHeight() - margin);
+        }
     }
 
     /** 按 ID 选中节点（供粘贴/复制后同步选中），触发回调但不移动相机。 */
@@ -581,7 +587,9 @@ public class DialogCanvasWidget extends AbstractWidget {
 
     /**
      * 画一条从 source 到 target 的三次贝塞尔边（水平切线控制点）。
-     * dashed=true 时隔段绘制模拟虚线；hot=true（端点选中）时加粗提亮。
+     * 细线：逐像素步进的 th×th 小方块逼近（MC GuiGraphics 只有轴对齐 fill，
+     * 若按段画包围盒，斜线段会糊成实心块——上一版视觉事故的根因）。
+     * dashed=true 时 2 段画 2 段跳模拟虚线；端点选中时 2px 提亮，平时 1px。
      */
     private void drawEdge(GuiGraphics graphics, String sourceId, String targetId, int color, boolean dashed, boolean hot) {
         int[] sp = this.positions.get(sourceId);
@@ -591,7 +599,7 @@ public class DialogCanvasWidget extends AbstractWidget {
             return; // 悬空引用：不画（节点卡片上的 ⚠ 已表达）
         }
         boolean targetHot = targetId.equals(this.selectedId);
-        int th = this.lineThickness(hot || targetHot ? 3f : 2f);
+        int th = this.lineThickness(hot || targetHot ? 2f : 1f);
         int edgeColor = hot || targetHot ? EditorRenderHelper.brighten(color, 40) : color;
         DialogEntry targetEntry = this.sequence.findEntryById(targetId);
         int sy = optionPortWorldY(source, sourceId, targetId);
@@ -605,19 +613,15 @@ public class DialogCanvasWidget extends AbstractWidget {
         float ext = Math.max(24f, dx * 0.5f);
         float c1x = sx + ext, c1y = sy;
         float c2x = tx - ext, c2y = ty;
-        int segments = 16;
+        int segments = 24;
         float prevX = sx, prevY = sy;
         for (int s = 1; s <= segments; s++) {
             float t = s / (float) segments;
             float mt = 1 - t;
             float x = mt * mt * mt * sx + 3 * mt * mt * t * c1x + 3 * mt * t * t * c2x + t * t * t * tx;
             float y = mt * mt * mt * sy + 3 * mt * mt * t * c1y + 3 * mt * t * t * c2y + t * t * t * ty;
-            if (!dashed || (s % 4) != 0) {
-                int x0 = Math.round(Math.min(prevX, x));
-                int y0 = Math.round(Math.min(prevY, y));
-                int x1 = Math.round(Math.max(prevX, x));
-                int y1 = Math.round(Math.max(prevY, y));
-                graphics.fill(x0 - th / 2, y0 - th / 2, x1 + (th + 1) / 2, y1 + (th + 1) / 2, edgeColor);
+            if (!dashed || ((s - 1) / 2) % 2 == 0) {
+                this.fillLine(graphics, prevX, prevY, x, y, th, edgeColor);
             }
             prevX = x;
             prevY = y;
@@ -625,6 +629,29 @@ public class DialogCanvasWidget extends AbstractWidget {
         // 端口方块：源端口（右缘）+ 目标端口（左缘）
         graphics.fill(sx - PORT_SZ, sy - PORT_SZ / 2, sx, sy + (PORT_SZ + 1) / 2, edgeColor);
         graphics.fill(tx, ty - PORT_SZ / 2, tx + PORT_SZ, ty + (PORT_SZ + 1) / 2, edgeColor);
+    }
+
+    /**
+     * 细线段（世界坐标）：沿线每 1 世界像素步进画 th×th 方块，
+     * 视觉上连续且粗细恒定，避免包围盒 fill 把斜线糊成多边形色块。
+     */
+    private void fillLine(GuiGraphics graphics, float x0, float y0, float x1, float y1, int th, int color) {
+        float dx = x1 - x0;
+        float dy = y1 - y0;
+        int steps = Math.max(1, Mth.ceil(Math.max(Math.abs(dx), Math.abs(dy))));
+        float half = th / 2f;
+        int prevIx = Integer.MIN_VALUE;
+        int prevIy = Integer.MIN_VALUE;
+        for (int i = 0; i <= steps; i++) {
+            float t = i / (float) steps;
+            int ix = Mth.floor(x0 + dx * t - half);
+            int iy = Mth.floor(y0 + dy * t - half);
+            if (ix != prevIx || iy != prevIy) { // 相邻步落在同一像素时跳过重绘
+                graphics.fill(ix, iy, ix + th, iy + th, color);
+                prevIx = ix;
+                prevIy = iy;
+            }
+        }
     }
 
     /** 计算从 source 指向 targetId 的边在源节点右缘的端口世界 Y：next 用头部端口，选项用对应索引端口。 */
@@ -838,11 +865,11 @@ public class DialogCanvasWidget extends AbstractWidget {
     private static final int HUD_BTN_W = 60;
 
     private int hudBtn1X() {
-        return this.getX() + this.getWidth() - HUD_BTN_W * 2 - 12 - this.hudInset;
+        return this.getX() + this.getWidth() - HUD_BTN_W * 2 - 12;
     }
 
     private int hudBtn2X() {
-        return this.getX() + this.getWidth() - HUD_BTN_W - 6 - this.hudInset;
+        return this.getX() + this.getWidth() - HUD_BTN_W - 6;
     }
 
     private int hudBtnY() {
@@ -912,10 +939,6 @@ public class DialogCanvasWidget extends AbstractWidget {
         int height = this.menuItems.size() * 15 + 2;
         int mx = (int) mouseX;
         int my = (int) mouseY;
-        // 浮动面板区域：菜单整体左移到面板左侧，避免被面板遮挡
-        if (this.excludeW > 0 && mx + width > this.excludeX && mouseY >= this.excludeY) {
-            mx = this.excludeX - width - 2;
-        }
         if (mx + width > this.getX() + this.getWidth() - 2) {
             mx = this.getX() + this.getWidth() - 2 - width;
         }
@@ -1007,10 +1030,6 @@ public class DialogCanvasWidget extends AbstractWidget {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // 浮动面板区域内的事件让给面板（面板渲染在画布上层，事件也应优先）
-        if (this.inExclusion(mouseX, mouseY)) {
-            return false;
-        }
         if (!this.isMouseOver(mouseX, mouseY)) {
             if (this.menuOpen) {
                 this.menuOpen = false;
@@ -1066,10 +1085,10 @@ public class DialogCanvasWidget extends AbstractWidget {
                 this.dragOffsetX = (int) this.mouseWorldX(mouseX) - pos[0];
                 this.dragOffsetY = (int) this.mouseWorldY(mouseY) - pos[1];
             } else {
-                // 空白：开始平移；若单击（非拖拽）在 mouseReleased 里清空选中
-                if (button == 0) {
-                    this.clearSelection();
-                }
+                // 空白按下：开始平移；是否取消选中推迟到 mouseReleased 按"点击/拖拽"判定，
+                // 避免只想平移画布却把选中（和停靠面板）误清掉。
+                this.pressOnEmpty = button == 0;
+                this.dragDist = 0f;
                 this.dragMode = DragMode.PAN;
             }
             this.lastMouseX = mouseX;
@@ -1084,6 +1103,7 @@ public class DialogCanvasWidget extends AbstractWidget {
         if (this.dragMode == DragMode.NONE) {
             return false;
         }
+        this.dragDist += Math.abs((float) (mouseX - this.lastMouseX)) + Math.abs((float) (mouseY - this.lastMouseY));
         if (this.dragMode == DragMode.PAN) {
             this.panX += (float) (mouseX - this.lastMouseX);
             this.panY += (float) (mouseY - this.lastMouseY);
@@ -1106,6 +1126,12 @@ public class DialogCanvasWidget extends AbstractWidget {
         if (this.dragMode == DragMode.NODE) {
             this.saveLayout();
         }
+        // 空白"单击"（位移<4px）才取消选中；拖拽平移不清
+        if (this.dragMode == DragMode.PAN && this.pressOnEmpty && this.dragDist < 4f) {
+            this.clearSelection();
+        }
+        this.pressOnEmpty = false;
+        this.dragDist = 0f;
         this.dragMode = DragMode.NONE;
         this.dragNodeId = null;
         return super.mouseReleased(mouseX, mouseY, button);
@@ -1113,7 +1139,7 @@ public class DialogCanvasWidget extends AbstractWidget {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        if (!this.isMouseOver(mouseX, mouseY) || this.inExclusion(mouseX, mouseY)) {
+        if (!this.isMouseOver(mouseX, mouseY)) {
             return false;
         }
         if (Screen.hasControlDown()) {

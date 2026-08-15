@@ -44,6 +44,8 @@ public class VNDialogEditorScreen extends Screen {
     private static final int TAB_BAR_HEIGHT = EditorTheme.TAB_BAR_H;
     private static final int STATUS_HEIGHT = EditorTheme.STATUS_H;
     private static final int TREE_WIDTH = EditorTheme.TREE_WIDTH;
+    /** 画布模式右侧停靠属性面板宽度（紧凑检查器，参考节点编辑器惯例）。 */
+    private static final int CANVAS_INSPECTOR_W = 300;
     private static final int TAB_AREA_LEFT = 2;
     private static final int TAB_AREA_RIGHT_MARGIN = 56;
     private static final int MAX_TAB_WIDTH = 100;
@@ -219,15 +221,14 @@ public class VNDialogEditorScreen extends Screen {
         this.addRenderableWidget(this.treeWidget);
         int propX = TREE_WIDTH + 1;
         int propWidth = this.width - propX;
-        // 画布：占满整个内容区（含树列），渲染在属性面板之下、事件经排除区避让面板。
-        // 画布模式下树列隐藏、属性面板浮在画布右侧（位置不变，无需重排）。
+        // 画布：画布模式下占内容区左侧（右侧留给停靠属性面板），面板展开时收窄自身、不遮挡。
         this.canvasWidget = new DialogCanvasWidget(0, treeContentY, this.width, contentHeight, this.font);
         this.canvasWidget.setCallbacks(
-                this::onEntrySelected,        // 选中 → 联动属性面板
+                this::onCanvasNodeSelected,   // 单击选中（轻量，不开面板）
                 this::onEntryDelete,          // 右键删除 → 确认框
                 this::onEntryAddChild,        // 右键添加后继节点
                 this::startRenameEntry,       // 右键重命名
-                () -> {                       // 双击/菜单编辑属性 → 打开属性面板
+                () -> {                       // 双击/菜单编辑属性 → 打开停靠面板
                     DialogEntry sel = this.getActiveSelectedEntry();
                     if (sel != null) {
                         this.onEntrySelected(sel);
@@ -257,7 +258,7 @@ public class VNDialogEditorScreen extends Screen {
     /**
      * 按当前视图模式应用控件可见性与序列绑定：
      * 大纲模式显示树列（添加按钮/搜索/树），画布模式显示画布并隐藏树列；
-     * 属性面板位置不变——画布模式下浮动在画布右侧（画布通过排除区避让）。
+     * 面板/画布几何由 applyPanelLayout 按模式停靠。
      */
     private void applyViewMode() {
         boolean canvas = EditorScreenState.get().isCanvasMode();
@@ -268,12 +269,17 @@ public class VNDialogEditorScreen extends Screen {
         if (canvas) {
             // 绑定当前序列：恢复该序列的节点布局与相机（聚焦起点）
             this.canvasWidget.setSequence(this.currentSequence);
+            // 大纲带选中切过来时：停靠面板 + 把选中节点平移进可视区
+            if (this.editingEntry != null && this.editingEntry.getId() != null) {
+                this.canvasWidget.selectEntryById(this.editingEntry.getId());
+                this.canvasWidget.ensureVisible(this.editingEntry.getId());
+            }
         } else {
             // 回到大纲：重建树并从状态单例恢复选中/滚动（画布选中已写入状态单例）
             this.treeWidget.setSequence(this.currentSequence);
         }
         this.viewToggleBtn.setMessage(Component.translatable(canvas ? "gui.vn_edit.view.outline" : "gui.vn_edit.view.canvas"));
-        this.updateCanvasAvoidance();
+        this.applyPanelLayout();
     }
 
     /**
@@ -283,26 +289,44 @@ public class VNDialogEditorScreen extends Screen {
     private void syncCanvasSequence() {
         if (this.canvasWidget != null && this.canvasWidget.visible) {
             this.canvasWidget.setSequence(this.currentSequence);
-            this.updateCanvasAvoidance();
+            this.applyPanelLayout();
         }
     }
 
     /**
-     * 更新画布对浮动属性面板的避让：面板可见时 HUD 按钮左移 + 设置输入排除区；
-     * 面板隐藏时恢复全画布可交互。在视图切换与选中变化（面板显隐）后调用。
+     * 按视图模式与面板显隐停靠属性面板与画布几何：
+     * - 大纲模式：面板在树列右侧（原始全宽），画布隐藏（全宽占位）；
+     * - 画布模式 + 面板展开：面板停靠右侧固定宽 CANVAS_INSPECTOR_W，画布收窄到面板左侧，
+     *   面板不覆盖画布任何区域（上一版浮动遮挡是可用性事故，本版改为布局让位）；
+     * - 画布模式 + 面板收起：画布恢复全宽。
+     * 几何无变化时跳过 relayout，避免大纲模式每次选节点都重置面板滚动。
      */
-    private void updateCanvasAvoidance() {
+    private void applyPanelLayout() {
         if (this.canvasWidget == null || this.propertyPanel == null) {
             return;
         }
-        boolean panelShown = this.propertyPanel.visible && this.editingEntry != null;
-        if (panelShown) {
-            this.canvasWidget.setOverlayAvoidance(
-                    this.width - this.propertyPanel.getX() + 6,
-                    this.propertyPanel.getX(), this.propertyPanel.getY(),
-                    this.propertyPanel.getWidth(), this.propertyPanel.getHeight());
+        boolean canvasMode = EditorScreenState.get().isCanvasMode();
+        boolean panelDocked = canvasMode && this.propertyPanel.visible && this.editingEntry != null;
+        int panelX;
+        int panelW;
+        int canvasW;
+        if (panelDocked) {
+            panelX = Math.max(TREE_WIDTH + 1, this.width - CANVAS_INSPECTOR_W);
+            panelW = this.width - panelX;
+            canvasW = panelX - 1;
         } else {
-            this.canvasWidget.setOverlayAvoidance(0, 0, 0, 0, 0);
+            panelX = TREE_WIDTH + 1;
+            panelW = this.width - panelX;
+            canvasW = this.width;
+        }
+        if (this.propertyPanel.getX() != panelX || this.propertyPanel.getWidth() != panelW) {
+            this.propertyPanel.setPosition(panelX, this.propertyPanel.getY());
+            this.propertyPanel.setWidth(panelW);
+            this.propertyPanel.relayout();
+        }
+        if (this.canvasWidget.getWidth() != canvasW) {
+            this.canvasWidget.setPosition(0, this.canvasWidget.getY());
+            this.canvasWidget.setWidth(canvasW);
         }
     }
 
@@ -416,7 +440,7 @@ public class VNDialogEditorScreen extends Screen {
         this.editingEntry = null;
         this.propertyPanel.unbind();
         this.propertyPanel.setVisible(false);
-        this.updateCanvasAvoidance();
+        this.applyPanelLayout();
         this.setStatus(Component.translatable("gui.vn_edit.status.switched", this.currentSequence.getId()).getString(), StatusLevel.NEUTRAL);
     }
 
@@ -459,9 +483,7 @@ public class VNDialogEditorScreen extends Screen {
             this.currentSequence.setEntries(list.toArray(new DialogEntry[0]));
             this.treeWidget.setSequence(this.currentSequence);
             this.propertyPanel.setSequence(this.currentSequence);
-            this.editingEntry = newEntry;
-            this.propertyPanel.bindTo(this.editingEntry);
-            this.propertyPanel.setVisible(true);
+            this.onEntrySelected(newEntry);
             EditorScreenState.get().setSelectedNodeId(newId);
             this.markDirty(this.currentSequence);
             if (this.canvasWidget.visible) {
@@ -677,6 +699,23 @@ public class VNDialogEditorScreen extends Screen {
         }
     }
 
+    /**
+     * 画布单击选中（轻量回调）：单击只做选中高亮 + 状态同步，不打开编辑面板——
+     * 上一版单击即弹全宽面板把画布盖掉大半，属误开；编辑入口改为双击/右键菜单。
+     * entry=null 表示点击空白：关闭停靠面板并恢复画布全宽。
+     */
+    private void onCanvasNodeSelected(DialogEntry entry) {
+        if (entry != null) {
+            return; // 选中状态画布已写 EditorScreenState，这里无需动作
+        }
+        if (this.editingEntry != null || this.propertyPanel.visible) {
+            this.editingEntry = null;
+            this.propertyPanel.unbind();
+            this.propertyPanel.setVisible(false);
+            this.applyPanelLayout();
+        }
+    }
+
     private void onEntrySelected(DialogEntry entry) {
         this.editingEntry = entry;
         if (this.propertyPanel != null) {
@@ -688,8 +727,11 @@ public class VNDialogEditorScreen extends Screen {
                 this.propertyPanel.setVisible(false);
             }
         }
-        // 面板显隐变化 → 更新画布 HUD 内缩与输入排除区
-        this.updateCanvasAvoidance();
+        // 面板显隐/停靠变化 → 画布收窄或恢复全宽，并把选中节点平移回可视区
+        this.applyPanelLayout();
+        if (entry != null && this.canvasWidget != null && this.canvasWidget.visible) {
+            this.canvasWidget.ensureVisible(entry.getId());
+        }
     }
 
     private void onEntryDelete(DialogEntry entry) {
@@ -745,7 +787,7 @@ public class VNDialogEditorScreen extends Screen {
             }
         }
         this.markDirty(this.currentSequence);
-        this.updateCanvasAvoidance();
+        this.applyPanelLayout();
         this.setStatus(Component.translatable("gui.vn_edit.status.node_deleted", entry.getId()).getString(), StatusLevel.NEUTRAL);
     }
 
@@ -771,9 +813,7 @@ public class VNDialogEditorScreen extends Screen {
         }
         this.treeWidget.setSequence(this.currentSequence);
         this.propertyPanel.setSequence(this.currentSequence);
-        this.editingEntry = child;
-        this.propertyPanel.bindTo(child);
-        this.propertyPanel.setVisible(true);
+        this.onEntrySelected(child);
         EditorScreenState.get().setSelectedNodeId(newId);
         this.markDirty(this.currentSequence);
         if (this.canvasWidget.visible) {
@@ -917,7 +957,7 @@ public class VNDialogEditorScreen extends Screen {
             this.editingEntry = null;
             this.propertyPanel.setVisible(false);
             this.syncCanvasSequence();
-            this.updateCanvasAvoidance();
+            this.applyPanelLayout();
         } else if (this.activeSequenceIndex >= index) {
             this.activeSequenceIndex = Math.min(this.activeSequenceIndex, this.openSequences.size() - 1);
             this.switchToSequence(this.activeSequenceIndex);

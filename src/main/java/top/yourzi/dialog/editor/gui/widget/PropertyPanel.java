@@ -44,6 +44,8 @@ public class PropertyPanel extends AbstractWidget {
     private long lastFrameNanos = 0L;
     /** 当前活动页是否有下拉框浮层展开，展开时跳过内容 scissor 避免裁剪浮层。 */
     private boolean popupOpen = false;
+    /** 当前绑定的节点（relayout 时重新绑定数据用；null=未绑定）。 */
+    private DialogEntry currentEntry;
 
     public PropertyPanel(int x, int y, int width, int height, Font font) {
         super(x, y, width, height, Component.empty());
@@ -71,6 +73,7 @@ public class PropertyPanel extends AbstractWidget {
 
     public void bindTo(DialogEntry entry) {
         this.ensureInitialized();
+        this.currentEntry = entry;
         for (Tab tab : this.tabs) {
             tab.page.bindTo(entry);
         }
@@ -83,11 +86,38 @@ public class PropertyPanel extends AbstractWidget {
 
     public void unbind() {
         this.ensureInitialized();
+        this.currentEntry = null;
         for (Tab tab : this.tabs) {
             tab.page.unbind();
         }
         this.scrollOffset = 0;
         this.scrollState.reset(0);
+    }
+
+    /**
+     * 宿主重设面板几何后重建页面布局（画布模式停靠宽度变化 / 窗口缩放时调用）。
+     * 页面控件坐标在 init 时固定，故需重新 init + 重绑当前节点数据。
+     */
+    public void relayout() {
+        if (!this.initialized) {
+            return; // 尚未初始化时后续 ensureInitialized 会用新几何
+        }
+        if (this.popupOpen) {
+            for (DropdownWidget dd : this.tabs.get(this.activeTabIndex).page.getDropdowns()) {
+                dd.closePopup();
+            }
+            this.popupOpen = false;
+        }
+        this.initializePages();
+        if (this.currentEntry != null) {
+            for (Tab tab : this.tabs) {
+                tab.page.bindTo(this.currentEntry);
+            }
+            for (int i = 0; i < this.tabs.size(); i++) {
+                this.tabs.get(i).page.setVisible(i == this.activeTabIndex);
+            }
+            this.clampScroll();
+        }
     }
 
     public void setSequence(DialogSequence sequence) {

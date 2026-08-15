@@ -275,7 +275,7 @@
   "gui.vn_edit.tooltip.view_toggle": "Switch outline/canvas view",
   "gui.vn_edit.canvas": "Dialogue Canvas",
   "gui.vn_edit.canvas.empty": "No nodes yet, right-click to add",
-  "gui.vn_edit.canvas.hint": "Scroll: pan · Ctrl+Scroll: zoom · RMB: menu",
+  "gui.vn_edit.canvas.hint": "Dbl-click: edit · Scroll: pan · Ctrl+Scroll: zoom · RMB: menu",
   "gui.vn_edit.canvas.auto_layout": "Auto Layout",
   "gui.vn_edit.canvas.focus_start": "To Start",
   "gui.vn_edit.canvas.ctx.edit": "Edit Properties",
