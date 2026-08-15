@@ -791,7 +791,7 @@ public class VNDialogEditorScreen extends Screen {
             return false;
         }
         this.applyHistorySnapshot(snapshot);
-        this.setStatus(Component.translatable("gui.vn_edit.status.undone").getString(), StatusLevel.INFO);
+        this.setStatus(Component.translatable("gui.vn_edit.status.undone").getString(), StatusLevel.NEUTRAL);
         return true;
     }
 
@@ -805,7 +805,7 @@ public class VNDialogEditorScreen extends Screen {
             return false;
         }
         this.applyHistorySnapshot(snapshot);
-        this.setStatus(Component.translatable("gui.vn_edit.status.redone").getString(), StatusLevel.INFO);
+        this.setStatus(Component.translatable("gui.vn_edit.status.redone").getString(), StatusLevel.NEUTRAL);
         return true;
     }
 
