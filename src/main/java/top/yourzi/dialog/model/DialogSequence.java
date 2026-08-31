@@ -3,7 +3,9 @@ package top.yourzi.dialog.model;
 import com.google.gson.annotations.SerializedName;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class DialogSequence {
     private String id;
@@ -124,6 +126,7 @@ public class DialogSequence {
         return null;
     }
 
+
     public List<DialogEntry> getRemainingEntries(DialogEntry currentEntry) {
         List<DialogEntry> remainingEntries = new ArrayList<>();
         if (currentEntry == null || entries == null || entries.length == 0) {
@@ -131,7 +134,12 @@ public class DialogSequence {
         }
 
         DialogEntry nextEntry = getNextEntry(currentEntry);
+        Set<DialogEntry> visited = new HashSet<>();
+        visited.add(currentEntry);
         while (nextEntry != null) {
+            if (!visited.add(nextEntry)) {
+                break;
+            }
             remainingEntries.add(nextEntry);
             nextEntry = getNextEntry(nextEntry);
         }

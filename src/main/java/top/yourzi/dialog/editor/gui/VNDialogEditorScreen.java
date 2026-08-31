@@ -21,6 +21,7 @@ import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.editor.util.EditorHistory;
 import top.yourzi.dialog.editor.util.EditorTheme;
 import top.yourzi.dialog.editor.util.TextureCacheService;
+import top.yourzi.dialog.editor.validation.DialogValidator;
 import top.yourzi.dialog.model.DialogEntry;
 import top.yourzi.dialog.model.DialogOption;
 import top.yourzi.dialog.model.DialogSequence;
@@ -30,6 +31,7 @@ import java.io.IOException;
 import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
@@ -135,9 +137,6 @@ public class VNDialogEditorScreen extends Screen {
         }
         if (this.activeSequenceIndex >= 0 && this.activeSequenceIndex < this.openSequences.size()) {
             this.currentSequence = this.openSequences.get(this.activeSequenceIndex);
-            if (this.currentSequence.getAllowClose() == null) {
-                this.currentSequence.setAllowClose(true);
-            }
             this.treeWidget.setSequence(this.currentSequence);
             this.propertyPanel.setSequence(this.currentSequence);
             if (this.editingEntry != null) {
@@ -405,21 +404,36 @@ public class VNDialogEditorScreen extends Screen {
         }
         Minecraft.getInstance().setScreen(new InputDialogScreen(Component.translatable("gui.vn_edit.rename.title"), seq.getId(), newId -> {
             if (!newId.isEmpty() && !newId.equals(seq.getId())) {
+                if (!isSafeDocumentId(newId) || hasSequenceId(newId, seq)) {
+                    this.setStatus(Component.translatable("gui.vn_edit.rename.failed").getString(), StatusLevel.ERROR);
+                    return;
+                }
                 String oldId = seq.getId();
-                seq.setId(newId);
                 Path oldFile = EditorConfig.DIALOG_JSON_DIR.resolve(oldId + ".json");
                 Path newFile = EditorConfig.DIALOG_JSON_DIR.resolve(newId + ".json");
                 try {
+                    if (Files.exists(newFile)) {
+                        this.setStatus(Component.translatable("gui.vn_edit.rename.failed").getString(), StatusLevel.ERROR);
+                        return;
+                    }
                     if (Files.exists(oldFile)) {
-                        Files.move(oldFile, newFile);
+                        try {
+                            Files.move(oldFile, newFile, StandardCopyOption.ATOMIC_MOVE);
+                        } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
+                            Files.move(oldFile, newFile);
+                        }
                     }
                 } catch (IOException e) {
                     Dialog.LOGGER.error("Failed to rename dialog file", e);
                     this.setStatus(Component.translatable("gui.vn_edit.rename.failed").getString(), StatusLevel.ERROR);
+                    return;
                 }
+                seq.setId(newId);
                 if (this.activeSequenceIndex == index) {
                     this.currentSequence = seq;
                 }
+                this.dirtySequences.remove(oldId);
+                this.dirtySequences.add(newId);
                 this.saveSession();
                 this.rebuildTabButtons();
                 this.setStatus(Component.translatable("gui.vn_edit.rename.success", newId).getString(), StatusLevel.SUCCESS);
@@ -435,9 +449,6 @@ public class VNDialogEditorScreen extends Screen {
         this.currentSequence = this.openSequences.get(index);
         // 历史栈跟随序列：切换即清空（快照属于旧序列，跨序列还原会错乱）
         this.history.clear();
-        if (this.currentSequence.getAllowClose() == null) {
-            this.currentSequence.setAllowClose(true);
-        }
         // 切换到不同对话序列时清空节点选中与树滚动状态：旧 ID 在新序列中无意义
         EditorScreenState.get().setSelectedNodeId(null);
         EditorScreenState.get().setTreeScrollOffset(0);
@@ -453,10 +464,16 @@ public class VNDialogEditorScreen extends Screen {
 
     private void onNew() {
         Minecraft.getInstance().setScreen(new InputDialogScreen(Component.translatable("gui.vn_edit.new_dialog.title"), "new_dialog", id -> {
+            if (id == null || id.isBlank()) {
+                id = "new_dialog";
+            }
+            if (!isSafeDocumentId(id) || hasSequenceId(id)) {
+                this.setStatus(Component.translatable("gui.vn_edit.status.id_exists", id).getString(), StatusLevel.ERROR);
+                return;
+            }
             DialogSequence seq = new DialogSequence();
             seq.setId(id);
             seq.setEntries(new DialogEntry[0]);
-            seq.setAllowClose(true);
             this.openSequences.add(seq);
             this.activeSequenceIndex = this.openSequences.size() - 1;
             this.currentSequence = seq;
@@ -505,9 +522,8 @@ public class VNDialogEditorScreen extends Screen {
         if (this.currentSequence == null) {
             return;
         }
-        this.currentSequence.setAllowClose(true);
         // 保存前验证：检测悬空引用（nextId / option.targetId 指向不存在的节点）
-        List<String> dangling = this.findDanglingReferences(this.currentSequence);
+        List<DialogValidator.Issue> validationIssues = DialogValidator.validate(this.currentSequence);
         boolean ok = this.saveCurrentSequenceToFile();
         if (!ok) {
             // 保存失败：保留 dirty 标记（*），显示错误（常驻），不 reload，避免用户误以为已保存导致数据丢失
@@ -518,12 +534,14 @@ public class VNDialogEditorScreen extends Screen {
         this.markClean(this.currentSequence);
         // 保存成功后重置属性页字段 dirty 基线，清除行级 dirty 视觉
         this.propertyPanel.onSequenceSaved();
-        if (dangling.isEmpty()) {
+        long errorCount = validationIssues.stream().filter(i -> i.severity() == DialogValidator.Severity.ERROR).count();
+        long warningCount = validationIssues.stream().filter(i -> i.severity() == DialogValidator.Severity.WARNING).count();
+        if (errorCount == 0 && warningCount == 0) {
             this.setStatus(Component.translatable("gui.vn_edit.status.saved", this.currentSequence.getId()).getString(), StatusLevel.SUCCESS);
         } else {
             // 保存成功但存在悬空引用，附加警告（黄色，4 秒消失）
             this.setStatus(Component.translatable("gui.vn_edit.status.saved_with_warnings",
-                    this.currentSequence.getId(), dangling.size()).getString(), StatusLevel.WARNING);
+                    this.currentSequence.getId(), errorCount + warningCount).getString(), StatusLevel.WARNING);
         }
         if (Minecraft.getInstance().player != null) {
             NetworkHandler.sendExecuteCommandToServer("dialog reload");
@@ -602,14 +620,29 @@ public class VNDialogEditorScreen extends Screen {
         if (id == null || id.isEmpty()) {
             id = "untitled";
         }
+        if (!isSafeDocumentId(id)) {
+            Dialog.LOGGER.warn("Refusing to save dialog with unsafe ID: {}", id);
+            return false;
+        }
         String json = PRETTY_GSON.toJson(this.currentSequence);
         Path path = EditorConfig.DIALOG_JSON_DIR.resolve(id + ".json");
+        Path tempPath = path.resolveSibling(path.getFileName() + ".tmp");
         try {
             Files.createDirectories(EditorConfig.DIALOG_JSON_DIR);
-            Files.writeString(path, json);
+            Files.writeString(tempPath, json);
+            try {
+                Files.move(tempPath, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
+                Files.move(tempPath, path, StandardCopyOption.REPLACE_EXISTING);
+            }
             return true;
         } catch (IOException e) {
             Dialog.LOGGER.error("Failed to save dialog {}: {}", id, e.getMessage());
+            try {
+                Files.deleteIfExists(tempPath);
+            } catch (IOException cleanupError) {
+                Dialog.LOGGER.warn("Failed to clean temporary dialog file {}", tempPath);
+            }
             return false;
         }
     }
@@ -617,9 +650,14 @@ public class VNDialogEditorScreen extends Screen {
     private void onLoad() {
         FileBrowserScreen.open(EditorConfig.DIALOG_JSON_DIR.toFile(), new String[]{"json"}, path -> {
             try {
-                String json = Files.readString(EditorConfig.DIALOG_JSON_DIR.resolve(path));
+                if (path == null || !path.endsWith(".json") || path.contains("..")) {
+                    throw new IOException("Unsafe dialog file path");
+                }
+                String json = Files.readString(EditorConfig.DIALOG_JSON_DIR.resolve(path).normalize());
                 DialogSequence seq = DialogManager.GSON.fromJson(json, DialogSequence.class);
-                seq.setAllowClose(true);
+                if (seq == null || seq.getId() == null || !isSafeDocumentId(seq.getId()) || hasSequenceId(seq.getId())) {
+                    throw new IOException("Duplicate or unsafe dialog ID");
+                }
                 this.openSequences.add(seq);
                 this.activeSequenceIndex = this.openSequences.size() - 1;
                 this.currentSequence = seq;
@@ -649,7 +687,11 @@ public class VNDialogEditorScreen extends Screen {
         this.saveSession();
         // 设置测试返回屏幕：对话关闭后回到编辑器界面，无需重新打开
         DialogManager.getInstance().setTestReturnScreen(this);
-        String json = DialogManager.GSON.toJson(this.currentSequence);
+        DialogSequence previewSequence = DialogManager.GSON.fromJson(
+                DialogManager.GSON.toJson(this.currentSequence), DialogSequence.class);
+        // 仅对试玩副本允许 Esc 关闭，不污染正式序列的 allowClose 运行时语义。
+        previewSequence.setAllowClose(true);
+        String json = DialogManager.GSON.toJson(previewSequence);
         DialogManager.getInstance().receiveAndShowPlayerSpecificDialog(this.currentSequence.getId(), json);
     }
 
@@ -658,7 +700,7 @@ public class VNDialogEditorScreen extends Screen {
             if (fileName == null || fileName.isEmpty()) {
                 this.setStatus(Component.translatable("gui.vn_edit.import.failed").getString(), StatusLevel.ERROR);
             } else {
-                Path importedPath = EditorConfig.DIALOG_JSON_DIR.resolve(fileName);
+                Path importedPath = EditorConfig.DIALOG_JSON_DIR.resolve(fileName).normalize();
                 this.loadImportedDialog(importedPath);
             }
         }));
@@ -669,6 +711,9 @@ public class VNDialogEditorScreen extends Screen {
             return;
         }
         SequencePropertiesScreen propsScreen = new SequencePropertiesScreen(this.currentSequence, seq -> {
+            this.markDirty(seq);
+            this.treeWidget.setSequence(seq);
+            this.syncCanvasSequence();
             this.rebuildTabButtons();
             this.setStatus(Component.translatable("gui.vn_edit.status.props_saved").getString(), StatusLevel.SUCCESS);
         }, this);
@@ -684,10 +729,18 @@ public class VNDialogEditorScreen extends Screen {
 
     private void loadImportedDialog(Path dialogFile) {
         try {
-            String json = Files.readString(dialogFile);
+            Path base = EditorConfig.DIALOG_JSON_DIR.toAbsolutePath().normalize();
+            Path normalized = dialogFile.toAbsolutePath().normalize();
+            if (!normalized.startsWith(base) || !normalized.getFileName().toString().endsWith(".json")) {
+                throw new IOException("Unsafe import path");
+            }
+            String json = Files.readString(normalized);
             DialogSequence seq = DialogManager.GSON.fromJson(json, DialogSequence.class);
             if (seq != null && seq.getId() != null) {
-                seq.setAllowClose(true);
+                if (!isSafeDocumentId(seq.getId()) || hasSequenceId(seq.getId())) {
+                    this.setStatus(Component.translatable("gui.vn_edit.status.id_exists", seq.getId()).getString(), StatusLevel.ERROR);
+                    return;
+                }
                 this.openSequences.add(seq);
                 this.activeSequenceIndex = this.openSequences.size() - 1;
                 this.currentSequence = seq;
@@ -978,6 +1031,28 @@ public class VNDialogEditorScreen extends Screen {
         }
     }
 
+    /** 文档 ID 既是运行时键也是文件名，必须限制为安全的单层路径。 */
+    private static boolean isSafeDocumentId(String id) {
+        return id != null && !id.isBlank() && !id.equals(".") && !id.equals("..")
+                && id.matches("[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+)*");
+    }
+
+    private boolean hasSequenceId(String id) {
+        return hasSequenceId(id, null);
+    }
+
+    private boolean hasSequenceId(String id, DialogSequence exclude) {
+        if (id == null) {
+            return false;
+        }
+        for (DialogSequence sequence : this.openSequences) {
+            if (sequence != exclude && id.equals(sequence.getId())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void loadSession() {
         if (!Files.exists(SESSION_FILE)) {
             return;
@@ -990,7 +1065,10 @@ public class VNDialogEditorScreen extends Screen {
                 return;
             }
             for (String id : ids) {
-                Path dialogFile = EditorConfig.DIALOG_JSON_DIR.resolve(id + ".json");
+                if (!isSafeDocumentId(id)) {
+                    continue;
+                }
+                Path dialogFile = EditorConfig.DIALOG_JSON_DIR.resolve(id + ".json").normalize();
                 if (!Files.exists(dialogFile)) {
                     continue;
                 }
@@ -999,7 +1077,9 @@ public class VNDialogEditorScreen extends Screen {
                 if (seq == null) {
                     continue;
                 }
-                seq.setAllowClose(true);
+                if (seq.getId() == null || !isSafeDocumentId(seq.getId()) || hasSequenceId(seq.getId())) {
+                    continue;
+                }
                 this.openSequences.add(seq);
             }
             if (!this.openSequences.isEmpty()) {
@@ -1027,8 +1107,8 @@ public class VNDialogEditorScreen extends Screen {
                         try {
                             String json = Files.readString(path);
                             DialogSequence seq = DialogManager.GSON.fromJson(json, DialogSequence.class);
-                            if (seq != null && seq.getId() != null) {
-                                seq.setAllowClose(true);
+                            if (seq != null && seq.getId() != null && isSafeDocumentId(seq.getId())
+                                    && !hasSequenceId(seq.getId())) {
                                 this.openSequences.add(seq);
                             }
                         } catch (IOException e) {
