@@ -278,6 +278,7 @@
   "gui.vn_edit.flow.title": "Dialogue Flow",
   "gui.vn_edit.flow.no_sequence": "No dialog loaded",
   "gui.vn_edit.flow.no_results": "No matching nodes",
+  "gui.vn_edit.flow.no_selection": "Select a node in the navigator to inspect its context",
   "gui.vn_edit.tooltip.view_toggle": "Switch outline/canvas view",
   "gui.vn_edit.canvas": "Dialogue Canvas",
   "gui.vn_edit.canvas.empty": "No nodes yet, right-click to add",

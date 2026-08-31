@@ -17,6 +17,7 @@ import top.yourzi.dialog.model.DialogSequence;
 import top.yourzi.dialog.util.ComponentJson;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Consumer;
@@ -71,8 +72,15 @@ public class FlowViewWidget extends AbstractWidget {
     }
 
     public void selectEntryById(String id) {
-        if (id != null && this.sequence != null && this.sequence.findEntryById(id) != null) {
+        if (id == null) {
+            this.selectedId = null;
+            this.scrollOffset = 0;
+            return;
+        }
+        if (this.sequence != null && this.sequence.findEntryById(id) != null) {
             this.selectedId = id;
+            this.scrollOffset = 0;
+            this.clampScroll();
         }
     }
 
@@ -82,11 +90,43 @@ public class FlowViewWidget extends AbstractWidget {
             return result;
         }
         String q = this.searchText == null ? "" : this.searchText.trim().toLowerCase(Locale.ROOT);
-        for (DialogEntry entry : this.sequence.getEntries()) {
-            if (entry == null) {
-                continue;
+        // 搜索时保留全局结果，方便从左侧导航快速查找；无搜索时只展示当前节点的局部上下文。
+        if (!q.isEmpty()) {
+            for (DialogEntry entry : this.sequence.getEntries()) {
+                if (entry != null && searchableText(entry).contains(q)) {
+                    result.add(entry);
+                }
             }
-            if (q.isEmpty() || searchableText(entry).contains(q)) {
+            return result;
+        }
+        DialogEntry focused = this.sequence.findEntryById(this.selectedId);
+        if (focused == null) {
+            return result;
+        }
+        LinkedHashSet<String> contextIds = new LinkedHashSet<>();
+        DialogEntry[] all = this.sequence.getEntries();
+        for (int i = 0; i < all.length; i++) {
+            if (all[i] == focused) {
+                if (i > 0 && all[i - 1] != null) {
+                    contextIds.add(all[i - 1].getId());
+                }
+                break;
+            }
+        }
+        contextIds.add(focused.getId());
+        if (focused.getOptions() != null) {
+            for (DialogOption option : focused.getOptions()) {
+                if (option != null && option.getTargetId() != null && !option.getTargetId().isBlank()) {
+                    contextIds.add(option.getTargetId());
+                }
+            }
+        }
+        if (focused.getNextId() != null && !focused.getNextId().isBlank()) {
+            contextIds.add(focused.getNextId());
+        }
+        for (String id : contextIds) {
+            DialogEntry entry = this.sequence.findEntryById(id);
+            if (entry != null) {
                 result.add(entry);
             }
         }
@@ -164,6 +204,8 @@ public class FlowViewWidget extends AbstractWidget {
             if (entries.isEmpty()) {
                 Component message = this.sequence == null
                         ? Component.translatable("gui.vn_edit.flow.no_sequence")
+                        : this.selectedId == null
+                        ? Component.translatable("gui.vn_edit.flow.no_selection")
                         : Component.translatable("gui.vn_edit.flow.no_results");
                 g.drawCenteredString(this.font, message, this.getX() + this.getWidth() / 2,
                         this.getY() + this.getHeight() / 2, EditorTheme.TEXT_MUTED);
@@ -192,7 +234,9 @@ public class FlowViewWidget extends AbstractWidget {
         }
         String marker = entry.getId() != null && entry.getId().equals(this.sequence.getStartId()) ? "START " : "";
         String type = entry.isEndDialog() ? "END" : entry.hasOptions() ? "CHOICE" : "LINE";
-        g.drawString(this.font, marker + type, this.getX() + 12, y + 5, EditorTheme.ACCENT, selected);
+        String relation = entry.getId() != null && entry.getId().equals(this.selectedId)
+                ? "CURRENT" : "CONTEXT";
+        g.drawString(this.font, relation + "  " + marker + type, this.getX() + 12, y + 5, EditorTheme.ACCENT, selected);
         g.drawString(this.font, entry.getId() == null ? "untitled" : entry.getId(), this.getX() + 78, y + 5, EditorTheme.TEXT_PRIMARY, selected);
         String speaker = plain(entry.getSpeaker());
         String text = plain(entry.getText()).replace('\n', ' ');

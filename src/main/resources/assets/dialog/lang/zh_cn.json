@@ -278,6 +278,7 @@
   "gui.vn_edit.flow.title": "对话流程",
   "gui.vn_edit.flow.no_sequence": "未加载对话",
   "gui.vn_edit.flow.no_results": "没有匹配的节点",
+  "gui.vn_edit.flow.no_selection": "请在左侧导航中选择节点以查看上下文",
   "gui.vn_edit.tooltip.view_toggle": "切换 大纲/画布 视图",
   "gui.vn_edit.canvas": "对话画布",
   "gui.vn_edit.canvas.empty": "该序列暂无节点，右键新建",

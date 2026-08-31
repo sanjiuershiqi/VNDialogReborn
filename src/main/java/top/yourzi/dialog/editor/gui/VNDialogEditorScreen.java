@@ -949,6 +949,9 @@ public class VNDialogEditorScreen extends Screen {
 
     private void onEntrySelected(DialogEntry entry) {
         this.editingEntry = entry;
+        if (this.flowWidget != null) {
+            this.flowWidget.selectEntryById(entry == null ? null : entry.getId());
+        }
         if (this.propertyPanel != null) {
             if (entry != null) {
                 this.propertyPanel.bindTo(entry);
