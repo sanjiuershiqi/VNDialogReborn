@@ -16,6 +16,7 @@ import top.yourzi.dialog.editor.gui.property.AppearancePropertyPage;
 import top.yourzi.dialog.editor.gui.widget.DialogCanvasWidget;
 import top.yourzi.dialog.editor.gui.widget.DialogTreeWidget;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
+import top.yourzi.dialog.editor.gui.widget.FlowViewWidget;
 import top.yourzi.dialog.editor.gui.widget.PropertyPanel;
 import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.editor.util.EditorHistory;
@@ -73,6 +74,7 @@ public class VNDialogEditorScreen extends Screen {
     private DialogEntry editingEntry;
     /** 节点画布视图（大纲↔画布切换，状态存 EditorScreenState.canvasMode）。 */
     private DialogCanvasWidget canvasWidget;
+    private FlowViewWidget flowWidget;
     /** 当前序列的结构级撤销/重做历史（JSON 快照式，借鉴 MainGraph HistoryManager）。 */
     private final EditorHistory history = new EditorHistory();
     /** 工具栏右侧视图切换按钮：大纲 ↔ 画布。 */
@@ -139,6 +141,7 @@ public class VNDialogEditorScreen extends Screen {
             this.currentSequence = this.openSequences.get(this.activeSequenceIndex);
             this.treeWidget.setSequence(this.currentSequence);
             this.propertyPanel.setSequence(this.currentSequence);
+            this.syncFlowSequence();
             if (this.editingEntry != null) {
                 this.propertyPanel.bindTo(this.editingEntry);
             } else {
@@ -209,6 +212,9 @@ public class VNDialogEditorScreen extends Screen {
         java.util.function.Consumer<String> searchResponder = text -> {
             EditorScreenState.get().setTreeSearchText(text);
             this.treeWidget.setSearchText(text);
+            if (this.flowWidget != null) {
+                this.flowWidget.setSearchText(text);
+            }
         };
         this.treeSearchBox.setResponder(searchResponder);
         // silent 回填初值，避免触发 responder（setSequence 会权威回填搜索态）
@@ -221,6 +227,10 @@ public class VNDialogEditorScreen extends Screen {
         this.treeWidget = new DialogTreeWidget(0, treeWidgetY, TREE_WIDTH, treeWidgetH, this.font);
         this.treeWidget.setCallbacks(this::onEntrySelected, this::onEntryDelete, this::onEntryAddChild);
         this.addRenderableWidget(this.treeWidget);
+        this.flowWidget = new FlowViewWidget(TREE_WIDTH + 1, treeContentY,
+                Math.max(1, this.width - TREE_WIDTH - 1), contentHeight, this.font);
+        this.flowWidget.setCallbacks(this::onEntrySelected, this::onEntryDelete, this::onEntryAddChild);
+        this.addRenderableWidget(this.flowWidget);
         int propX = TREE_WIDTH + 1;
         int propWidth = this.width - propX;
         // 画布：画布模式下占内容区左侧（右侧留给停靠属性面板），面板展开时收窄自身、不遮挡。
@@ -270,6 +280,7 @@ public class VNDialogEditorScreen extends Screen {
         this.addNodeBtn.visible = !canvas;
         this.treeWidget.visible = !canvas;
         this.canvasWidget.visible = canvas;
+        this.flowWidget.visible = !canvas;
         if (canvas) {
             // 绑定当前序列：恢复该序列的节点布局与相机（聚焦起点）
             this.canvasWidget.setSequence(this.currentSequence);
@@ -281,6 +292,8 @@ public class VNDialogEditorScreen extends Screen {
         } else {
             // 回到大纲：重建树并从状态单例恢复选中/滚动（画布选中已写入状态单例）
             this.treeWidget.setSequence(this.currentSequence);
+            this.flowWidget.setSequence(this.currentSequence);
+            this.flowWidget.setSearchText(EditorScreenState.get().getTreeSearchText());
         }
         this.viewToggleBtn.setMessage(Component.translatable(canvas ? "gui.vn_edit.view.outline" : "gui.vn_edit.view.canvas"));
         this.applyPanelLayout();
@@ -291,6 +304,7 @@ public class VNDialogEditorScreen extends Screen {
      * 结构级变化（增删节点/改引用）走 markDirty → canvasWidget.refresh()，保留用户布局。
      */
     private void syncCanvasSequence() {
+        this.syncFlowSequence();
         if (this.canvasWidget != null && this.canvasWidget.visible) {
             this.canvasWidget.setSequence(this.currentSequence);
             this.applyPanelLayout();
@@ -306,11 +320,11 @@ public class VNDialogEditorScreen extends Screen {
      * 几何无变化时跳过 relayout，避免大纲模式每次选节点都重置面板滚动。
      */
     private void applyPanelLayout() {
-        if (this.canvasWidget == null || this.propertyPanel == null) {
+        if (this.canvasWidget == null || this.flowWidget == null || this.propertyPanel == null) {
             return;
         }
         boolean canvasMode = EditorScreenState.get().isCanvasMode();
-        boolean panelDocked = canvasMode && this.propertyPanel.visible && this.editingEntry != null;
+        boolean panelDocked = this.propertyPanel.visible && this.editingEntry != null;
         int panelX;
         int panelW;
         int canvasW;
@@ -319,7 +333,7 @@ public class VNDialogEditorScreen extends Screen {
             panelW = this.width - panelX;
             canvasW = panelX - 1;
         } else {
-            panelX = TREE_WIDTH + 1;
+            panelX = this.width;
             panelW = this.width - panelX;
             canvasW = this.width;
         }
@@ -332,6 +346,9 @@ public class VNDialogEditorScreen extends Screen {
             this.canvasWidget.setPosition(0, this.canvasWidget.getY());
             this.canvasWidget.setWidth(canvasW);
         }
+        int flowX = canvasMode ? 0 : TREE_WIDTH + 1;
+        this.flowWidget.setPosition(flowX, this.flowWidget.getY());
+        this.flowWidget.setWidth(Math.max(1, panelX - flowX - 1));
     }
 
     /** 当前激活视图（大纲=树 / 画布）选中的节点，供 Delete/F2/Ctrl+C/D 等快捷键定位目标。 */
@@ -454,6 +471,7 @@ public class VNDialogEditorScreen extends Screen {
         EditorScreenState.get().setTreeScrollOffset(0);
         this.treeWidget.setSequence(this.currentSequence);
         this.propertyPanel.setSequence(this.currentSequence);
+        this.syncFlowSequence();
         this.syncCanvasSequence();
         this.editingEntry = null;
         this.propertyPanel.unbind();
@@ -479,6 +497,7 @@ public class VNDialogEditorScreen extends Screen {
             this.currentSequence = seq;
             this.treeWidget.setSequence(this.currentSequence);
             this.propertyPanel.setSequence(this.currentSequence);
+            this.syncFlowSequence();
         this.syncCanvasSequence();
         this.editingEntry = null;
             this.propertyPanel.unbind();
@@ -663,6 +682,7 @@ public class VNDialogEditorScreen extends Screen {
                 this.currentSequence = seq;
                 this.treeWidget.setSequence(this.currentSequence);
                 this.propertyPanel.setSequence(this.currentSequence);
+                this.syncFlowSequence();
                 this.editingEntry = null;
                 this.propertyPanel.unbind();
                 this.propertyPanel.setVisible(false);
@@ -746,6 +766,7 @@ public class VNDialogEditorScreen extends Screen {
                 this.currentSequence = seq;
                 this.treeWidget.setSequence(this.currentSequence);
                 this.propertyPanel.setSequence(this.currentSequence);
+                this.syncFlowSequence();
                 this.editingEntry = null;
                 this.propertyPanel.unbind();
                 this.propertyPanel.setVisible(false);
@@ -810,6 +831,7 @@ public class VNDialogEditorScreen extends Screen {
     private void afterGraphMutation() {
         this.markDirty(this.currentSequence);
         this.treeWidget.setSequence(this.currentSequence);
+        this.syncFlowSequence();
         if (this.propertyPanel.visible && this.editingEntry != null) {
             // 正在编辑的节点若就是变更源/目标，重绑以刷新逻辑页的下拉显示
             this.propertyPanel.bindTo(this.editingEntry);
@@ -1028,6 +1050,13 @@ public class VNDialogEditorScreen extends Screen {
             Files.writeString(SESSION_FILE, DialogManager.GSON.toJson(ids));
         } catch (IOException e) {
             Dialog.LOGGER.error("Failed to save editor session", e);
+        }
+    }
+
+    private void syncFlowSequence() {
+        if (this.flowWidget != null) {
+            this.flowWidget.setSequence(this.currentSequence);
+            this.flowWidget.setSearchText(EditorScreenState.get().getTreeSearchText());
         }
     }
 
