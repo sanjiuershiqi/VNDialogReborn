@@ -9,10 +9,12 @@ import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import top.yourzi.dialog.editor.gui.EditorScreenState;
+import top.yourzi.dialog.editor.util.ConfigLanguageCache;
 import top.yourzi.dialog.editor.util.EditorTheme;
 import top.yourzi.dialog.model.DialogEntry;
 import top.yourzi.dialog.model.DialogOption;
 import top.yourzi.dialog.model.DialogSequence;
+import top.yourzi.dialog.util.ComponentJson;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -103,9 +105,21 @@ public class FlowViewWidget extends AbstractWidget {
             return value.getAsString();
         }
         if (value.isJsonObject() && value.getAsJsonObject().has("translate")) {
-            return "[" + value.getAsJsonObject().get("translate").getAsString() + "]";
+            String key = value.getAsJsonObject().get("translate").getAsString();
+            String translated = ConfigLanguageCache.get(key);
+            return translated != null ? translated : Component.translatable(key).getString();
         }
-        return value.toString();
+        if (value.isJsonArray()) {
+            StringBuilder result = new StringBuilder();
+            for (JsonElement part : value.getAsJsonArray()) {
+                result.append(plain(part));
+            }
+            return result.toString();
+        }
+        if (value.isJsonObject()) {
+            return ComponentJson.fromJson(value).getString();
+        }
+        return "";
     }
 
     private int rowHeight(DialogEntry entry) {
