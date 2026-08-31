@@ -323,7 +323,7 @@ public class VNDialogEditorScreen extends Screen {
     /**
      * 按视图模式与面板显隐停靠属性面板与画布几何：
      * - 大纲模式：面板在树列右侧（原始全宽），画布隐藏（全宽占位）；
-     * - 画布模式 + 面板展开：面板停靠右侧固定宽 CANVAS_INSPECTOR_W，画布收窄到面板左侧，
+     * - 画布模式 + 面板展开：面板停靠右侧按窗口比例取宽，画布收窄到面板左侧，
      *   面板不覆盖画布任何区域（上一版浮动遮挡是可用性事故，本版改为布局让位）；
      * - 画布模式 + 面板收起：画布恢复全宽。
      * 几何无变化时跳过 relayout，避免大纲模式每次选节点都重置面板滚动。
@@ -338,7 +338,9 @@ public class VNDialogEditorScreen extends Screen {
         int panelW;
         int canvasW;
         if (panelDocked) {
-            panelX = Math.max(this.sidebarWidth + 1, this.width - this.inspectorWidth);
+            int minCenterWidth = Math.min(320, Math.max(1, this.width - this.sidebarWidth - 2));
+            panelX = Math.max(this.sidebarWidth + 1,
+                    Math.min(this.width - this.inspectorWidth, this.width - minCenterWidth));
             panelW = this.width - panelX;
             canvasW = panelX - 1;
         } else {

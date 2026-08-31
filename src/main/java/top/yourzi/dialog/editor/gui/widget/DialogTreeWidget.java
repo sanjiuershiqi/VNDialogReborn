@@ -34,7 +34,7 @@ import java.util.function.Consumer;
  * 对话树组件，按 next/options 引用关系构建层级树。融合自 visual_mod_edit_vndialog。
  */
 public class DialogTreeWidget extends AbstractWidget {
-    private static final int HEADER_HEIGHT = 18;
+    private static final int HEADER_HEIGHT = 0;
     private static final int ROW_HEIGHT = EditorTheme.TREE_ROW_H;
     private static final int INDENT_WIDTH = EditorTheme.TREE_INDENT;
     private static final int SCROLLBAR_WIDTH = EditorTheme.SCROLLBAR_W;
@@ -464,7 +464,7 @@ public class DialogTreeWidget extends AbstractWidget {
                 if (i > 0) {
                     sb.append(", ");
                 }
-                sb.append(options[i].getTargetId() != null ? options[i].getTargetId() : "?");
+                sb.append(options[i] == null || options[i].getTargetId() == null ? "?" : options[i].getTargetId());
             }
             sb.append("]");
         }
@@ -530,15 +530,6 @@ public class DialogTreeWidget extends AbstractWidget {
         graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), EditorTheme.BG_SURFACE);
         int nodeAreaTop = this.getY() + HEADER_HEIGHT;
         graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), nodeAreaTop, EditorTheme.BG_ELEVATED);
-        int totalNodes = this.sequence == null || this.sequence.getEntries() == null ? 0 : this.sequence.getEntries().length;
-        int choices = 0;
-        if (this.sequence != null && this.sequence.getEntries() != null) {
-            for (DialogEntry entry : this.sequence.getEntries()) {
-                if (entry != null && entry.hasOptions()) choices++;
-            }
-        }
-        graphics.drawString(this.font, Component.translatable("gui.vn_edit.tree.header", totalNodes, choices, this.orphans.size()),
-                this.getX() + 7, this.getY() + 4, EditorTheme.TEXT_WARM, true);
         graphics.enableScissor(this.getX(), nodeAreaTop, this.getX() + this.getWidth(), this.getY() + this.getHeight());
         try {
         int maxScroll = Math.max(0, this.visibleNodes.size() * ROW_HEIGHT - this.visibleHeight());
@@ -586,19 +577,15 @@ public class DialogTreeWidget extends AbstractWidget {
             int textX = this.getX() + 5 + indent;
             int textRight = this.getX() + this.getWidth() - 8;
             int available = Math.max(30, textRight - textX);
-            // Explorer 风格单行导航：ID 保持主层级，摘要作为右侧弱化上下文，避免列表变成大卡片。
-            int idWidth = Math.max(42, available * 56 / 100);
-            String idLabel = this.font.plainSubstrByWidth(idText, idWidth);
-            graphics.drawString(this.font, idLabel, textX, rowY + 6, textColor, isSelected);
-            int summaryX = textX + idWidth + 4;
-            int summaryWidth = Math.max(0, textRight - summaryX);
-            if (summaryWidth >= 24) {
-                String summary = this.font.plainSubstrByWidth(this.summary(node.entry), summaryWidth);
-                graphics.drawString(this.font, summary, summaryX, rowY + 6,
-                        node.isOrphan ? EditorTheme.STATUS_WARNING : EditorTheme.TEXT_MUTED);
+            graphics.drawString(this.font, this.font.plainSubstrByWidth(idText, available), textX, rowY + 2, textColor, isSelected);
+            String connectionInfo = this.getConnectionInfo(node.entry);
+            if (!connectionInfo.isEmpty()) {
+                int infoWidth = this.font.width(connectionInfo);
+                int infoX = this.getX() + this.getWidth() - infoWidth - 6;
+                if (infoX > textX + 20) {
+                    graphics.drawString(this.font, connectionInfo, infoX, rowY + 2, EditorTheme.TEXT_MUTED);
+                }
             }
-            graphics.fill(this.getX() + 5, rowY + ROW_HEIGHT - 1, this.getX() + this.getWidth() - 8,
-                    rowY + ROW_HEIGHT, EditorTheme.DIVIDER);
             DialogValidator.Severity severity = severityById.get(node.entry.getId());
             if (severity != null) {
                 int badgeColor = severity == DialogValidator.Severity.ERROR ? EditorTheme.STATUS_ERROR : EditorTheme.STATUS_WARNING;

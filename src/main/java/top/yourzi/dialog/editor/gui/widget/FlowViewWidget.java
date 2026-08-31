@@ -17,15 +17,15 @@ import top.yourzi.dialog.model.DialogSequence;
 import top.yourzi.dialog.util.ComponentJson;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * Writing-oriented flow view. It keeps the runtime array order visible while
- * presenting options as an inline branch list instead of flattening a graph
- * into a misleading tree.
+ * Full flow view. It keeps the runtime array order visible while presenting
+ * options as an inline branch list; the left tree remains the navigation view.
  */
 public class FlowViewWidget extends AbstractWidget {
     private static final int HEADER_HEIGHT = 26;
@@ -90,43 +90,8 @@ public class FlowViewWidget extends AbstractWidget {
             return result;
         }
         String q = this.searchText == null ? "" : this.searchText.trim().toLowerCase(Locale.ROOT);
-        // 搜索时保留全局结果，方便从左侧导航快速查找；无搜索时只展示当前节点的局部上下文。
-        if (!q.isEmpty()) {
-            for (DialogEntry entry : this.sequence.getEntries()) {
-                if (entry != null && searchableText(entry).contains(q)) {
-                    result.add(entry);
-                }
-            }
-            return result;
-        }
-        DialogEntry focused = this.sequence.findEntryById(this.selectedId);
-        if (focused == null) {
-            return result;
-        }
-        LinkedHashSet<String> contextIds = new LinkedHashSet<>();
-        DialogEntry[] all = this.sequence.getEntries();
-        for (int i = 0; i < all.length; i++) {
-            if (all[i] == focused) {
-                if (i > 0 && all[i - 1] != null) {
-                    contextIds.add(all[i - 1].getId());
-                }
-                break;
-            }
-        }
-        contextIds.add(focused.getId());
-        if (focused.getOptions() != null) {
-            for (DialogOption option : focused.getOptions()) {
-                if (option != null && option.getTargetId() != null && !option.getTargetId().isBlank()) {
-                    contextIds.add(option.getTargetId());
-                }
-            }
-        }
-        if (focused.getNextId() != null && !focused.getNextId().isBlank()) {
-            contextIds.add(focused.getNextId());
-        }
-        for (String id : contextIds) {
-            DialogEntry entry = this.sequence.findEntryById(id);
-            if (entry != null) {
+        for (DialogEntry entry : this.sequence.getEntries()) {
+            if (entry != null && (q.isEmpty() || searchableText(entry).contains(q))) {
                 result.add(entry);
             }
         }
@@ -135,6 +100,27 @@ public class FlowViewWidget extends AbstractWidget {
 
     private String searchableText(DialogEntry entry) {
         return (entry.getId() + " " + plain(entry.getSpeaker()) + " " + plain(entry.getText())).toLowerCase(Locale.ROOT);
+    }
+
+    /** 将选项颜色传播到其目标节点，形成从分支到对话节点的视觉追踪线索。 */
+    private Map<String, Integer> incomingOptionColors() {
+        Map<String, Integer> colors = new HashMap<>();
+        if (this.sequence == null || this.sequence.getEntries() == null) {
+            return colors;
+        }
+        for (DialogEntry source : this.sequence.getEntries()) {
+            if (source == null || source.getOptions() == null) {
+                continue;
+            }
+            for (int i = 0; i < source.getOptions().length; i++) {
+                DialogOption option = source.getOptions()[i];
+                if (option == null || option.getTargetId() == null || option.getTargetId().isBlank()) {
+                    continue;
+                }
+                colors.putIfAbsent(option.getTargetId(), EditorTheme.OPTION_PALETTE[i % EditorTheme.OPTION_PALETTE.length]);
+            }
+        }
+        return colors;
     }
 
     private String plain(JsonElement value) {
@@ -194,18 +180,17 @@ public class FlowViewWidget extends AbstractWidget {
                 this.getX() + this.getWidth(), this.getY() + this.getHeight());
         try {
             int y = this.getY() + HEADER_HEIGHT - this.scrollOffset;
+            Map<String, Integer> incomingColors = incomingOptionColors();
             for (DialogEntry entry : entries) {
                 int h = rowHeight(entry);
                 if (y + h >= this.getY() + HEADER_HEIGHT && y <= this.getY() + this.getHeight()) {
-                    renderEntry(g, entry, y, h, mouseX, mouseY);
+                    renderEntry(g, entry, y, h, mouseX, mouseY, incomingColors);
                 }
                 y += h + 2;
             }
             if (entries.isEmpty()) {
                 Component message = this.sequence == null
                         ? Component.translatable("gui.vn_edit.flow.no_sequence")
-                        : this.selectedId == null
-                        ? Component.translatable("gui.vn_edit.flow.no_selection")
                         : Component.translatable("gui.vn_edit.flow.no_results");
                 g.drawCenteredString(this.font, message, this.getX() + this.getWidth() / 2,
                         this.getY() + this.getHeight() / 2, EditorTheme.TEXT_MUTED);
@@ -223,21 +208,25 @@ public class FlowViewWidget extends AbstractWidget {
         }
     }
 
-    private void renderEntry(GuiGraphics g, DialogEntry entry, int y, int h, int mouseX, int mouseY) {
+    private void renderEntry(GuiGraphics g, DialogEntry entry, int y, int h, int mouseX, int mouseY,
+                             Map<String, Integer> incomingColors) {
         boolean selected = entry.getId() != null && entry.getId().equals(this.selectedId);
         boolean hovered = mouseX >= this.getX() && mouseX <= this.getX() + this.getWidth()
                 && mouseY >= y && mouseY < y + h;
         int bg = selected ? EditorTheme.BG_SELECTED : hovered ? EditorTheme.BG_HOVER : EditorTheme.BG_DEEPEST;
         g.fill(this.getX() + 4, y, this.getX() + this.getWidth() - 6, y + ENTRY_HEIGHT, bg);
+        Integer incomingColor = incomingColors.get(entry.getId());
+        if (incomingColor != null) {
+            g.fill(this.getX() + 4, y, this.getX() + 7, y + ENTRY_HEIGHT, incomingColor);
+        }
         if (selected) {
             g.fill(this.getX() + 4, y, this.getX() + 6, y + ENTRY_HEIGHT, EditorTheme.ACCENT);
         }
         String marker = entry.getId() != null && entry.getId().equals(this.sequence.getStartId()) ? "START " : "";
         String type = entry.isEndDialog() ? "END" : entry.hasOptions() ? "CHOICE" : "LINE";
-        String relation = entry.getId() != null && entry.getId().equals(this.selectedId)
-                ? "CURRENT" : "CONTEXT";
-        g.drawString(this.font, relation + "  " + marker + type, this.getX() + 12, y + 5, EditorTheme.ACCENT, selected);
-        g.drawString(this.font, entry.getId() == null ? "untitled" : entry.getId(), this.getX() + 78, y + 5, EditorTheme.TEXT_PRIMARY, selected);
+        g.drawString(this.font, marker + type, this.getX() + 12, y + 5, EditorTheme.ACCENT, selected);
+        int idColor = incomingColor == null ? EditorTheme.TEXT_PRIMARY : incomingColor;
+        g.drawString(this.font, entry.getId() == null ? "untitled" : entry.getId(), this.getX() + 78, y + 5, idColor, selected);
         String speaker = plain(entry.getSpeaker());
         String text = plain(entry.getText()).replace('\n', ' ');
         if (speaker.isEmpty()) speaker = "-";
