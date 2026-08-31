@@ -230,7 +230,7 @@
   "gui.vn_edit.discard": "丢弃",
   "gui.vn_edit.unsaved.title": "未保存的修改",
   "gui.vn_edit.unsaved.message": "有未保存的修改，是否保存后再关闭？",
-  "gui.vn_edit.status.saved_with_warnings": "已保存：%s（警告：%s 处悬空引用）",
+  "gui.vn_edit.status.saved_with_warnings": "已保存：%s（%s 个验证问题）",
   "gui.vn_edit.status.save_failed": "保存失败：%s",
   "gui.vn_edit.tooltip.new": "新建对话序列",
   "gui.vn_edit.tooltip.save": "保存当前序列 (Ctrl+S)",
@@ -298,4 +298,15 @@
   "gui.vn_edit.status.undone": "已撤销",
   "gui.vn_edit.status.redone": "已重做",
   "gui.vn_edit.canvas.ctx.disconnect": "断开连线：%s"
+  ,"gui.vn_edit.validation.button": "验证"
+  ,"gui.vn_edit.validation.tooltip": "查看验证问题"
+  ,"gui.vn_edit.validation.title": "对话验证"
+  ,"gui.vn_edit.validation.all": "全部"
+  ,"gui.vn_edit.validation.errors": "仅错误"
+  ,"gui.vn_edit.validation.warnings": "仅警告"
+  ,"gui.vn_edit.validation.summary": "%s · %s 个错误，%s 个警告"
+  ,"gui.vn_edit.validation.clean": "未发现问题"
+  ,"gui.vn_edit.validation.footer": "点击问题定位节点 · Esc 关闭"
+  ,"gui.vn_edit.validation.no_sequence": "未加载对话序列"
+  ,"gui.vn_edit.validation.blocked_test": "测试已阻止：%s 个错误"
 }

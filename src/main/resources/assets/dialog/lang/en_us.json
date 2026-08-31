@@ -230,7 +230,7 @@
   "gui.vn_edit.discard": "Discard",
   "gui.vn_edit.unsaved.title": "Unsaved Changes",
   "gui.vn_edit.unsaved.message": "There are unsaved changes. Save before closing?",
-  "gui.vn_edit.status.saved_with_warnings": "Saved: %s (warning: %s dangling reference(s))",
+  "gui.vn_edit.status.saved_with_warnings": "Saved: %s (%s validation issue(s))",
   "gui.vn_edit.status.save_failed": "Save failed: %s",
   "gui.vn_edit.tooltip.new": "Create a new dialog sequence",
   "gui.vn_edit.tooltip.save": "Save current sequence (Ctrl+S)",
@@ -298,4 +298,15 @@
   "gui.vn_edit.status.undone": "Undone",
   "gui.vn_edit.status.redone": "Redone",
   "gui.vn_edit.canvas.ctx.disconnect": "Disconnect link: %s"
+  ,"gui.vn_edit.validation.button": "Validate"
+  ,"gui.vn_edit.validation.tooltip": "Show validation issues"
+  ,"gui.vn_edit.validation.title": "Dialogue Validation"
+  ,"gui.vn_edit.validation.all": "All"
+  ,"gui.vn_edit.validation.errors": "Errors"
+  ,"gui.vn_edit.validation.warnings": "Warnings"
+  ,"gui.vn_edit.validation.summary": "%s · %s error(s), %s warning(s)"
+  ,"gui.vn_edit.validation.clean": "No issues found"
+  ,"gui.vn_edit.validation.footer": "Click an issue to locate it · Esc closes"
+  ,"gui.vn_edit.validation.no_sequence": "No dialog sequence loaded"
+  ,"gui.vn_edit.validation.blocked_test": "Test blocked: %s error(s)"
 }

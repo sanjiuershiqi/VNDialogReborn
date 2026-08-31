@@ -160,9 +160,10 @@ public class VNDialogEditorScreen extends Screen {
         int btnHeight = 20;
         int btnX = 2;
         // 按钮宽度自适应：根据屏幕宽度和按钮数量计算，确保不溢出
-        int btnCount = 6;
+        int btnCount = 7;
         int totalGap = (btnCount - 1) * EditorTheme.GAP;
-        int maxBtnWidth = (this.width - totalGap - 4) / btnCount;
+        // 右侧固定留给视图切换按钮，避免窗口较窄时工具栏按钮互相覆盖。
+        int maxBtnWidth = (this.width - 46 - totalGap - 4) / btnCount;
         int btnWidth = Math.min(EditorTheme.BTN_WIDTH, Math.max(36, maxBtnWidth));
         EditorButton newBtn = EditorButton.builder(Component.translatable("gui.vn_edit.new"), b -> this.onNew())
                 .bounds(btnX, btnY, btnWidth, btnHeight).build();
@@ -176,12 +177,15 @@ public class VNDialogEditorScreen extends Screen {
                 .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight).build();
         EditorButton propsBtn = EditorButton.builder(Component.translatable("gui.vn_edit.sequence_props"), b -> this.onSequenceProps())
                 .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight).build();
+        EditorButton validateBtn = EditorButton.builder(Component.translatable("gui.vn_edit.validation.button"), b -> this.onValidate())
+                .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight).build();
         this.addRenderableWidget(newBtn);
         this.addRenderableWidget(saveBtn);
         this.addRenderableWidget(loadBtn);
         this.addRenderableWidget(testBtn);
         this.addRenderableWidget(importBtn);
         this.addRenderableWidget(propsBtn);
+        this.addRenderableWidget(validateBtn);
         // 维护工具栏按钮引用，用于 tooltip 检测
         this.toolbarButtons.clear();
         this.toolbarButtons.add(newBtn);
@@ -190,6 +194,7 @@ public class VNDialogEditorScreen extends Screen {
         this.toolbarButtons.add(testBtn);
         this.toolbarButtons.add(importBtn);
         this.toolbarButtons.add(propsBtn);
+        this.toolbarButtons.add(validateBtn);
         this.tabLeftArrow = EditorButton.builder(Component.literal("\u25c0"), b -> this.scrollTabs(-80))
                 .bounds(0, 0, 14, 18).build();
         this.tabRightArrow = EditorButton.builder(Component.literal("\u25b6"), b -> this.scrollTabs(80))
@@ -699,6 +704,15 @@ public class VNDialogEditorScreen extends Screen {
         if (this.currentSequence == null) {
             return;
         }
+        List<DialogValidator.Issue> validationIssues = DialogValidator.validate(this.currentSequence);
+        long validationErrors = validationIssues.stream()
+                .filter(i -> i.severity() == DialogValidator.Severity.ERROR).count();
+        if (validationErrors > 0) {
+            this.setStatus(Component.translatable("gui.vn_edit.validation.blocked_test", validationErrors).getString(), StatusLevel.ERROR);
+            Minecraft.getInstance().setScreen(new DialogValidationScreen(this.currentSequence, validationIssues,
+                    this::onValidationIssueSelected, this));
+            return;
+        }
         if (!this.saveCurrentSequenceToFile()) {
             // 保存失败：不进入测试，避免测试的是旧数据。错误消息常驻提示用户先修复保存问题。
             this.setStatus(Component.translatable("gui.vn_edit.status.save_failed", this.currentSequence.getId()).getString(), StatusLevel.ERROR);
@@ -1053,6 +1067,41 @@ public class VNDialogEditorScreen extends Screen {
         }
     }
 
+    /** 打开可操作的验证面板；保存/试玩前的诊断也复用同一验证器。 */
+    private void onValidate() {
+        if (this.currentSequence == null) {
+            this.setStatus(Component.translatable("gui.vn_edit.validation.no_sequence").getString(), StatusLevel.WARNING);
+            return;
+        }
+        List<DialogValidator.Issue> issues = DialogValidator.validate(this.currentSequence);
+        Minecraft.getInstance().setScreen(new DialogValidationScreen(this.currentSequence, issues,
+                this::onValidationIssueSelected, this));
+    }
+
+    private void onValidationIssueSelected(DialogValidator.Issue issue) {
+        if (this.minecraft != null) {
+            this.minecraft.setScreen(this);
+        }
+        if (issue == null) {
+            return;
+        }
+        String nodeId = issue.nodeId();
+        DialogEntry entry = nodeId == null || this.currentSequence == null
+                ? null : this.currentSequence.findEntryById(nodeId);
+        if (entry != null) {
+            this.onEntrySelected(entry);
+            EditorScreenState.get().setSelectedNodeId(nodeId);
+            int tab = switch (issue.code()) {
+                case "EMPTY_TEXT" -> 0;
+                case "DANGLING_NEXT", "DANGLING_OPTION_TARGET", "OPTION_WITHOUT_TARGET", "CYCLE", "INVALID_START" -> 2;
+                default -> 0;
+            };
+            this.propertyPanel.setActiveTab(tab);
+        }
+        this.setStatus(issue.code() + (nodeId == null ? "" : " · " + nodeId),
+                issue.severity() == DialogValidator.Severity.ERROR ? StatusLevel.ERROR : StatusLevel.WARNING);
+    }
+
     private void syncFlowSequence() {
         if (this.flowWidget != null) {
             this.flowWidget.setSequence(this.currentSequence);
@@ -1357,6 +1406,7 @@ public class VNDialogEditorScreen extends Screen {
                     case 3 -> Component.translatable("gui.vn_edit.tooltip.test");
                     case 4 -> Component.translatable("gui.vn_edit.tooltip.import");
                     case 5 -> Component.translatable("gui.vn_edit.tooltip.sequence_props");
+                    case 6 -> Component.translatable("gui.vn_edit.validation.tooltip");
                     default -> null;
                 };
                 if (tip != null) {
