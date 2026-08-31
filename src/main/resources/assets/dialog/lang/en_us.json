@@ -269,6 +269,8 @@
   "gui.vn_edit.help.close": "Close panel/dialog",
   "gui.vn_edit.tree.no_sequence": "No dialog sequence loaded",
   "gui.vn_edit.tree.empty": "No nodes yet, press Insert to add",
+  "gui.vn_edit.tree.header": "%s nodes · %s choice nodes · %s orphan(s)",
+  "gui.vn_edit.tree.empty_text": "(empty text)",
   "gui.vn_edit.portrait.empty": "No portraits, click add portrait",
   "gui.vn_edit.view.canvas": "Canvas",
   "gui.vn_edit.view.outline": "Outline",

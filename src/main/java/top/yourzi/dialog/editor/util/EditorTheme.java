@@ -77,8 +77,9 @@ public class EditorTheme {
     public static final int TOOLBAR_H    = 24;
     public static final int TAB_BAR_H    = 22;
     public static final int STATUS_H     = 14;
-    public static final int TREE_WIDTH   = 180;
-    public static final int TREE_ROW_H   = 14;
+    /** 导航侧栏需要容纳节点摘要与状态标记，避免 ID/连线目标挤在同一行。 */
+    public static final int TREE_WIDTH   = 224;
+    public static final int TREE_ROW_H   = 30;
     public static final int TREE_INDENT  = 12;
     public static final int PROP_TAB_H   = 18;
     public static final int PROP_TAB_W   = 56;

@@ -269,6 +269,8 @@
   "gui.vn_edit.help.close": "关闭面板/对话框",
   "gui.vn_edit.tree.no_sequence": "未加载对话序列",
   "gui.vn_edit.tree.empty": "该序列暂无节点，按 Insert 添加",
+  "gui.vn_edit.tree.header": "%s 个节点 · %s 个分支 · %s 个孤立节点",
+  "gui.vn_edit.tree.empty_text": "（空文本）",
   "gui.vn_edit.portrait.empty": "暂无立绘，点击添加立绘",
   "gui.vn_edit.view.canvas": "画布",
   "gui.vn_edit.view.outline": "大纲",
