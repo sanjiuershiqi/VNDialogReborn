@@ -47,9 +47,10 @@ public class VNDialogEditorScreen extends Screen {
     private static final int TOOLBAR_HEIGHT = EditorTheme.TOOLBAR_H;
     private static final int TAB_BAR_HEIGHT = EditorTheme.TAB_BAR_H;
     private static final int STATUS_HEIGHT = EditorTheme.STATUS_H;
-    private static final int TREE_WIDTH = EditorTheme.TREE_WIDTH;
-    /** 画布模式右侧停靠属性面板宽度（紧凑检查器，参考节点编辑器惯例）。 */
-    private static final int CANVAS_INSPECTOR_W = 300;
+    /** 当前窗口的导航栏宽度；按窗口宽度计算，避免固定像素在不同 GUI Scale 下失衡。 */
+    private int sidebarWidth = EditorTheme.TREE_WIDTH;
+    /** 当前窗口的检查器宽度；停靠时保留中心工作区的最小可用宽度。 */
+    private int inspectorWidth = 300;
     private static final int TAB_AREA_LEFT = 2;
     private static final int TAB_AREA_RIGHT_MARGIN = 56;
     private static final int MAX_TAB_WIDTH = 100;
@@ -156,6 +157,8 @@ public class VNDialogEditorScreen extends Screen {
     }
 
     private void buildWidgets() {
+        this.sidebarWidth = Mth.clamp(this.width * 22 / 100, 180, 250);
+        this.inspectorWidth = Mth.clamp(this.width * 28 / 100, 260, 360);
         int btnY = 2;
         int btnHeight = 20;
         int btnX = 2;
@@ -205,14 +208,14 @@ public class VNDialogEditorScreen extends Screen {
         this.addRenderableWidget(this.tabRightArrow);
         this.addRenderableWidget(this.addTabBtn);
         int treeY = TOOLBAR_HEIGHT + TAB_BAR_HEIGHT;
-        // 侧栏顶部保持单行工具条：加号负责新建，搜索框负责导航，避免操作按钮占满整个侧栏。
-        this.addNodeBtn = EditorButton.builder(Component.literal("+"), b -> this.onAddNode())
-                .bounds(0, treeY, 24, EditorTheme.BTN_HEIGHT).build();
+        // 保留原有的明确文字按钮，避免新建节点入口变成难以发现的图标。
+        this.addNodeBtn = EditorButton.builder(Component.translatable("gui.vn_edit.add_node"), b -> this.onAddNode())
+                .bounds(0, treeY, this.sidebarWidth, EditorTheme.BTN_HEIGHT).build();
         this.addRenderableWidget(this.addNodeBtn);
         int treeContentY = treeY + EditorTheme.BTN_HEIGHT;
         int contentHeight = this.height - treeContentY - STATUS_HEIGHT;
-        // 搜索与新建按钮同一行，节点列表从下一行开始，减少无效留白。
-        this.treeSearchBox = new EditBox(this.font, 28, treeY, TREE_WIDTH - 28, 18, Component.translatable("gui.vn_edit.search"));
+        // 搜索框单独占一行，保留原有的输入节奏与可读性。
+        this.treeSearchBox = new EditBox(this.font, 0, treeContentY, this.sidebarWidth, 16, Component.translatable("gui.vn_edit.search"));
         this.treeSearchBox.setMaxLength(999999999);
         this.treeSearchBox.setHint(Component.translatable("gui.vn_edit.search_hint"));
         java.util.function.Consumer<String> searchResponder = text -> {
@@ -228,16 +231,16 @@ public class VNDialogEditorScreen extends Screen {
         this.treeSearchBox.setValue(EditorScreenState.get().getTreeSearchText());
         this.treeSearchBox.setResponder(searchResponder);
         this.addRenderableWidget(this.treeSearchBox);
-        int treeWidgetY = treeContentY;
-        int treeWidgetH = contentHeight;
-        this.treeWidget = new DialogTreeWidget(0, treeWidgetY, TREE_WIDTH, treeWidgetH, this.font);
+        int treeWidgetY = treeContentY + 18;
+        int treeWidgetH = contentHeight - 18;
+        this.treeWidget = new DialogTreeWidget(0, treeWidgetY, this.sidebarWidth, treeWidgetH, this.font);
         this.treeWidget.setCallbacks(this::onEntrySelected, this::onEntryDelete, this::onEntryAddChild);
         this.addRenderableWidget(this.treeWidget);
-        this.flowWidget = new FlowViewWidget(TREE_WIDTH + 1, treeContentY,
-                Math.max(1, this.width - TREE_WIDTH - 1), contentHeight, this.font);
+        this.flowWidget = new FlowViewWidget(this.sidebarWidth + 1, treeContentY,
+                Math.max(1, this.width - this.sidebarWidth - 1), contentHeight, this.font);
         this.flowWidget.setCallbacks(this::onEntrySelected, this::onEntryDelete, this::onEntryAddChild);
         this.addRenderableWidget(this.flowWidget);
-        int propX = TREE_WIDTH + 1;
+        int propX = this.sidebarWidth + 1;
         int propWidth = this.width - propX;
         // 画布：画布模式下占内容区左侧（右侧留给停靠属性面板），面板展开时收窄自身、不遮挡。
         this.canvasWidget = new DialogCanvasWidget(0, treeContentY, this.width, contentHeight, this.font);
@@ -335,7 +338,7 @@ public class VNDialogEditorScreen extends Screen {
         int panelW;
         int canvasW;
         if (panelDocked) {
-            panelX = Math.max(TREE_WIDTH + 1, this.width - CANVAS_INSPECTOR_W);
+            panelX = Math.max(this.sidebarWidth + 1, this.width - this.inspectorWidth);
             panelW = this.width - panelX;
             canvasW = panelX - 1;
         } else {
@@ -352,7 +355,7 @@ public class VNDialogEditorScreen extends Screen {
             this.canvasWidget.setPosition(0, this.canvasWidget.getY());
             this.canvasWidget.setWidth(canvasW);
         }
-        int flowX = canvasMode ? 0 : TREE_WIDTH + 1;
+        int flowX = canvasMode ? 0 : this.sidebarWidth + 1;
         this.flowWidget.setPosition(flowX, this.flowWidget.getY());
         this.flowWidget.setWidth(Math.max(1, panelX - flowX - 1));
     }
@@ -1296,12 +1299,26 @@ public class VNDialogEditorScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics, mouseX, mouseY, partialTick);
+        int contentTop = TOOLBAR_HEIGHT + TAB_BAR_HEIGHT;
+        int contentBottom = this.height - STATUS_HEIGHT;
+        // 顶部工具栏、标签栏和工作区使用连续的色带与分隔线，避免控件像漂浮在黑底上。
+        graphics.fill(0, 0, this.width, TOOLBAR_HEIGHT, EditorTheme.BG_SURFACE);
+        graphics.fill(0, TOOLBAR_HEIGHT - 1, this.width, TOOLBAR_HEIGHT, EditorTheme.BORDER);
         int clipRight = this.width - TAB_AREA_RIGHT_MARGIN;
         int tabBarTop = TOOLBAR_HEIGHT;
         int tabBarBottom = TOOLBAR_HEIGHT + TAB_BAR_HEIGHT;
         // 标签栏背景使用不透明深色
         graphics.fill(0, tabBarTop, this.width, tabBarBottom, EditorTheme.BG_ELEVATED);
+        graphics.fill(0, tabBarBottom - 1, this.width, tabBarBottom, EditorTheme.BORDER);
         graphics.fill(0, this.height - STATUS_HEIGHT, this.width, this.height, EditorTheme.BG_SURFACE);
+        // 三段式工作区的固定分隔线：导航 / 中央工作区 / 检查器。
+        graphics.fill(this.sidebarWidth, contentTop, this.sidebarWidth + 1, contentBottom, EditorTheme.BORDER);
+        if (!EditorScreenState.get().isCanvasMode() && this.propertyPanel != null && this.propertyPanel.visible) {
+            int inspectorX = this.propertyPanel.getX();
+            if (inspectorX > this.sidebarWidth + 1 && inspectorX < this.width) {
+                graphics.fill(inspectorX - 1, contentTop, inspectorX, contentBottom, EditorTheme.BORDER);
+            }
+        }
         // 状态栏：按 statusLevel 选语义色；非错误消息到时自动清空（错误常驻）
         if (this.statusClearTime != 0L && System.nanoTime() > this.statusClearTime) {
             this.statusText = "";

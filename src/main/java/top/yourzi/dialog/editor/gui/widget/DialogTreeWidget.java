@@ -441,12 +441,12 @@ public class DialogTreeWidget extends AbstractWidget {
 
     private String getTypeIcon(DialogEntry entry) {
         if (entry.isEndDialog()) {
-            return "E";
+            return "\u2297";
         }
         if (entry.getOptions() != null && entry.getOptions().length > 0) {
-            return "C";
+            return "\u25c6";
         }
-        return "L";
+        return "\u25cb";
     }
 
     private String getConnectionInfo(DialogEntry entry) {
@@ -576,11 +576,11 @@ public class DialogTreeWidget extends AbstractWidget {
             }
             // 选中项文字提亮为纯白，hover/普通保持次要色
             int textColor = isSelected ? EditorTheme.TEXT_PRIMARY : EditorTheme.TEXT_SECONDARY;
-            String arrow = !node.children.isEmpty() ? (node.expanded ? "v " : "> ") : "  ";
+            String arrow = !node.children.isEmpty() ? (node.expanded ? "\u25bc " : "\u25b6 ") : "  ";
             String icon = this.getTypeIcon(node.entry);
             int refs = this.refCounts.getOrDefault(node.entry.getId(), 0);
-            String refMarker = refs > 1 ? " *" : "";
-            String idText = arrow + (node.isOrphan ? "! " : "") + icon + " "
+            String refMarker = refs > 1 ? "*" : "";
+            String idText = arrow + (node.isOrphan ? "\u26a0 " : "") + icon + " "
                     + (node.entry.getId() == null ? "untitled" : node.entry.getId()) + refMarker;
             // 第八轮美化：选中项文字加阴影（项 9），强化视觉锚点
             int textX = this.getX() + 5 + indent;
