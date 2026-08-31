@@ -64,6 +64,13 @@ public class EditorTheme {
             0xFF6AC46A, 0xFFE0A040, 0xFFE070B8, 0xFF58C8D8,
             0xFFB08CFF, 0xFFE05555, 0xFF98D86A, 0xFFD8A858
     };
+    /** 流程目标节点调色板：扩大颜色数量，避免不同目标节点被误认为同一分支。 */
+    public static final int[] FLOW_TARGET_PALETTE = {
+            0xFF6AC46A, 0xFFE0A040, 0xFFE070B8, 0xFF58C8D8,
+            0xFFB08CFF, 0xFFE05555, 0xFF98D86A, 0xFFD8A858,
+            0xFF5C8DFF, 0xFFFF7A5C, 0xFF4FD1A5, 0xFFD06CFF,
+            0xFFFFC857, 0xFF6CCBFF, 0xFFFF6F91, 0xFF9BD36A
+    };
 
     // ===== 间距 =====
     public static final int PADDING      = 6;

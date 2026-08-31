@@ -102,8 +102,8 @@ public class FlowViewWidget extends AbstractWidget {
         return (entry.getId() + " " + plain(entry.getSpeaker()) + " " + plain(entry.getText())).toLowerCase(Locale.ROOT);
     }
 
-    /** 将选项颜色传播到其目标节点，形成从分支到对话节点的视觉追踪线索。 */
-    private Map<String, Integer> incomingOptionColors() {
+    /** 为整个序列的目标节点分配稳定颜色，避免每个节点的选项从绿色重新开始。 */
+    private Map<String, Integer> targetColors() {
         Map<String, Integer> colors = new HashMap<>();
         if (this.sequence == null || this.sequence.getEntries() == null) {
             return colors;
@@ -117,7 +117,8 @@ public class FlowViewWidget extends AbstractWidget {
                 if (option == null || option.getTargetId() == null || option.getTargetId().isBlank()) {
                     continue;
                 }
-                colors.putIfAbsent(option.getTargetId(), EditorTheme.OPTION_PALETTE[i % EditorTheme.OPTION_PALETTE.length]);
+                String targetId = option.getTargetId();
+                colors.putIfAbsent(targetId, EditorTheme.FLOW_TARGET_PALETTE[colors.size() % EditorTheme.FLOW_TARGET_PALETTE.length]);
             }
         }
         return colors;
@@ -180,11 +181,11 @@ public class FlowViewWidget extends AbstractWidget {
                 this.getX() + this.getWidth(), this.getY() + this.getHeight());
         try {
             int y = this.getY() + HEADER_HEIGHT - this.scrollOffset;
-            Map<String, Integer> incomingColors = incomingOptionColors();
+            Map<String, Integer> targetColorMap = targetColors();
             for (DialogEntry entry : entries) {
                 int h = rowHeight(entry);
                 if (y + h >= this.getY() + HEADER_HEIGHT && y <= this.getY() + this.getHeight()) {
-                    renderEntry(g, entry, y, h, mouseX, mouseY, incomingColors);
+                    renderEntry(g, entry, y, h, mouseX, mouseY, targetColorMap);
                 }
                 y += h + 2;
             }
@@ -209,13 +210,13 @@ public class FlowViewWidget extends AbstractWidget {
     }
 
     private void renderEntry(GuiGraphics g, DialogEntry entry, int y, int h, int mouseX, int mouseY,
-                             Map<String, Integer> incomingColors) {
+                             Map<String, Integer> targetColors) {
         boolean selected = entry.getId() != null && entry.getId().equals(this.selectedId);
         boolean hovered = mouseX >= this.getX() && mouseX <= this.getX() + this.getWidth()
                 && mouseY >= y && mouseY < y + h;
         int bg = selected ? EditorTheme.BG_SELECTED : hovered ? EditorTheme.BG_HOVER : EditorTheme.BG_DEEPEST;
         g.fill(this.getX() + 4, y, this.getX() + this.getWidth() - 6, y + ENTRY_HEIGHT, bg);
-        Integer incomingColor = incomingColors.get(entry.getId());
+        Integer incomingColor = targetColors.get(entry.getId());
         if (incomingColor != null) {
             g.fill(this.getX() + 4, y, this.getX() + 7, y + ENTRY_HEIGHT, incomingColor);
         }
@@ -240,7 +241,8 @@ public class FlowViewWidget extends AbstractWidget {
                 String optionText = option == null ? "(null option)" : plain(option.getText());
                 String target = option == null || option.getTargetId() == null || option.getTargetId().isBlank()
                         ? "END" : option.getTargetId();
-                int color = EditorTheme.OPTION_PALETTE[i % EditorTheme.OPTION_PALETTE.length];
+                Integer mappedColor = targetColors.get(target);
+                int color = mappedColor == null ? EditorTheme.TEXT_MUTED : mappedColor;
                 g.fill(this.getX() + 16, optionY + 3, this.getX() + 20, optionY + 13, color);
                 g.drawString(this.font, this.font.plainSubstrByWidth((i + 1) + ". " + optionText,
                         Math.max(40, this.getWidth() - 100)), this.getX() + 25, optionY + 4, EditorTheme.TEXT_SECONDARY);
