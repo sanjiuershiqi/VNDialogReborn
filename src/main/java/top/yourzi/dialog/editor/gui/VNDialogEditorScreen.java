@@ -205,13 +205,14 @@ public class VNDialogEditorScreen extends Screen {
         this.addRenderableWidget(this.tabRightArrow);
         this.addRenderableWidget(this.addTabBtn);
         int treeY = TOOLBAR_HEIGHT + TAB_BAR_HEIGHT;
-        this.addNodeBtn = EditorButton.builder(Component.translatable("gui.vn_edit.add_node"), b -> this.onAddNode())
-                .bounds(0, treeY, TREE_WIDTH, EditorTheme.BTN_HEIGHT).build();
+        // 侧栏顶部保持单行工具条：加号负责新建，搜索框负责导航，避免操作按钮占满整个侧栏。
+        this.addNodeBtn = EditorButton.builder(Component.literal("+"), b -> this.onAddNode())
+                .bounds(0, treeY, 24, EditorTheme.BTN_HEIGHT).build();
         this.addRenderableWidget(this.addNodeBtn);
         int treeContentY = treeY + EditorTheme.BTN_HEIGHT;
         int contentHeight = this.height - treeContentY - STATUS_HEIGHT;
-        // 搜索框占树内容区顶部 18px，treeWidget 下移并缩减高度
-        this.treeSearchBox = new EditBox(this.font, 0, treeContentY, TREE_WIDTH, 16, Component.translatable("gui.vn_edit.search"));
+        // 搜索与新建按钮同一行，节点列表从下一行开始，减少无效留白。
+        this.treeSearchBox = new EditBox(this.font, 28, treeY, TREE_WIDTH - 28, 18, Component.translatable("gui.vn_edit.search"));
         this.treeSearchBox.setMaxLength(999999999);
         this.treeSearchBox.setHint(Component.translatable("gui.vn_edit.search_hint"));
         java.util.function.Consumer<String> searchResponder = text -> {
@@ -227,8 +228,8 @@ public class VNDialogEditorScreen extends Screen {
         this.treeSearchBox.setValue(EditorScreenState.get().getTreeSearchText());
         this.treeSearchBox.setResponder(searchResponder);
         this.addRenderableWidget(this.treeSearchBox);
-        int treeWidgetY = treeContentY + 18;
-        int treeWidgetH = contentHeight - 18;
+        int treeWidgetY = treeContentY;
+        int treeWidgetH = contentHeight;
         this.treeWidget = new DialogTreeWidget(0, treeWidgetY, TREE_WIDTH, treeWidgetH, this.font);
         this.treeWidget.setCallbacks(this::onEntrySelected, this::onEntryDelete, this::onEntryAddChild);
         this.addRenderableWidget(this.treeWidget);

@@ -34,7 +34,7 @@ import java.util.function.Consumer;
  * 对话树组件，按 next/options 引用关系构建层级树。融合自 visual_mod_edit_vndialog。
  */
 public class DialogTreeWidget extends AbstractWidget {
-    private static final int HEADER_HEIGHT = 24;
+    private static final int HEADER_HEIGHT = 20;
     private static final int ROW_HEIGHT = EditorTheme.TREE_ROW_H;
     private static final int INDENT_WIDTH = EditorTheme.TREE_INDENT;
     private static final int SCROLLBAR_WIDTH = EditorTheme.SCROLLBAR_W;
@@ -441,12 +441,12 @@ public class DialogTreeWidget extends AbstractWidget {
 
     private String getTypeIcon(DialogEntry entry) {
         if (entry.isEndDialog()) {
-            return "\u2297";
+            return "E";
         }
         if (entry.getOptions() != null && entry.getOptions().length > 0) {
-            return "\u25c6";
+            return "C";
         }
-        return "\u25cb";
+        return "L";
     }
 
     private String getConnectionInfo(DialogEntry entry) {
@@ -576,7 +576,7 @@ public class DialogTreeWidget extends AbstractWidget {
             }
             // 选中项文字提亮为纯白，hover/普通保持次要色
             int textColor = isSelected ? EditorTheme.TEXT_PRIMARY : EditorTheme.TEXT_SECONDARY;
-            String arrow = !node.children.isEmpty() ? (node.expanded ? "\u25bc " : "\u25b6 ") : "  ";
+            String arrow = !node.children.isEmpty() ? (node.expanded ? "v " : "> ") : "  ";
             String icon = this.getTypeIcon(node.entry);
             int refs = this.refCounts.getOrDefault(node.entry.getId(), 0);
             String refMarker = refs > 1 ? " *" : "";
@@ -590,6 +590,8 @@ public class DialogTreeWidget extends AbstractWidget {
             String summary = this.font.plainSubstrByWidth(this.summary(node.entry), available);
             graphics.drawString(this.font, summary, textX, rowY + 16,
                     node.isOrphan ? EditorTheme.STATUS_WARNING : EditorTheme.TEXT_MUTED);
+            graphics.fill(this.getX() + 5, rowY + ROW_HEIGHT - 1, this.getX() + this.getWidth() - 8,
+                    rowY + ROW_HEIGHT, EditorTheme.DIVIDER);
             DialogValidator.Severity severity = severityById.get(node.entry.getId());
             if (severity != null) {
                 int badgeColor = severity == DialogValidator.Severity.ERROR ? EditorTheme.STATUS_ERROR : EditorTheme.STATUS_WARNING;
