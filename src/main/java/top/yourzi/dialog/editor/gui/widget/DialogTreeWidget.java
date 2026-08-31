@@ -34,7 +34,7 @@ import java.util.function.Consumer;
  * 对话树组件，按 next/options 引用关系构建层级树。融合自 visual_mod_edit_vndialog。
  */
 public class DialogTreeWidget extends AbstractWidget {
-    private static final int HEADER_HEIGHT = 20;
+    private static final int HEADER_HEIGHT = 18;
     private static final int ROW_HEIGHT = EditorTheme.TREE_ROW_H;
     private static final int INDENT_WIDTH = EditorTheme.TREE_INDENT;
     private static final int SCROLLBAR_WIDTH = EditorTheme.SCROLLBAR_W;
@@ -586,16 +586,23 @@ public class DialogTreeWidget extends AbstractWidget {
             int textX = this.getX() + 5 + indent;
             int textRight = this.getX() + this.getWidth() - 8;
             int available = Math.max(30, textRight - textX);
-            graphics.drawString(this.font, this.font.plainSubstrByWidth(idText, available), textX, rowY + 3, textColor, isSelected);
-            String summary = this.font.plainSubstrByWidth(this.summary(node.entry), available);
-            graphics.drawString(this.font, summary, textX, rowY + 16,
-                    node.isOrphan ? EditorTheme.STATUS_WARNING : EditorTheme.TEXT_MUTED);
+            // Explorer 风格单行导航：ID 保持主层级，摘要作为右侧弱化上下文，避免列表变成大卡片。
+            int idWidth = Math.max(42, available * 56 / 100);
+            String idLabel = this.font.plainSubstrByWidth(idText, idWidth);
+            graphics.drawString(this.font, idLabel, textX, rowY + 6, textColor, isSelected);
+            int summaryX = textX + idWidth + 4;
+            int summaryWidth = Math.max(0, textRight - summaryX);
+            if (summaryWidth >= 24) {
+                String summary = this.font.plainSubstrByWidth(this.summary(node.entry), summaryWidth);
+                graphics.drawString(this.font, summary, summaryX, rowY + 6,
+                        node.isOrphan ? EditorTheme.STATUS_WARNING : EditorTheme.TEXT_MUTED);
+            }
             graphics.fill(this.getX() + 5, rowY + ROW_HEIGHT - 1, this.getX() + this.getWidth() - 8,
                     rowY + ROW_HEIGHT, EditorTheme.DIVIDER);
             DialogValidator.Severity severity = severityById.get(node.entry.getId());
             if (severity != null) {
                 int badgeColor = severity == DialogValidator.Severity.ERROR ? EditorTheme.STATUS_ERROR : EditorTheme.STATUS_WARNING;
-                graphics.fill(this.getX() + this.getWidth() - 8, rowY + 5, this.getX() + this.getWidth() - 4, rowY + 9, badgeColor);
+                graphics.fill(this.getX() + this.getWidth() - 8, rowY + 7, this.getX() + this.getWidth() - 4, rowY + 11, badgeColor);
             }
         }
         // 空状态：序列未加载或无节点时显示引导（借鉴 Sparkle 三态列表，但不引入加载/错误态避免过度设计）
