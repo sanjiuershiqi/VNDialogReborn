@@ -134,6 +134,12 @@ public final class DialogValidationScreen extends Screen {
                 this.width / 2, panelY + panelH - 14, EditorTheme.TEXT_MUTED);
     }
 
+    /** 禁用 Minecraft 菜单默认的背景模糊，避免后处理把验证面板文字一起变糊。 */
+    @Override
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        graphics.fill(0, 0, this.width, this.height, EditorTheme.BG_DEEPEST);
+    }
+
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         int max = Math.max(0, filteredIssues().size() * 22 - (this.height - panelTop() - 70));
