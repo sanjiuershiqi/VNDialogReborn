@@ -1148,10 +1148,6 @@ public class VNDialogEditorScreen extends Screen {
         // 顶部工具栏、标签栏和工作区使用连续的色带与分隔线，避免控件像漂浮在黑底上。
         graphics.fill(0, 0, this.width, TOOLBAR_HEIGHT, EditorTheme.BG_SURFACE);
         graphics.fill(0, 0, 5, TOOLBAR_HEIGHT, EditorTheme.ACCENT);
-        EditorTheme.drawHatch(graphics, Math.max(0, this.width - 100), 0, 100, TOOLBAR_HEIGHT,
-                EditorTheme.ACCENT_TINT);
-        graphics.drawString(this.font, "VN // DIALOG EDITOR", Math.max(8, this.width - 148), 11,
-                EditorTheme.TEXT_MUTED, false);
         graphics.fill(0, TOOLBAR_HEIGHT - 1, this.width, TOOLBAR_HEIGHT, EditorTheme.BORDER);
         int clipRight = this.width - TAB_AREA_RIGHT_MARGIN;
         int tabBarTop = TOOLBAR_HEIGHT;

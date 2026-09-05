@@ -29,7 +29,7 @@ import java.util.function.Consumer;
  */
 public class FlowViewWidget extends AbstractWidget {
     private static final int HEADER_HEIGHT = 26;
-    private static final int ENTRY_HEIGHT = 58;
+    private static final int ENTRY_HEIGHT = 50;
     private static final int OPTION_HEIGHT = 18;
     private static final int SCROLLBAR_WIDTH = EditorTheme.SCROLLBAR_W;
 
@@ -273,8 +273,8 @@ public class FlowViewWidget extends AbstractWidget {
         String marker = entry.getId() != null && entry.getId().equals(this.sequence.getStartId()) ? "START " : "";
         String type = entry.isEndDialog() ? "END" : entry.hasOptions() ? "CHOICE" : "LINE";
         g.drawString(this.font, marker + type, this.getX() + 12, y + 5, entryTypeColor, selected);
-        int idColor = incomingColor == null ? EditorTheme.TEXT_PRIMARY : incomingColor;
-        g.drawString(this.font, entry.getId() == null ? "untitled" : entry.getId(), this.getX() + 78, y + 5, idColor, selected);
+        g.drawString(this.font, entry.getId() == null ? "untitled" : entry.getId(), this.getX() + 78, y + 5,
+                EditorTheme.TEXT_PRIMARY, selected);
         String speaker = plain(entry.getSpeaker());
         String text = plain(entry.getText()).replace('\n', ' ');
         if (speaker.isEmpty()) speaker = "-";

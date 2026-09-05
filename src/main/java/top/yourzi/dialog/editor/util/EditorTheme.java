@@ -10,19 +10,19 @@ import net.minecraft.network.chat.Component;
  */
 public class EditorTheme {
     // ===== 配色 - 精炼暗色主题 =====
-    public static final int BG_DEEPEST     = 0xFF0B0D0E;  // 终末地炭黑背景
-    public static final int BG_SURFACE     = 0xFF171A1B;  // 深色面板
-    public static final int BG_ELEVATED    = 0xFF272B2C;  // 工具栏/标题条
-    public static final int BG_HOVER       = 0xFF34393A;  // 悬停
-    public static final int BG_SELECTED    = 0xFF17383A;  // 深青色选中底
-    public static final int BORDER         = 0xFF485052;  // 金属灰分隔线
-    public static final int BORDER_LIGHT   = 0xFF6E7778;  // 高亮分隔线
-    public static final int TEXT_PRIMARY   = 0xFFF4F1E8;
-    public static final int TEXT_SECONDARY = 0xFFC2C6C2;
-    public static final int TEXT_MUTED     = 0xFF7C8583;
-    public static final int ACCENT         = 0xFFE4D83A;  // 终末地标志性黄色
-    public static final int ACCENT_DIM     = 0xFF8D8720;
-    public static final int ACCENT_CYAN    = 0xFF1EB7D1;  // 系统信息/链接
+    public static final int BG_DEEPEST     = 0xFF0C1011;
+    public static final int BG_SURFACE     = 0xFF171D1E;
+    public static final int BG_ELEVATED    = 0xFF232A2C;
+    public static final int BG_HOVER       = 0xFF2C3638;
+    public static final int BG_SELECTED    = 0xFF1E3A3D;
+    public static final int BORDER         = 0xFF3B484A;
+    public static final int BORDER_LIGHT   = 0xFF5C6A6B;
+    public static final int TEXT_PRIMARY   = 0xFFE7ECE8;
+    public static final int TEXT_SECONDARY = 0xFFB4C0BD;
+    public static final int TEXT_MUTED     = 0xFF788684;
+    public static final int ACCENT         = 0xFFD3B936;
+    public static final int ACCENT_DIM     = 0xFF766A20;
+    public static final int ACCENT_CYAN    = 0xFF55C2C5;
     public static final int DANGER         = 0xFFE56B5D;  // 删除/危险
 
     // ===== 视觉美化色板（第八轮，借鉴 Sparkle-Morpher RoulettePanelStyle/RouletteTheme） =====
@@ -33,7 +33,7 @@ public class EditorTheme {
     // 内发光：22% 白，面板顶部 1px 叠层模拟顶光立体感（借鉴 Sparkle SLICE_INNER_GLOW）
     public static final int SHADOW_INNER_GLOW = 0x36FFFFFF;
     // 强调发光：25% 蓝，hover 外发光层（比硬描边柔和）
-    public static final int GLOW_ACCENT    = 0x40E4D83A;
+    public static final int GLOW_ACCENT    = 0x22D3B936;
     // 玻璃面板色系：半透明叠层产生磨砂观感（无需 GLSL 模糊也能有玻璃感）
     public static final int PANEL_GLASS       = 0x60405058;  // 玻璃底（借鉴 Sparkle GLASS）
     public static final int PANEL_GLASS_HOVER = 0x66576B76;  // 玻璃 hover（借鉴 Sparkle PANEL_HOVER）
@@ -57,10 +57,10 @@ public class EditorTheme {
     public static final int POPUP_BG       = 0xFF181818;
 
     // 终末地风格浅色模块，用于检查器标题、流程卡片高亮等局部区域。
-    public static final int PANEL_LIGHT       = 0xFFE9E7DE;
+    public static final int PANEL_LIGHT       = BG_ELEVATED;
     public static final int PANEL_LIGHT_TEXT  = 0xFF202426;
-    public static final int PANEL_LIGHT_MUTED = 0xFF687174;
-    public static final int PANEL_DARK_STRIPE  = 0xFF141819;
+    public static final int PANEL_LIGHT_MUTED = TEXT_MUTED;
+    public static final int PANEL_DARK_STRIPE  = BG_DEEPEST;
 
     // ===== 深色预览区域色（立绘预览等非编辑工作区） =====
     public static final int CANVAS_BG      = 0xFF161616;
@@ -108,12 +108,12 @@ public class EditorTheme {
         g.enableScissor(x, y, x + width, y + PANEL_HEADER_H);
         try {
             g.fill(x, y, x + width, y + PANEL_HEADER_H, PANEL_LIGHT);
-            g.fill(x, y, x + 28, y + PANEL_HEADER_H, ACCENT);
-            g.drawString(font, index, x + 8, y + 9, PANEL_LIGHT_TEXT, false);
+            g.fill(x, y, x + 4, y + PANEL_HEADER_H, ACCENT);
+            g.drawString(font, index, x + 12, y + 9, ACCENT, false);
             g.drawString(font, font.plainSubstrByWidth(title.getString(), Math.max(1, width - 52)),
-                    x + 36, y + 9, PANEL_LIGHT_TEXT, false);
+                    x + 38, y + 9, TEXT_PRIMARY, false);
             for (int i = 0; i < 3; i++) {
-                g.fill(x + width - 11 + i * 3, y + 4, x + width - 10 + i * 3, y + 7, PANEL_LIGHT_MUTED);
+                g.fill(x + width - 11 + i * 3, y + 4, x + width - 10 + i * 3, y + 7, ACCENT_DIM);
             }
             g.fill(x, y + PANEL_HEADER_H - 1, x + width, y + PANEL_HEADER_H, BORDER);
         } finally {

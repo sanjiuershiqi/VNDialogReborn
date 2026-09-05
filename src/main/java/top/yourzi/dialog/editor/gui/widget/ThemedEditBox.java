@@ -1,6 +1,7 @@
 package top.yourzi.dialog.editor.gui.widget;
 
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
 import top.yourzi.dialog.editor.util.EditorTheme;
@@ -14,6 +15,17 @@ public class ThemedEditBox extends EditBox {
         super(font, x, y, width, height, message);
         this.setTextColor(EditorTheme.TEXT_PRIMARY);
         this.setTextColorUneditable(EditorTheme.TEXT_MUTED);
-        this.setBordered(true);
+        this.setBordered(false);
+    }
+
+    @Override
+    public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        int border = this.isFocused() ? EditorTheme.ACCENT : EditorTheme.BORDER;
+        graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), EditorTheme.BG_DEEPEST);
+        super.renderWidget(graphics, mouseX, mouseY, partialTick);
+        graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + 1, border);
+        graphics.fill(this.getX(), this.getY() + this.getHeight() - 1, this.getX() + this.getWidth(), this.getY() + this.getHeight(), border);
+        graphics.fill(this.getX(), this.getY(), this.getX() + 1, this.getY() + this.getHeight(), border);
+        graphics.fill(this.getX() + this.getWidth() - 1, this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), border);
     }
 }
