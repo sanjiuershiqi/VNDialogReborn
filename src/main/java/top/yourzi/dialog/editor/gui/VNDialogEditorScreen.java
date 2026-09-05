@@ -13,7 +13,6 @@ import net.minecraft.util.Mth;
 import top.yourzi.dialog.Dialog;
 import top.yourzi.dialog.DialogManager;
 import top.yourzi.dialog.editor.gui.property.AppearancePropertyPage;
-import top.yourzi.dialog.editor.gui.widget.DialogCanvasWidget;
 import top.yourzi.dialog.editor.gui.widget.DialogTreeWidget;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import top.yourzi.dialog.editor.gui.widget.FlowViewWidget;
@@ -68,18 +67,14 @@ public class VNDialogEditorScreen extends Screen {
     private EditorButton addNodeBtn;
     private EditorButton tabLeftArrow;
     private EditorButton tabRightArrow;
-    /** 顶部工具栏按钮引用，用于 tooltip 检测（顺序：新建/保存/读取/测试/导入/序列属性） */
+    /** 顶部工具栏按钮引用，用于 tooltip 检测（顺序：新建/保存/读取/测试/导入/序列属性/验证） */
     private final List<EditorButton> toolbarButtons = new ArrayList<>();
     private int tabScrollOffset = 0;
     private DialogSequence currentSequence;
     private DialogEntry editingEntry;
-    /** 节点画布视图（大纲↔画布切换，状态存 EditorScreenState.canvasMode）。 */
-    private DialogCanvasWidget canvasWidget;
     private FlowViewWidget flowWidget;
     /** 当前序列的结构级撤销/重做历史（JSON 快照式，借鉴 MainGraph HistoryManager）。 */
     private final EditorHistory history = new EditorHistory();
-    /** 工具栏右侧视图切换按钮：大纲 ↔ 画布。 */
-    private EditorButton viewToggleBtn;
     /** 跟踪有未保存修改的对话序列 ID */
     private final java.util.Set<String> dirtySequences = new java.util.HashSet<>();
     public String statusText = "";
@@ -152,8 +147,7 @@ public class VNDialogEditorScreen extends Screen {
         this.propertyPanel.setActiveTab(EditorScreenState.get().getActivePropertyTab());
         this.propertyPanel.setVisible(this.editingEntry != null);
         this.rebuildTabButtons();
-        // 视图模式恢复（大纲/画布）并按模式绑定序列与控件可见性
-        this.applyViewMode();
+        this.configureWorkspace();
     }
 
     private void buildWidgets() {
@@ -165,8 +159,8 @@ public class VNDialogEditorScreen extends Screen {
         // 按钮宽度自适应：根据屏幕宽度和按钮数量计算，确保不溢出
         int btnCount = 7;
         int totalGap = (btnCount - 1) * EditorTheme.GAP;
-        // 右侧固定留给视图切换按钮，避免窗口较窄时工具栏按钮互相覆盖。
-        int maxBtnWidth = (this.width - 46 - totalGap - 4) / btnCount;
+        // 画布入口已移除，工具栏可使用完整宽度，避免右侧留下无意义空白。
+        int maxBtnWidth = (this.width - totalGap - 4) / btnCount;
         int btnWidth = Math.min(EditorTheme.BTN_WIDTH, Math.max(36, maxBtnWidth));
         EditorButton newBtn = EditorButton.builder(Component.translatable("gui.vn_edit.new"), b -> this.onNew())
                 .bounds(btnX, btnY, btnWidth, btnHeight).build();
@@ -242,131 +236,61 @@ public class VNDialogEditorScreen extends Screen {
         this.addRenderableWidget(this.flowWidget);
         int propX = this.sidebarWidth + 1;
         int propWidth = this.width - propX;
-        // 画布：画布模式下占内容区左侧（右侧留给停靠属性面板），面板展开时收窄自身、不遮挡。
-        this.canvasWidget = new DialogCanvasWidget(0, treeContentY, this.width, contentHeight, this.font);
-        this.canvasWidget.setCallbacks(
-                this::onCanvasNodeSelected,   // 单击选中（轻量，不开面板）
-                this::onEntryDelete,          // 右键删除 → 确认框
-                this::onEntryAddChild,        // 右键添加后继节点
-                this::startRenameEntry,       // 右键重命名
-                () -> {                       // 双击/菜单编辑属性 → 打开停靠面板
-                    DialogEntry sel = this.getActiveSelectedEntry();
-                    if (sel != null) {
-                        this.onEntrySelected(sel);
-                    }
-                },
-                this::onAddNode,              // 空白右键新建节点
-                this::copySelectedNode,       // 菜单复制
-                this::pasteNode,              // 菜单粘贴
-                this::onCanvasConnect,        // 端口拖拽建边
-                this::onCanvasDisconnect);    // 右键连线断开
-        this.addRenderableWidget(this.canvasWidget);
         this.propertyPanel = new PropertyPanel(propX, treeContentY, propWidth, contentHeight, this.font);
         this.addRenderableWidget(this.propertyPanel);
         // 注入字段变脏回调：属性页内 Option 变脏时标记当前序列为未保存，使字段编辑联动标签页 * 标记
         this.propertyPanel.setDirtyListener(() -> this.markDirty(this.currentSequence));
-        // 工具栏右侧视图切换按钮（固定位置，标签箭头在下一行不冲突）
-        this.viewToggleBtn = EditorButton.builder(Component.translatable("gui.vn_edit.view.canvas"), b -> this.onToggleView())
-                .bounds(this.width - 46, btnY, 44, btnHeight).build();
-        this.addRenderableWidget(this.viewToggleBtn);
     }
 
-    /** 切换 大纲 ↔ 画布 视图（状态持久化到 EditorScreenState，重建后恢复）。 */
-    private void onToggleView() {
-        EditorScreenState state = EditorScreenState.get();
-        state.setCanvasMode(!state.isCanvasMode());
-        this.applyViewMode();
-    }
-
-    /**
-     * 按当前视图模式应用控件可见性与序列绑定：
-     * 大纲模式显示树列（添加按钮/搜索/树），画布模式显示画布并隐藏树列；
-     * 面板/画布几何由 applyPanelLayout 按模式停靠。
-     */
-    private void applyViewMode() {
-        boolean canvas = EditorScreenState.get().isCanvasMode();
-        this.treeSearchBox.setVisible(!canvas);
-        this.addNodeBtn.visible = !canvas;
-        this.treeWidget.visible = !canvas;
-        this.canvasWidget.visible = canvas;
-        this.flowWidget.visible = !canvas;
-        if (canvas) {
-            // 绑定当前序列：恢复该序列的节点布局与相机（聚焦起点）
-            this.canvasWidget.setSequence(this.currentSequence);
-            // 大纲带选中切过来时：停靠面板 + 把选中节点平移进可视区
-            if (this.editingEntry != null && this.editingEntry.getId() != null) {
-                this.canvasWidget.selectEntryById(this.editingEntry.getId());
-                this.canvasWidget.ensureVisible(this.editingEntry.getId());
-            }
-        } else {
-            // 回到大纲：重建树并从状态单例恢复选中/滚动（画布选中已写入状态单例）
-            this.treeWidget.setSequence(this.currentSequence);
-            this.flowWidget.setSequence(this.currentSequence);
-            this.flowWidget.setSearchText(EditorScreenState.get().getTreeSearchText());
-        }
-        this.viewToggleBtn.setMessage(Component.translatable(canvas ? "gui.vn_edit.view.outline" : "gui.vn_edit.view.canvas"));
+    /** 将编辑器统一配置为导航、流程与检查器三栏工作区。 */
+    private void configureWorkspace() {
+        this.treeSearchBox.setVisible(true);
+        this.addNodeBtn.visible = true;
+        this.treeWidget.visible = true;
+        this.flowWidget.visible = true;
+        this.treeWidget.setSequence(this.currentSequence);
+        this.flowWidget.setSequence(this.currentSequence);
+        this.flowWidget.setSearchText(EditorScreenState.get().getTreeSearchText());
         this.applyPanelLayout();
     }
 
     /**
-     * 同步画布序列绑定（序列切换/加载后调用）：画布可见时重绑以恢复该序列布局。
-     * 结构级变化（增删节点/改引用）走 markDirty → canvasWidget.refresh()，保留用户布局。
+     * 同步流程视图序列绑定（序列切换/加载后调用）。
      */
-    private void syncCanvasSequence() {
+    private void syncWorkspaceSequence() {
         this.syncFlowSequence();
-        if (this.canvasWidget != null && this.canvasWidget.visible) {
-            this.canvasWidget.setSequence(this.currentSequence);
-            this.applyPanelLayout();
-        }
+        this.configureWorkspace();
     }
 
-    /**
-     * 按视图模式与面板显隐停靠属性面板与画布几何：
-     * - 大纲模式：面板在树列右侧（原始全宽），画布隐藏（全宽占位）；
-     * - 画布模式 + 面板展开：面板停靠右侧按窗口比例取宽，画布收窄到面板左侧，
-     *   面板不覆盖画布任何区域（上一版浮动遮挡是可用性事故，本版改为布局让位）；
-     * - 画布模式 + 面板收起：画布恢复全宽。
-     * 几何无变化时跳过 relayout，避免大纲模式每次选节点都重置面板滚动。
-     */
+    /** 按面板显隐停靠检查器，并为中央流程视图保留稳定的最小宽度。 */
     private void applyPanelLayout() {
-        if (this.canvasWidget == null || this.flowWidget == null || this.propertyPanel == null) {
+        if (this.flowWidget == null || this.propertyPanel == null) {
             return;
         }
-        boolean canvasMode = EditorScreenState.get().isCanvasMode();
         boolean panelDocked = this.propertyPanel.visible && this.editingEntry != null;
         int panelX;
         int panelW;
-        int canvasW;
         if (panelDocked) {
             int minCenterWidth = Math.min(320, Math.max(1, this.width - this.sidebarWidth - 2));
             panelX = Math.max(this.sidebarWidth + 1,
                     Math.min(this.width - this.inspectorWidth, this.width - minCenterWidth));
             panelW = this.width - panelX;
-            canvasW = panelX - 1;
         } else {
             panelX = this.width;
             panelW = this.width - panelX;
-            canvasW = this.width;
         }
         if (this.propertyPanel.getX() != panelX || this.propertyPanel.getWidth() != panelW) {
             this.propertyPanel.setPosition(panelX, this.propertyPanel.getY());
             this.propertyPanel.setWidth(panelW);
             this.propertyPanel.relayout();
         }
-        if (this.canvasWidget.getWidth() != canvasW) {
-            this.canvasWidget.setPosition(0, this.canvasWidget.getY());
-            this.canvasWidget.setWidth(canvasW);
-        }
-        int flowX = canvasMode ? 0 : this.sidebarWidth + 1;
+        int flowX = this.sidebarWidth + 1;
         this.flowWidget.setPosition(flowX, this.flowWidget.getY());
         this.flowWidget.setWidth(Math.max(1, panelX - flowX - 1));
     }
 
-    /** 当前激活视图（大纲=树 / 画布）选中的节点，供 Delete/F2/Ctrl+C/D 等快捷键定位目标。 */
+    /** 当前导航选中的节点，供 Delete/F2/Ctrl+C/D 等快捷键定位目标。 */
     private DialogEntry getActiveSelectedEntry() {
-        if (EditorScreenState.get().isCanvasMode() && this.canvasWidget != null) {
-            return this.canvasWidget.getSelectedEntry();
-        }
         return this.treeWidget != null ? this.treeWidget.getSelectedEntry() : null;
     }
 
@@ -483,7 +407,7 @@ public class VNDialogEditorScreen extends Screen {
         this.treeWidget.setSequence(this.currentSequence);
         this.propertyPanel.setSequence(this.currentSequence);
         this.syncFlowSequence();
-        this.syncCanvasSequence();
+        this.syncWorkspaceSequence();
         this.editingEntry = null;
         this.propertyPanel.unbind();
         this.propertyPanel.setVisible(false);
@@ -509,7 +433,7 @@ public class VNDialogEditorScreen extends Screen {
             this.treeWidget.setSequence(this.currentSequence);
             this.propertyPanel.setSequence(this.currentSequence);
             this.syncFlowSequence();
-        this.syncCanvasSequence();
+        this.syncWorkspaceSequence();
         this.editingEntry = null;
             this.propertyPanel.unbind();
             this.propertyPanel.setVisible(false);
@@ -541,9 +465,6 @@ public class VNDialogEditorScreen extends Screen {
             this.onEntrySelected(newEntry);
             EditorScreenState.get().setSelectedNodeId(newId);
             this.markDirty(this.currentSequence);
-            if (this.canvasWidget.visible) {
-                this.canvasWidget.selectEntryById(newId);
-            }
             this.setStatus(Component.translatable("gui.vn_edit.status.node_added", newId).getString(), StatusLevel.SUCCESS);
         }, this));
     }
@@ -619,10 +540,6 @@ public class VNDialogEditorScreen extends Screen {
         if (seq != null && seq.getId() != null && this.dirtySequences.add(seq.getId())) {
             // 状态变化时刷新标签 * 显示（TabButton 为自绘列表，重建开销小）
             this.rebuildTabButtons();
-        }
-        // 画布可见时同步刷新缓存（入度/卡片高度/新节点落点），保留用户布局
-        if (this.canvasWidget != null && this.canvasWidget.visible) {
-            this.canvasWidget.refresh();
         }
     }
 
@@ -753,7 +670,7 @@ public class VNDialogEditorScreen extends Screen {
         SequencePropertiesScreen propsScreen = new SequencePropertiesScreen(this.currentSequence, seq -> {
             this.markDirty(seq);
             this.treeWidget.setSequence(seq);
-            this.syncCanvasSequence();
+            this.syncWorkspaceSequence();
             this.rebuildTabButtons();
             this.setStatus(Component.translatable("gui.vn_edit.status.props_saved").getString(), StatusLevel.SUCCESS);
         }, this);
@@ -798,63 +715,6 @@ public class VNDialogEditorScreen extends Screen {
         } catch (Exception e) {
             Dialog.LOGGER.error("Import failed", e);
             this.setStatus(Component.translatable("gui.vn_edit.import.failed").getString(), StatusLevel.ERROR);
-        }
-    }
-
-    /**
-     * 画布端口拖拽建边（借鉴 MainGraph BlueprintConnectionHandler）：
-     * optionIndex=-1 设置 nextId，>=0 设置对应选项 targetId。自连已在画布层禁止。
-     */
-    private void onCanvasConnect(String sourceId, int optionIndex, String targetId) {
-        if (this.currentSequence == null || sourceId == null || targetId == null) {
-            return;
-        }
-        DialogEntry source = this.currentSequence.findEntryById(sourceId);
-        DialogEntry target = this.currentSequence.findEntryById(targetId);
-        if (source == null || target == null) {
-            return;
-        }
-        this.pushHistory();
-        if (optionIndex < 0) {
-            source.setNextId(targetId);
-        } else if (source.getOptions() != null && optionIndex < source.getOptions().length) {
-            source.getOptions()[optionIndex].setTargetId(targetId);
-        } else {
-            return;
-        }
-        this.afterGraphMutation();
-        this.setStatus(Component.translatable("gui.vn_edit.status.connected", sourceId, targetId).getString(), StatusLevel.SUCCESS);
-    }
-
-    /** 画布右键连线断开：optionIndex=-1 清 nextId，>=0 清对应选项 targetId。 */
-    private void onCanvasDisconnect(String sourceId, int optionIndex, String targetId) {
-        if (this.currentSequence == null || sourceId == null) {
-            return;
-        }
-        DialogEntry source = this.currentSequence.findEntryById(sourceId);
-        if (source == null) {
-            return;
-        }
-        this.pushHistory();
-        if (optionIndex < 0) {
-            source.setNextId(null);
-        } else if (source.getOptions() != null && optionIndex < source.getOptions().length) {
-            source.getOptions()[optionIndex].setTargetId(null);
-        } else {
-            return;
-        }
-        this.afterGraphMutation();
-        this.setStatus(Component.translatable("gui.vn_edit.status.disconnected", sourceId).getString(), StatusLevel.SUCCESS);
-    }
-
-    /** 图结构变更（建边/断边）后的联动刷新：树/画布重绘、绑定中的属性页重绑、标脏。 */
-    private void afterGraphMutation() {
-        this.markDirty(this.currentSequence);
-        this.treeWidget.setSequence(this.currentSequence);
-        this.syncFlowSequence();
-        if (this.propertyPanel.visible && this.editingEntry != null) {
-            // 正在编辑的节点若就是变更源/目标，重绑以刷新逻辑页的下拉显示
-            this.propertyPanel.bindTo(this.editingEntry);
         }
     }
 
@@ -904,7 +764,7 @@ public class VNDialogEditorScreen extends Screen {
         return true;
     }
 
-    /** 应用历史快照：还原 entries 并联动刷新树/画布/属性面板（选中节点按 ID 重新定位）。 */
+    /** 应用历史快照：还原 entries 并联动刷新导航/流程/属性面板（选中节点按 ID 重新定位）。 */
     private void applyHistorySnapshot(String snapshot) {
         DialogEntry[] entries = DialogManager.GSON.fromJson(snapshot, DialogEntry[].class);
         if (entries == null) {
@@ -926,27 +786,6 @@ public class VNDialogEditorScreen extends Screen {
             this.propertyPanel.setVisible(false);
             this.applyPanelLayout();
         }
-        // 画布保持当前布局缓存，仅重算节点高度/入度等派生数据
-        if (this.canvasWidget != null && this.canvasWidget.visible) {
-            this.canvasWidget.refresh();
-        }
-    }
-
-    /**
-     * 画布单击选中（轻量回调）：单击只做选中高亮 + 状态同步，不打开编辑面板——
-     * 上一版单击即弹全宽面板把画布盖掉大半，属误开；编辑入口改为双击/右键菜单。
-     * entry=null 表示点击空白：关闭停靠面板并恢复画布全宽。
-     */
-    private void onCanvasNodeSelected(DialogEntry entry) {
-        if (entry != null) {
-            return; // 选中状态画布已写 EditorScreenState，这里无需动作
-        }
-        if (this.editingEntry != null || this.propertyPanel.visible) {
-            this.editingEntry = null;
-            this.propertyPanel.unbind();
-            this.propertyPanel.setVisible(false);
-            this.applyPanelLayout();
-        }
     }
 
     private void onEntrySelected(DialogEntry entry) {
@@ -963,11 +802,8 @@ public class VNDialogEditorScreen extends Screen {
                 this.propertyPanel.setVisible(false);
             }
         }
-        // 面板显隐/停靠变化 → 画布收窄或恢复全宽，并把选中节点平移回可视区
+        // 面板显隐/停靠变化 → 重新计算检查器停靠位置
         this.applyPanelLayout();
-        if (entry != null && this.canvasWidget != null && this.canvasWidget.visible) {
-            this.canvasWidget.ensureVisible(entry.getId());
-        }
     }
 
     private void onEntryDelete(DialogEntry entry) {
@@ -1030,7 +866,7 @@ public class VNDialogEditorScreen extends Screen {
 
     /**
      * 添加后继节点：新建节点插入父节点数组位置之后，并在父节点无分支时建立显式 next 边
-     * （画布右键"添加后继节点"入口；父节点已有选项分支时不自动连线，避免改变分支语义）。
+     * （节点菜单"添加后继节点"入口；父节点已有选项分支时不自动连线，避免改变分支语义）。
      */
     private void onEntryAddChild(DialogEntry parentEntry) {
         if (this.currentSequence == null || parentEntry == null) {
@@ -1054,9 +890,6 @@ public class VNDialogEditorScreen extends Screen {
         this.onEntrySelected(child);
         EditorScreenState.get().setSelectedNodeId(newId);
         this.markDirty(this.currentSequence);
-        if (this.canvasWidget.visible) {
-            this.canvasWidget.selectEntryById(newId);
-        }
         this.setStatus(Component.translatable("gui.vn_edit.status.node_added", newId).getString(), StatusLevel.SUCCESS);
     }
 
@@ -1263,7 +1096,7 @@ public class VNDialogEditorScreen extends Screen {
             this.propertyPanel.unbind();
             this.editingEntry = null;
             this.propertyPanel.setVisible(false);
-            this.syncCanvasSequence();
+            this.syncWorkspaceSequence();
             this.applyPanelLayout();
         } else if (this.activeSequenceIndex >= index) {
             this.activeSequenceIndex = Math.min(this.activeSequenceIndex, this.openSequences.size() - 1);
@@ -1318,7 +1151,7 @@ public class VNDialogEditorScreen extends Screen {
         graphics.fill(0, this.height - STATUS_HEIGHT, this.width, this.height, EditorTheme.BG_SURFACE);
         // 三段式工作区的固定分隔线：导航 / 中央工作区 / 检查器。
         graphics.fill(this.sidebarWidth, contentTop, this.sidebarWidth + 1, contentBottom, EditorTheme.BORDER);
-        if (!EditorScreenState.get().isCanvasMode() && this.propertyPanel != null && this.propertyPanel.visible) {
+        if (this.propertyPanel != null && this.propertyPanel.visible) {
             int inspectorX = this.propertyPanel.getX();
             if (inspectorX > this.sidebarWidth + 1 && inspectorX < this.width) {
                 graphics.fill(inspectorX - 1, contentTop, inspectorX, contentBottom, EditorTheme.BORDER);
@@ -1438,11 +1271,6 @@ public class VNDialogEditorScreen extends Screen {
                 return;
             }
         }
-        // 视图切换按钮
-        if (this.viewToggleBtn != null && this.viewToggleBtn.isMouseOver(mouseX, mouseY)) {
-            graphics.renderTooltip(this.font, Component.translatable("gui.vn_edit.tooltip.view_toggle"), mouseX, mouseY);
-            return;
-        }
         // 添加节点按钮
         if (this.addNodeBtn != null && this.addNodeBtn.isMouseOver(mouseX, mouseY)) {
             graphics.renderTooltip(this.font, Component.translatable("gui.vn_edit.tooltip.add_node"), mouseX, mouseY);
@@ -1552,21 +1380,6 @@ public class VNDialogEditorScreen extends Screen {
                 this.onAddNode();
                 return true;
             }
-            if (EditorScreenState.get().isCanvasMode() && this.canvasWidget != null) {
-                // 画布键盘：方向键平移、Enter 打开属性面板、+/- 缩放
-                if (keyCode == GLFW.GLFW_KEY_ENTER) {
-                    DialogEntry sel = this.getActiveSelectedEntry();
-                    if (sel != null) { this.onEntrySelected(sel); return true; }
-                }
-                if (keyCode == GLFW.GLFW_KEY_UP || keyCode == GLFW.GLFW_KEY_DOWN
-                        || keyCode == GLFW.GLFW_KEY_LEFT || keyCode == GLFW.GLFW_KEY_RIGHT
-                        || keyCode == GLFW.GLFW_KEY_EQUAL || keyCode == GLFW.GLFW_KEY_KP_ADD
-                        || keyCode == GLFW.GLFW_KEY_MINUS || keyCode == GLFW.GLFW_KEY_KP_SUBTRACT) {
-                    if (this.canvasWidget.keyPressed(keyCode)) {
-                        return true;
-                    }
-                }
-            } else
             // 树键盘导航：方向键移动选中、左右折叠展开、Enter 打开属性面板
             if (keyCode == GLFW.GLFW_KEY_UP || keyCode == GLFW.GLFW_KEY_DOWN
                     || keyCode == GLFW.GLFW_KEY_LEFT || keyCode == GLFW.GLFW_KEY_RIGHT
@@ -1579,7 +1392,7 @@ public class VNDialogEditorScreen extends Screen {
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
-    /** Ctrl+C：复制选中节点的深拷贝到静态剪贴板（选中来源跟随当前视图：树/画布）。 */
+    /** Ctrl+C：复制选中节点的深拷贝到静态剪贴板。 */
     private void copySelectedNode() {
         DialogEntry sel = this.getActiveSelectedEntry();
         if (sel == null) {
@@ -1612,11 +1425,7 @@ public class VNDialogEditorScreen extends Screen {
         this.propertyPanel.setSequence(this.currentSequence);
         this.markDirty(this.currentSequence);
         // selectEntryById 内部会触发 onEntrySelected 回调（设 editingEntry + bindTo）并定位/滚动到可见
-        if (this.canvasWidget.visible) {
-            this.canvasWidget.selectEntryById(newId);
-        } else {
-            this.treeWidget.selectEntryById(newId);
-        }
+        this.treeWidget.selectEntryById(newId);
         this.setStatus(Component.translatable("gui.vn_edit.status.node_pasted", newId).getString(), StatusLevel.SUCCESS);
     }
 
@@ -1654,8 +1463,8 @@ public class VNDialogEditorScreen extends Screen {
     }
 
     /**
-     * 重命名指定节点（F2 / 画布右键菜单入口）：弹出 InputDialogScreen，确认后直接改数据模型
-     * 并同步更新全部 nextId/option.targetId 引用，随后刷新树与画布两个视图（画布迁移节点坐标）。
+     * 重命名指定节点（F2 / 节点菜单入口）：弹出 InputDialogScreen，确认后直接改数据模型
+     * 并同步更新全部 nextId/option.targetId 引用，随后刷新导航与流程视图。
      * 失败（ID 冲突）时显示状态栏警告。
      */
     private void startRenameEntry(DialogEntry entry) {
@@ -1674,7 +1483,7 @@ public class VNDialogEditorScreen extends Screen {
     }
 
     /**
-     * 重命名节点并更新引用：不依赖树视图的选中状态（画布右键重命名时树选中可能不同步）。
+     * 重命名节点并更新引用：不依赖导航视图的选中状态。
      * @return false 表示新 ID 已存在（冲突）
      */
     private boolean renameEntry(DialogEntry entry, String newId) {
@@ -1701,21 +1510,6 @@ public class VNDialogEditorScreen extends Screen {
         EditorScreenState.get().setSelectedNodeId(newId);
         this.treeWidget.setSequence(this.currentSequence);
         this.treeWidget.selectEntryById(newId);
-        // 迁移已保存的画布布局坐标（旧 ID → 新 ID）：之后切到画布视图节点仍在原位
-        if (this.currentSequence.getId() != null) {
-            java.util.Map<String, int[]> layout = EditorScreenState.get().getCanvasLayout(this.currentSequence.getId());
-            int[] pos = layout.remove(oldId);
-            if (pos != null) {
-                layout.put(newId, pos);
-                EditorScreenState.get().setCanvasLayout(this.currentSequence.getId(), layout);
-            }
-        }
-        // 画布可见时同步刷新：refresh 为新 ID 生成落点，renameNode 再迁移到旧坐标（节点留在原位）
-        if (this.canvasWidget.visible) {
-            this.canvasWidget.refresh();
-            this.canvasWidget.renameNode(oldId, newId);
-            this.canvasWidget.selectEntryById(newId);
-        }
         return true;
     }
 

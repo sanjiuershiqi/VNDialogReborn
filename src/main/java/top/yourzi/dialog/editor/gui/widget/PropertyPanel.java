@@ -95,7 +95,7 @@ public class PropertyPanel extends AbstractWidget {
     }
 
     /**
-     * 宿主重设面板几何后重建页面布局（画布模式停靠宽度变化 / 窗口缩放时调用）。
+     * 宿主重设面板几何后重建页面布局（窗口缩放或检查器宽度变化时调用）。
      * 页面控件坐标在 init 时固定，故需重新 init + 重绑当前节点数据。
      */
     public void relayout() {

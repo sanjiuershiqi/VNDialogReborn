@@ -9,7 +9,6 @@ import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
-import top.yourzi.dialog.Dialog;
 import top.yourzi.dialog.editor.gui.EditorRenderHelper;
 import top.yourzi.dialog.editor.gui.EditorScreenState;
 import top.yourzi.dialog.editor.gui.InputDialogScreen;
@@ -488,18 +487,6 @@ public class DialogTreeWidget extends AbstractWidget {
         } catch (Exception ignored) {
             return value.toString();
         }
-    }
-
-    private String summary(DialogEntry entry) {
-        String speaker = plain(entry.getSpeaker()).replace('\n', ' ').trim();
-        String text = plain(entry.getText()).replace('\n', ' ').trim();
-        if (speaker.isEmpty()) {
-            speaker = "-";
-        }
-        if (text.isEmpty()) {
-            text = Component.translatable("gui.vn_edit.tree.empty_text").getString();
-        }
-        return speaker + "  |  " + text;
     }
 
     private int visibleHeight() {

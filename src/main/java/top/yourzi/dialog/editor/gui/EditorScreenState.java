@@ -1,8 +1,5 @@
 package top.yourzi.dialog.editor.gui;
 
-import java.util.HashMap;
-import java.util.Map;
-
 /**
  * 编辑器跨屏 UI 状态单例（借鉴 Sparkle-Morpher 的 ModelPanelState）。
  *
@@ -24,14 +21,6 @@ public final class EditorScreenState {
     private int treeScrollOffset = 0;
     /** 对话树搜索文本（重建后回填，借鉴 Sparkle ModelPanelState）。 */
     private String treeSearchText = "";
-    /** 主编辑器当前视图：false=大纲（树列表） true=节点画布。 */
-    private boolean canvasMode = false;
-    /**
-     * 画布节点坐标缓存：序列 ID → (节点 ID → [x, y] 世界坐标)。
-     * 节点位置不属于 JSON 数据模型，仅作为编辑器会话状态保存在内存中；
-     * 切换序列/重建控件后恢复，编辑器关闭即丢弃（reset 清空）。
-     */
-    private final Map<String, Map<String, int[]>> canvasLayouts = new HashMap<>();
 
     private EditorScreenState() {
     }
@@ -72,33 +61,11 @@ public final class EditorScreenState {
         this.treeSearchText = text == null ? "" : text;
     }
 
-    public boolean isCanvasMode() {
-        return canvasMode;
-    }
-
-    public void setCanvasMode(boolean canvasMode) {
-        this.canvasMode = canvasMode;
-    }
-
-    /** 获取指定序列的画布布局（无则返回空 Map，不创建）。 */
-    public Map<String, int[]> getCanvasLayout(String sequenceId) {
-        return canvasLayouts.getOrDefault(sequenceId, new HashMap<>());
-    }
-
-    /** 覆盖指定序列的画布布局（整体替换，由画布在节点移动后写回）。 */
-    public void setCanvasLayout(String sequenceId, Map<String, int[]> layout) {
-        if (sequenceId != null) {
-            canvasLayouts.put(sequenceId, new HashMap<>(layout));
-        }
-    }
-
     /** 编辑器整体关闭时清空所有状态，下次打开为初始状态。 */
     public void reset() {
         this.activePropertyTab = 0;
         this.selectedNodeId = null;
         this.treeScrollOffset = 0;
         this.treeSearchText = "";
-        this.canvasMode = false;
-        this.canvasLayouts.clear();
     }
 }

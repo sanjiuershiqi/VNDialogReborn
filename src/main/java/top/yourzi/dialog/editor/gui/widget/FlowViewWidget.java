@@ -99,7 +99,17 @@ public class FlowViewWidget extends AbstractWidget {
     }
 
     private String searchableText(DialogEntry entry) {
-        return (entry.getId() + " " + plain(entry.getSpeaker()) + " " + plain(entry.getText())).toLowerCase(Locale.ROOT);
+        StringBuilder text = new StringBuilder(entry.getId() == null ? "" : entry.getId())
+                .append(' ').append(plain(entry.getSpeaker())).append(' ').append(plain(entry.getText()));
+        if (entry.getOptions() != null) {
+            for (DialogOption option : entry.getOptions()) {
+                if (option != null) {
+                    text.append(' ').append(plain(option.getText())).append(' ')
+                            .append(option.getTargetId() == null ? "" : option.getTargetId());
+                }
+            }
+        }
+        return text.toString().toLowerCase(Locale.ROOT);
     }
 
     /** 为整个序列的目标节点分配稳定颜色，避免每个节点的选项从绿色重新开始。 */
@@ -176,6 +186,9 @@ public class FlowViewWidget extends AbstractWidget {
         g.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + HEADER_HEIGHT, EditorTheme.BG_ELEVATED);
         g.drawString(this.font, Component.translatable("gui.vn_edit.flow.title"), this.getX() + 8, this.getY() + 5, EditorTheme.TEXT_WARM, true);
         List<DialogEntry> entries = visibleEntries();
+        Component countLabel = Component.translatable("gui.vn_edit.flow.count", entries.size());
+        g.drawString(this.font, countLabel, this.getX() + this.getWidth() - this.font.width(countLabel) - 10,
+                this.getY() + 5, EditorTheme.TEXT_MUTED);
         this.clampScroll();
         g.enableScissor(this.getX(), this.getY() + HEADER_HEIGHT,
                 this.getX() + this.getWidth(), this.getY() + this.getHeight());
@@ -242,7 +255,9 @@ public class FlowViewWidget extends AbstractWidget {
                 String target = option == null || option.getTargetId() == null || option.getTargetId().isBlank()
                         ? "END" : option.getTargetId();
                 Integer mappedColor = targetColors.get(target);
-                int color = mappedColor == null ? EditorTheme.TEXT_MUTED : mappedColor;
+                int color = mappedColor == null
+                        ? EditorTheme.OPTION_PALETTE[i % EditorTheme.OPTION_PALETTE.length]
+                        : mappedColor;
                 g.fill(this.getX() + 16, optionY + 3, this.getX() + 20, optionY + 13, color);
                 g.drawString(this.font, this.font.plainSubstrByWidth((i + 1) + ". " + optionText,
                         Math.max(40, this.getWidth() - 100)), this.getX() + 25, optionY + 4, EditorTheme.TEXT_SECONDARY);
@@ -268,6 +283,22 @@ public class FlowViewWidget extends AbstractWidget {
             if (mouseY >= y && mouseY < y + h) {
                 if (button == 1 && this.onDelete != null) this.onDelete.accept(entry);
                 if (button == 0) {
+                    int optionY = y + ENTRY_HEIGHT;
+                    if (entry.getOptions() != null && mouseY >= optionY) {
+                        int optionIndex = (int) ((mouseY - optionY) / OPTION_HEIGHT);
+                        if (optionIndex >= 0 && optionIndex < entry.getOptions().length) {
+                            DialogOption option = entry.getOptions()[optionIndex];
+                            String targetId = option == null ? null : option.getTargetId();
+                            DialogEntry target = targetId == null || targetId.isBlank()
+                                    ? null : this.sequence.findEntryById(targetId);
+                            if (target != null) {
+                                this.selectedId = target.getId();
+                                EditorScreenState.get().setSelectedNodeId(this.selectedId);
+                                if (this.onSelect != null) this.onSelect.accept(target);
+                                return true;
+                            }
+                        }
+                    }
                     this.selectedId = entry.getId();
                     EditorScreenState.get().setSelectedNodeId(this.selectedId);
                     if (this.onSelect != null) this.onSelect.accept(entry);

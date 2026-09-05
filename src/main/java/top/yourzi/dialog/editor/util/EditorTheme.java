@@ -55,10 +55,8 @@ public class EditorTheme {
     // 浮层/弹出面板底色：比 BG_SURFACE 更暗一档，与投影配合区分层级（收编 DropdownWidget 硬编码 0xFF181818）
     public static final int POPUP_BG       = 0xFF181818;
 
-    // ===== 画布专用色（节点画布视图） =====
-    public static final int CANVAS_BG      = 0xFF161616;  // 画布底色（比 BG_SURFACE 更深，衬托节点卡片）
-    public static final int EDGE_NEXT      = 0xFF4A9EFF;  // 显式 next 边（与 ACCENT 同值但语义独立）
-    public static final int EDGE_IMPLICIT  = 0xFF707070;  // 隐式顺序边（数组顺序回退，虚线）
+    // ===== 深色预览区域色（立绘预览等非编辑工作区） =====
+    public static final int CANVAS_BG      = 0xFF161616;
     /** 选项边调色板：按选项索引取色，与节点端口圆点一一对应。 */
     public static final int[] OPTION_PALETTE = {
             0xFF6AC46A, 0xFFE0A040, 0xFFE070B8, 0xFF58C8D8,
@@ -84,7 +82,7 @@ public class EditorTheme {
     public static final int TOOLBAR_H    = 24;
     public static final int TAB_BAR_H    = 22;
     public static final int STATUS_H     = 14;
-    /** 导航侧栏需要容纳节点摘要与状态标记，避免 ID/连线目标挤在同一行。 */
+    /** 导航侧栏宽度，兼顾层级缩进与连接目标显示。 */
     public static final int TREE_WIDTH   = 224;
     public static final int TREE_ROW_H   = 14;
     public static final int TREE_INDENT  = 12;
