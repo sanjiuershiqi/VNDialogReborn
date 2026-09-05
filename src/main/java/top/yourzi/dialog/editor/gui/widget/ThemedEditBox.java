@@ -24,23 +24,27 @@ public class ThemedEditBox extends EditBox {
         graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), EditorTheme.BG_DEEPEST);
 
         /*
-         * EditBox's vanilla baseline is calculated from an 8px glyph box.  That
-         * leaves the 16px fields used by compact property rows looking one pixel
-         * too high compared with the 18px fields.  Keep the widget bounds (and
-         * therefore hit testing/layout) unchanged, but nudge the native text,
-         * caret and selection together inside compact fields.  Rendering the
-         * whole native layer in one translated scope is important: moving only
-         * the hint would make the hint/caret disagree when the field receives
-         * focus.
+         * The vanilla baseline is a little too high for the compact fields used
+         * by this editor (especially with CJK glyphs).  Keep the widget bounds
+         * unchanged, but move the complete native layer -- value, hint, caret
+         * and selection -- together.  The scissor is deliberately inside the
+         * border so tall glyphs can never paint into the 1px frame or adjacent
+         * rows.  Moving only the hint would make focused fields disagree with
+         * their caret/selection, so all EditBox rendering uses the same scope.
          */
-        int baselineNudge = this.getHeight() <= 16 ? 1 : 0;
-        if (baselineNudge != 0) {
-            graphics.pose().pushPose();
-            graphics.pose().translate(0.0f, baselineNudge, 0.0f);
-            super.renderWidget(graphics, mouseX, mouseY, partialTick);
-            graphics.pose().popPose();
-        } else {
-            super.renderWidget(graphics, mouseX, mouseY, partialTick);
+        int clipLeft = this.getX() + 1;
+        int clipTop = this.getY() + 1;
+        int clipRight = this.getX() + this.getWidth() - 1;
+        int clipBottom = this.getY() + this.getHeight() - 1;
+        if (clipRight > clipLeft && clipBottom > clipTop) {
+            graphics.enableScissor(clipLeft, clipTop, clipRight, clipBottom);
+        }
+        graphics.pose().pushPose();
+        graphics.pose().translate(0.0f, 1.0f, 0.0f);
+        super.renderWidget(graphics, mouseX, mouseY, partialTick);
+        graphics.pose().popPose();
+        if (clipRight > clipLeft && clipBottom > clipTop) {
+            graphics.disableScissor();
         }
 
         graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + 1, border);
