@@ -47,11 +47,11 @@ public final class DialogValidationScreen extends Screen {
         int top = Math.max(12, (this.height - 260) / 2);
         int buttonY = top + 32;
         this.allButton = EditorButton.builder(Component.translatable("gui.vn_edit.validation.all"), b -> setFilter(Filter.ALL))
-                .bounds(panelX + 10, buttonY, 86, 18).build();
+                .bounds(panelX + 10, buttonY, 86, 18).tone(EditorButton.Tone.LIGHT).build();
         this.errorsButton = EditorButton.builder(Component.translatable("gui.vn_edit.validation.errors"), b -> setFilter(Filter.ERRORS))
-                .bounds(panelX + 100, buttonY, 100, 18).build();
+                .bounds(panelX + 100, buttonY, 100, 18).tone(EditorButton.Tone.NORMAL).build();
         this.warningsButton = EditorButton.builder(Component.translatable("gui.vn_edit.validation.warnings"), b -> setFilter(Filter.WARNINGS))
-                .bounds(panelX + 204, buttonY, 110, 18).build();
+                .bounds(panelX + 204, buttonY, 110, 18).tone(EditorButton.Tone.NORMAL).build();
         this.addRenderableWidget(this.allButton);
         this.addRenderableWidget(this.errorsButton);
         this.addRenderableWidget(this.warningsButton);
@@ -119,12 +119,12 @@ public final class DialogValidationScreen extends Screen {
         EditorRenderHelper.fillWithShadow(graphics, panelX, panelY, panelW, panelH,
                 EditorTheme.BG_SURFACE, EditorTheme.SHADOW_DROP);
         EditorRenderHelper.drawBorder(graphics, panelX, panelY, panelW, panelH, EditorTheme.BORDER_LIGHT);
-        graphics.drawString(this.font, this.title, panelX + 10, panelY + 8, EditorTheme.TEXT_WARM, true);
+        EditorTheme.drawPanelHeader(graphics, this.font, panelX, panelY, panelW, "V", this.title);
         long errors = this.issues.stream().filter(i -> i.severity() == DialogValidator.Severity.ERROR).count();
         long warnings = this.issues.stream().filter(i -> i.severity() == DialogValidator.Severity.WARNING).count();
         String sequenceId = this.sequence == null || this.sequence.getId() == null ? "—" : this.sequence.getId();
         graphics.drawString(this.font, Component.translatable("gui.vn_edit.validation.summary", sequenceId, errors, warnings),
-                panelX + 10, panelY + 20, EditorTheme.TEXT_SECONDARY);
+                panelX + 10, panelY + 32, EditorTheme.TEXT_SECONDARY);
         if (this.filteredIssues().isEmpty()) {
             graphics.drawCenteredString(this.font, Component.translatable("gui.vn_edit.validation.clean"),
                     this.width / 2, panelY + 105, EditorTheme.STATUS_SUCCESS);

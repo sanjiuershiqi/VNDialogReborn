@@ -128,10 +128,32 @@ public class FlowViewWidget extends AbstractWidget {
                     continue;
                 }
                 String targetId = option.getTargetId();
-                colors.putIfAbsent(targetId, EditorTheme.FLOW_TARGET_PALETTE[colors.size() % EditorTheme.FLOW_TARGET_PALETTE.length]);
+                colors.putIfAbsent(targetId, generatedTargetColor(colors.size()));
             }
         }
         return colors;
+    }
+
+    /** Golden angle hues keep arbitrary numbers of targets visually distinct without palette wraparound. */
+    private int generatedTargetColor(int index) {
+        float h = (index * 0.61803398875f) % 1.0f;
+        float s = 0.68f;
+        float v = 0.92f;
+        float r = 0, g = 0, b = 0;
+        float i = (float) Math.floor(h * 6.0f);
+        float f = h * 6.0f - i;
+        float p = v * (1.0f - s);
+        float q = v * (1.0f - f * s);
+        float t = v * (1.0f - (1.0f - f) * s);
+        switch ((int) i % 6) {
+            case 0 -> { r = v; g = t; b = p; }
+            case 1 -> { r = q; g = v; b = p; }
+            case 2 -> { r = p; g = v; b = t; }
+            case 3 -> { r = p; g = q; b = v; }
+            case 4 -> { r = t; g = p; b = v; }
+            default -> { r = v; g = p; b = q; }
+        }
+        return 0xFF000000 | ((int) (r * 255) << 16) | ((int) (g * 255) << 8) | (int) (b * 255);
     }
 
     private String plain(JsonElement value) {
@@ -176,6 +198,16 @@ public class FlowViewWidget extends AbstractWidget {
         return Math.max(0, contentHeight(visibleEntries()) - this.getHeight());
     }
 
+    private int typeColor(DialogEntry entry) {
+        if (entry.isEndDialog()) {
+            return EditorTheme.STATUS_ERROR;
+        }
+        if (entry.hasOptions()) {
+            return EditorTheme.STATUS_WARNING;
+        }
+        return EditorTheme.ACCENT;
+    }
+
     private void clampScroll() {
         this.scrollOffset = Mth.clamp(this.scrollOffset, 0, this.maxScroll());
     }
@@ -183,12 +215,12 @@ public class FlowViewWidget extends AbstractWidget {
     @Override
     protected void renderWidget(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         g.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), EditorTheme.BG_SURFACE);
-        g.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + HEADER_HEIGHT, EditorTheme.BG_ELEVATED);
-        g.drawString(this.font, Component.translatable("gui.vn_edit.flow.title"), this.getX() + 8, this.getY() + 5, EditorTheme.TEXT_WARM, true);
+        EditorTheme.drawPanelHeader(g, this.font, this.getX(), this.getY(), this.getWidth(), "02",
+                Component.translatable("gui.vn_edit.flow.title"));
         List<DialogEntry> entries = visibleEntries();
         Component countLabel = Component.translatable("gui.vn_edit.flow.count", entries.size());
         g.drawString(this.font, countLabel, this.getX() + this.getWidth() - this.font.width(countLabel) - 10,
-                this.getY() + 5, EditorTheme.TEXT_MUTED);
+                this.getY() + 8, EditorTheme.PANEL_LIGHT_MUTED);
         this.clampScroll();
         g.enableScissor(this.getX(), this.getY() + HEADER_HEIGHT,
                 this.getX() + this.getWidth(), this.getY() + this.getHeight());
@@ -229,6 +261,8 @@ public class FlowViewWidget extends AbstractWidget {
                 && mouseY >= y && mouseY < y + h;
         int bg = selected ? EditorTheme.BG_SELECTED : hovered ? EditorTheme.BG_HOVER : EditorTheme.BG_DEEPEST;
         g.fill(this.getX() + 4, y, this.getX() + this.getWidth() - 6, y + ENTRY_HEIGHT, bg);
+        int entryTypeColor = typeColor(entry);
+        g.fill(this.getX() + 4, y, this.getX() + this.getWidth() - 6, y + 2, entryTypeColor);
         Integer incomingColor = targetColors.get(entry.getId());
         if (incomingColor != null) {
             g.fill(this.getX() + 4, y, this.getX() + 7, y + ENTRY_HEIGHT, incomingColor);
@@ -238,7 +272,7 @@ public class FlowViewWidget extends AbstractWidget {
         }
         String marker = entry.getId() != null && entry.getId().equals(this.sequence.getStartId()) ? "START " : "";
         String type = entry.isEndDialog() ? "END" : entry.hasOptions() ? "CHOICE" : "LINE";
-        g.drawString(this.font, marker + type, this.getX() + 12, y + 5, EditorTheme.ACCENT, selected);
+        g.drawString(this.font, marker + type, this.getX() + 12, y + 5, entryTypeColor, selected);
         int idColor = incomingColor == null ? EditorTheme.TEXT_PRIMARY : incomingColor;
         g.drawString(this.font, entry.getId() == null ? "untitled" : entry.getId(), this.getX() + 78, y + 5, idColor, selected);
         String speaker = plain(entry.getSpeaker());
@@ -259,8 +293,9 @@ public class FlowViewWidget extends AbstractWidget {
                         ? EditorTheme.OPTION_PALETTE[i % EditorTheme.OPTION_PALETTE.length]
                         : mappedColor;
                 g.fill(this.getX() + 16, optionY + 3, this.getX() + 20, optionY + 13, color);
-                g.drawString(this.font, this.font.plainSubstrByWidth((i + 1) + ". " + optionText,
-                        Math.max(40, this.getWidth() - 100)), this.getX() + 25, optionY + 4, EditorTheme.TEXT_SECONDARY);
+                g.drawString(this.font, (i + 1) + ".", this.getX() + 25, optionY + 4, color);
+                g.drawString(this.font, this.font.plainSubstrByWidth(optionText,
+                        Math.max(32, this.getWidth() - 104)), this.getX() + 40, optionY + 4, EditorTheme.TEXT_SECONDARY);
                 g.drawString(this.font, this.font.plainSubstrByWidth("-> " + target, 70),
                         this.getX() + this.getWidth() - 80, optionY + 4, color);
                 optionY += OPTION_HEIGHT;

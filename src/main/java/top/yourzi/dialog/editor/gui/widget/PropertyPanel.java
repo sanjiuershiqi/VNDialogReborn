@@ -230,7 +230,9 @@ public class PropertyPanel extends AbstractWidget {
         }
         this.ensureInitialized();
         graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), EditorTheme.BG_SURFACE);
-        int tabX = this.getX();
+        graphics.fill(this.getX(), this.getY(), this.getX() + 30, this.getY() + TAB_HEIGHT, EditorTheme.ACCENT);
+        graphics.drawString(this.font, "03", this.getX() + 8, this.getY() + 5, EditorTheme.PANEL_LIGHT_TEXT, false);
+        int tabX = this.getX() + 30;
         int tabY = this.getY();
         // 第八轮美化：标签 hover lerp 推进（项 4），dt 复用上一帧时间戳
         long nowTab = System.nanoTime();
@@ -329,7 +331,7 @@ public class PropertyPanel extends AbstractWidget {
                 return true;
             }
         }
-        int tabX = this.getX();
+        int tabX = this.getX() + 30;
         int tabY = this.getY();
         for (int i = 0; i < this.tabs.size(); i++) {
             if (mouseX >= tabX && mouseX <= tabX + TAB_WIDTH && mouseY >= tabY && mouseY <= tabY + TAB_HEIGHT) {

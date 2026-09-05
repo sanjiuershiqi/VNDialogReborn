@@ -165,17 +165,20 @@ public class VNDialogEditorScreen extends Screen {
         EditorButton newBtn = EditorButton.builder(Component.translatable("gui.vn_edit.new"), b -> this.onNew())
                 .bounds(btnX, btnY, btnWidth, btnHeight).build();
         EditorButton saveBtn = EditorButton.builder(Component.translatable("gui.vn_edit.save"), b -> this.onSave())
-                .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight).build();
+                .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight)
+                .tone(EditorButton.Tone.PRIMARY).build();
         EditorButton loadBtn = EditorButton.builder(Component.translatable("gui.vn_edit.load"), b -> this.onLoad())
                 .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight).build();
         EditorButton testBtn = EditorButton.builder(Component.translatable("gui.vn_edit.test"), b -> this.onTest())
-                .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight).build();
+                .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight)
+                .tone(EditorButton.Tone.PRIMARY).build();
         EditorButton importBtn = EditorButton.builder(Component.translatable("gui.vn_edit.import"), b -> this.onImport())
                 .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight).build();
         EditorButton propsBtn = EditorButton.builder(Component.translatable("gui.vn_edit.sequence_props"), b -> this.onSequenceProps())
                 .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight).build();
         EditorButton validateBtn = EditorButton.builder(Component.translatable("gui.vn_edit.validation.button"), b -> this.onValidate())
-                .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight).build();
+                .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight)
+                .tone(EditorButton.Tone.LIGHT).build();
         this.addRenderableWidget(newBtn);
         this.addRenderableWidget(saveBtn);
         this.addRenderableWidget(loadBtn);
@@ -204,12 +207,14 @@ public class VNDialogEditorScreen extends Screen {
         int treeY = TOOLBAR_HEIGHT + TAB_BAR_HEIGHT;
         // 保留原有的明确文字按钮，避免新建节点入口变成难以发现的图标。
         this.addNodeBtn = EditorButton.builder(Component.translatable("gui.vn_edit.add_node"), b -> this.onAddNode())
-                .bounds(0, treeY, this.sidebarWidth, EditorTheme.BTN_HEIGHT).build();
+                .bounds(0, treeY, this.sidebarWidth, EditorTheme.PANEL_HEADER_H)
+                .tone(EditorButton.Tone.PRIMARY).build();
         this.addRenderableWidget(this.addNodeBtn);
-        int treeContentY = treeY + EditorTheme.BTN_HEIGHT;
-        int contentHeight = this.height - treeContentY - STATUS_HEIGHT;
+        int treeContentY = treeY;
+        int contentHeight = this.height - treeY - STATUS_HEIGHT;
         // 搜索框单独占一行，保留原有的输入节奏与可读性。
-        this.treeSearchBox = new EditBox(this.font, 0, treeContentY, this.sidebarWidth, 16, Component.translatable("gui.vn_edit.search"));
+        this.treeSearchBox = new EditBox(this.font, 0, treeY + EditorTheme.PANEL_HEADER_H + 2,
+                this.sidebarWidth, 18, Component.translatable("gui.vn_edit.search"));
         this.treeSearchBox.setMaxLength(999999999);
         this.treeSearchBox.setHint(Component.translatable("gui.vn_edit.search_hint"));
         java.util.function.Consumer<String> searchResponder = text -> {
@@ -225,8 +230,8 @@ public class VNDialogEditorScreen extends Screen {
         this.treeSearchBox.setValue(EditorScreenState.get().getTreeSearchText());
         this.treeSearchBox.setResponder(searchResponder);
         this.addRenderableWidget(this.treeSearchBox);
-        int treeWidgetY = treeContentY + 18;
-        int treeWidgetH = contentHeight - 18;
+        int treeWidgetY = treeY + EditorTheme.PANEL_HEADER_H + 22;
+        int treeWidgetH = contentHeight - EditorTheme.PANEL_HEADER_H - 22;
         this.treeWidget = new DialogTreeWidget(0, treeWidgetY, this.sidebarWidth, treeWidgetH, this.font);
         this.treeWidget.setCallbacks(this::onEntrySelected, this::onEntryDelete, this::onEntryAddChild);
         this.addRenderableWidget(this.treeWidget);
@@ -1141,6 +1146,9 @@ public class VNDialogEditorScreen extends Screen {
         int contentBottom = this.height - STATUS_HEIGHT;
         // 顶部工具栏、标签栏和工作区使用连续的色带与分隔线，避免控件像漂浮在黑底上。
         graphics.fill(0, 0, this.width, TOOLBAR_HEIGHT, EditorTheme.BG_SURFACE);
+        graphics.fill(0, 0, 5, TOOLBAR_HEIGHT, EditorTheme.ACCENT);
+        EditorTheme.drawHatch(graphics, Math.max(0, this.width - 100), 0, 100, TOOLBAR_HEIGHT,
+                EditorTheme.ACCENT_TINT);
         graphics.fill(0, TOOLBAR_HEIGHT - 1, this.width, TOOLBAR_HEIGHT, EditorTheme.BORDER);
         int clipRight = this.width - TAB_AREA_RIGHT_MARGIN;
         int tabBarTop = TOOLBAR_HEIGHT;
@@ -1149,6 +1157,7 @@ public class VNDialogEditorScreen extends Screen {
         graphics.fill(0, tabBarTop, this.width, tabBarBottom, EditorTheme.BG_ELEVATED);
         graphics.fill(0, tabBarBottom - 1, this.width, tabBarBottom, EditorTheme.BORDER);
         graphics.fill(0, this.height - STATUS_HEIGHT, this.width, this.height, EditorTheme.BG_SURFACE);
+        graphics.fill(0, this.height - STATUS_HEIGHT, this.width, this.height - STATUS_HEIGHT + 1, EditorTheme.ACCENT_DIM);
         // 三段式工作区的固定分隔线：导航 / 中央工作区 / 检查器。
         graphics.fill(this.sidebarWidth, contentTop, this.sidebarWidth + 1, contentBottom, EditorTheme.BORDER);
         if (this.propertyPanel != null && this.propertyPanel.visible) {

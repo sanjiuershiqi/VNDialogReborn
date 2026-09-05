@@ -42,7 +42,7 @@ public class InputDialogScreen extends Screen {
                 this.onConfirm.accept(result);
             }
             this.onClose();
-        }).bounds(this.width / 2 - 55, y, 110, 20).build());
+        }).bounds(this.width / 2 - 55, y, 110, 20).tone(EditorButton.Tone.PRIMARY).build());
         this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.cancel"), btn -> this.onClose())
                 .bounds(this.width / 2 + 65, y, 50, 20).build());
     }

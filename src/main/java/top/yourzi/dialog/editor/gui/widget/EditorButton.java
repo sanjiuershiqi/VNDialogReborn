@@ -15,6 +15,13 @@ import top.yourzi.dialog.editor.util.EditorTheme;
  * 保持与原生 Button 相同的 builder 模式和事件接口，便于直接替换。
  */
 public class EditorButton extends AbstractButton {
+    public enum Tone { NORMAL, PRIMARY, LIGHT }
+    private Tone tone = Tone.NORMAL;
+
+    public EditorButton tone(Tone tone) {
+        this.tone = tone;
+        return this;
+    }
     private OnPress onPress;
     private boolean focused = false;
     /** hover 渐变进度（0=未 hover，1=hover），每帧 lerp 推进，避免布尔硬切换跳变。借鉴 Sparkle blendBg。 */
@@ -65,8 +72,12 @@ public class EditorButton extends AbstractButton {
         } else {
             bgColor = EditorRenderHelper.lerpColor(EditorTheme.BG_ELEVATED, EditorTheme.BG_HOVER, this.hoverProgress);
         }
-        // 第八轮美化：圆角填充（radius=2），边缘柔和
-        EditorRenderHelper.fillRoundedRect(graphics, x, y, w, h, 2, bgColor);
+        if (this.active && this.tone != Tone.NORMAL) {
+            bgColor = this.tone == Tone.PRIMARY ? EditorTheme.ACCENT : EditorTheme.PANEL_LIGHT;
+            bgColor = EditorRenderHelper.lerpColor(bgColor, EditorTheme.TEXT_PRIMARY, this.hoverProgress * 0.25f);
+        }
+        // Square industrial controls retain the familiar text labels and generous hit area.
+        graphics.fill(x, y, x + w, y + h, bgColor);
 
         // 边框：lerp 从 BORDER 渐变到 ACCENT
         int borderColor = !this.active ? EditorTheme.BORDER
@@ -75,6 +86,10 @@ public class EditorButton extends AbstractButton {
         graphics.fill(x, y + h - 1, x + w, y + h, borderColor);
         graphics.fill(x, y, x + 1, y + h, borderColor);
         graphics.fill(x + w - 1, y, x + w, y + h, borderColor);
+        if (w >= 30) {
+            graphics.fill(x + 3, y + h - 4, x + 6, y + h - 3,
+                    this.tone == Tone.NORMAL ? EditorTheme.ACCENT_DIM : EditorTheme.PANEL_LIGHT_TEXT);
+        }
 
         // 计算文字颜色：根据按钮状态
         int textColor;
@@ -85,8 +100,9 @@ public class EditorButton extends AbstractButton {
         } else {
             textColor = EditorTheme.TEXT_SECONDARY;
         }
+        if (this.active && this.tone != Tone.NORMAL) textColor = EditorTheme.PANEL_LIGHT_TEXT;
         // 第八轮美化：hover 时文字加阴影，让文字在背景变化时更"浮出"
-        boolean textShadow = this.active && this.isHoveredOrFocused();
+        boolean textShadow = false;
 
         // 使用原版滚动文字渲染：文字超长时自动滚动（与原版 Button 行为一致）
         // drawCenteredString 内部的 Font.draw 会优先使用 Component 自带的 Style 颜色，
@@ -97,7 +113,7 @@ public class EditorButton extends AbstractButton {
         int padding = 2;
         int availW = w - padding * 2;
 
-        if (textW > availW) {
+        if (textW > availW && this.isHoveredOrFocused()) {
             // 文字超长：使用滚动渲染（模拟原版按钮行为）
             int scrollAmount = textW - availW;
             double time = (double) System.currentTimeMillis() / 1000.0;
@@ -107,6 +123,9 @@ public class EditorButton extends AbstractButton {
             graphics.enableScissor(x + padding, y + 1, x + w - padding, y + h - 1);
             graphics.drawString(font, message, x + padding - (int) offset, textY, textColor, textShadow);
             graphics.disableScissor();
+        } else if (textW > availW) {
+            String label = font.plainSubstrByWidth(message.getString(), Math.max(1, availW - font.width("…"))) + "…";
+            graphics.drawString(font, label, x + padding, textY, textColor, false);
         } else {
             // 文字不超长：居中显示（drawCenteredString 无 shadow 重载，用 drawString 手动居中）
             int cx = x + (w - textW) / 2;
@@ -187,10 +206,18 @@ public class EditorButton extends AbstractButton {
             return this;
         }
 
+        public Builder tone(Tone tone) {
+            this.tone = tone == null ? Tone.NORMAL : tone;
+            return this;
+        }
+
         public EditorButton build() {
             EditorButton btn = new EditorButton(this.x, this.y, this.width, this.height, this.message, this.onPress);
             btn.active = this.active;
+            btn.tone = this.tone;
             return btn;
         }
+
+        private Tone tone = Tone.NORMAL;
     }
 }

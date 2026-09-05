@@ -42,7 +42,8 @@ public class EditorConfirmScreen extends Screen {
         int btnW = 90;
         int btnH = 18;
         this.addRenderableWidget(EditorButton.builder(this.confirmLabel, btn -> this.finish(true))
-                .bounds(this.width / 2 - btnW - 4, btnY, btnW, btnH).build());
+                .bounds(this.width / 2 - btnW - 4, btnY, btnW, btnH)
+                .tone(EditorButton.Tone.PRIMARY).build());
         this.addRenderableWidget(EditorButton.builder(this.cancelLabel, btn -> this.finish(false))
                 .bounds(this.width / 2 + 4, btnY, btnW, btnH).build());
     }

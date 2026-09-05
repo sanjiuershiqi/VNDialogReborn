@@ -448,6 +448,12 @@ public class DialogTreeWidget extends AbstractWidget {
         return "\u25cb";
     }
 
+    private int getTypeColor(DialogEntry entry) {
+        if (entry.isEndDialog()) return EditorTheme.STATUS_ERROR;
+        if (entry.hasOptions()) return EditorTheme.STATUS_WARNING;
+        return EditorTheme.ACCENT_CYAN;
+    }
+
     private String getConnectionInfo(DialogEntry entry) {
         DialogOption[] options;
         StringBuilder sb = new StringBuilder();
@@ -573,6 +579,8 @@ public class DialogTreeWidget extends AbstractWidget {
                     graphics.drawString(this.font, connectionInfo, infoX, rowY + 2, EditorTheme.TEXT_MUTED);
                 }
             }
+            graphics.fill(this.getX() + 2, rowY + 3, this.getX() + 4, rowY + ROW_HEIGHT - 3,
+                    getTypeColor(node.entry));
             DialogValidator.Severity severity = severityById.get(node.entry.getId());
             if (severity != null) {
                 int badgeColor = severity == DialogValidator.Severity.ERROR ? EditorTheme.STATUS_ERROR : EditorTheme.STATUS_WARNING;
