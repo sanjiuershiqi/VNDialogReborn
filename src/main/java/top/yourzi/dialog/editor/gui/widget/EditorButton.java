@@ -88,7 +88,7 @@ public class EditorButton extends AbstractButton {
         graphics.fill(x + w - 1, y, x + w, y + h, borderColor);
         if (w >= 30) {
             graphics.fill(x + 3, y + h - 4, x + 6, y + h - 3,
-                    this.tone == Tone.NORMAL ? EditorTheme.ACCENT_DIM : EditorTheme.PANEL_LIGHT_TEXT);
+                    this.tone == Tone.PRIMARY ? EditorTheme.PANEL_LIGHT_TEXT : EditorTheme.ACCENT_DIM);
         }
 
         // 计算文字颜色：根据按钮状态
@@ -100,7 +100,11 @@ public class EditorButton extends AbstractButton {
         } else {
             textColor = EditorTheme.TEXT_SECONDARY;
         }
-        if (this.active && this.tone != Tone.NORMAL) textColor = EditorTheme.PANEL_LIGHT_TEXT;
+        if (this.active && this.tone == Tone.PRIMARY) {
+            textColor = EditorTheme.PANEL_LIGHT_TEXT;
+        } else if (this.active && this.tone == Tone.LIGHT) {
+            textColor = EditorTheme.TEXT_PRIMARY;
+        }
         // 第八轮美化：hover 时文字加阴影，让文字在背景变化时更"浮出"
         boolean textShadow = false;
 

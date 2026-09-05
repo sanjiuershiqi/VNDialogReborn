@@ -143,9 +143,9 @@ public class DropdownWidget extends AbstractWidget {
         float targetHover = this.isHovered() ? 1f : 0f;
         this.hoverProgress = EditorRenderHelper.tickProgress(this.hoverProgress, targetHover, dt);
 
-        // 按钮条：lerp 背景从 BG_ELEVATED 到 BG_HOVER，圆角填充
+        // 按钮条：与 ThemedEditBox/EditorButton 使用相同的方角石墨控件。
         int bg = EditorRenderHelper.lerpColor(EditorTheme.BG_ELEVATED, EditorTheme.BG_HOVER, this.hoverProgress);
-        EditorRenderHelper.fillRoundedRect(graphics, this.getX(), this.getY(), this.getWidth(), this.getHeight(), 2, bg);
+        graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), bg);
         String text = this.selectedIndex >= 0 ? this.items.get(this.selectedIndex) : "";
         if (text.length() > 20) {
             text = text.substring(0, 17) + "...";
@@ -154,13 +154,8 @@ public class DropdownWidget extends AbstractWidget {
         boolean textShadow = this.hoverProgress > 0.5f;
         graphics.drawString(this.font, text, this.getX() + 3, this.getY() + (this.getHeight() - 8) / 2, EditorTheme.TEXT_PRIMARY, textShadow);
         graphics.drawString(this.font, this.expanded ? "\u25b2" : "\u25bc", this.getX() + this.getWidth() - 10, this.getY() + (this.getHeight() - 8) / 2, EditorTheme.TEXT_MUTED);
-        // 聚焦时 ACCENT 描边（与 EditorButton 一致），未展开时显示，展开时浮层已有边框
-        if (this.isFocused() && !this.expanded) {
-            graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + 1, EditorTheme.ACCENT);
-            graphics.fill(this.getX(), this.getY() + this.getHeight() - 1, this.getX() + this.getWidth(), this.getY() + this.getHeight(), EditorTheme.ACCENT);
-            graphics.fill(this.getX(), this.getY(), this.getX() + 1, this.getY() + this.getHeight(), EditorTheme.ACCENT);
-            graphics.fill(this.getX() + this.getWidth() - 1, this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), EditorTheme.ACCENT);
-        }
+        int border = this.isFocused() ? EditorTheme.ACCENT : EditorTheme.BORDER;
+        EditorRenderHelper.drawBorder(graphics, this.getX(), this.getY(), this.getWidth(), this.getHeight(), border);
 
         // 展开时自渲染浮层（父容器已通过 onPopupToggle 跳过 scissor）
         if (this.expanded && this.visible && !this.items.isEmpty()) {
