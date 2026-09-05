@@ -2,6 +2,7 @@ package top.yourzi.dialog.editor.gui;
 
 import net.minecraft.client.gui.GuiGraphics;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
+import top.yourzi.dialog.editor.gui.widget.ThemedEditBox;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -31,7 +32,7 @@ public class InputDialogScreen extends Screen {
         int fieldWidth = 200;
         int fieldX = (this.width - fieldWidth) / 2;
         int y = 40;
-        this.inputBox = new EditBox(this.font, fieldX, y, fieldWidth, 20, Component.empty());
+        this.inputBox = new ThemedEditBox(this.font, fieldX, y, fieldWidth, 20, Component.empty());
         this.inputBox.setMaxLength(999999999);
         this.inputBox.setValue(this.initialValue);
         this.addRenderableWidget(this.inputBox);

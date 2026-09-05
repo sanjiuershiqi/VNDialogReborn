@@ -31,15 +31,15 @@ public final class EditorRenderHelper {
     }
 
     /**
-     * 为列表中聚焦的 EditBox 画 ACCENT 1px 描边。
-     * 原生 EditBox 在暗色主题下聚焦仅靠光标闪烁，对比度不足；此方法在 render 末尾叠加描边，
-     * 让键盘/高缩放用户清晰辨认焦点落点。与 EditorButton/DropdownWidget 聚焦描边风格统一。
-     * 各 Screen render 末尾传入 this.children() 调用一次即可。
+     * 统一所有原生 EditBox 的边框语义：未聚焦使用金属灰，聚焦使用终末地黄。
+     * 这样原生输入框也会遵守编辑器组件契约，不再出现旧黑框与新模块头混用。
      */
     public static void drawFocusedEditBoxBorders(GuiGraphics g, List<? extends GuiEventListener> children) {
         for (GuiEventListener child : children) {
             if (child instanceof EditBox box && box.isFocused() && box.isVisible()) {
                 drawBorder(g, box.getX(), box.getY(), box.getWidth(), box.getHeight(), EditorTheme.ACCENT);
+            } else if (child instanceof EditBox box && box.isVisible()) {
+                drawBorder(g, box.getX(), box.getY(), box.getWidth(), box.getHeight(), EditorTheme.BORDER);
             }
         }
     }

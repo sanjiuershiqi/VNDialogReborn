@@ -11,6 +11,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import top.yourzi.dialog.Dialog;
 import top.yourzi.dialog.editor.gui.widget.DropdownWidget;
+import top.yourzi.dialog.editor.gui.widget.ThemedEditBox;
 import top.yourzi.dialog.editor.gui.BuiltInTextureBrowserScreen;
 import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.editor.util.EditorTheme;
@@ -218,7 +219,7 @@ public class PortraitListScreen extends Screen {
         });
         // 动画类型有 9 项，超过默认 MAX_VISIBLE=8，需显示全部避免闪光选项被滚动隐藏
         this.animDropdown.setMaxVisible(ANIM_ITEMS.size());
-        this.sizeBox = this.addRenderableWidget(new EditBox(this.font, 0, 0, 80, 16, Component.translatable("gui.vn_edit.size")));
+        this.sizeBox = this.addRenderableWidget(new ThemedEditBox(this.font, 0, 0, 80, 16, Component.translatable("gui.vn_edit.size")));
         this.sizeBox.setMaxLength(10);
         this.sizeBox.setResponder(s -> {
             PortraitInfo info = this.getSelected();
@@ -230,7 +231,7 @@ public class PortraitListScreen extends Screen {
                 }
             }
         });
-        this.brightnessBox = this.addRenderableWidget(new EditBox(this.font, 0, 0, 80, 16, Component.translatable("gui.vn_edit.brightness")));
+        this.brightnessBox = this.addRenderableWidget(new ThemedEditBox(this.font, 0, 0, 80, 16, Component.translatable("gui.vn_edit.brightness")));
         this.brightnessBox.setMaxLength(10);
         this.brightnessBox.setResponder(s -> {
             PortraitInfo info = this.getSelected();
@@ -242,7 +243,7 @@ public class PortraitListScreen extends Screen {
                 }
             }
         });
-        this.offsetXBox = this.addRenderableWidget(new EditBox(this.font, 0, 0, 80, 16, Component.translatable("gui.vn_edit.offset_x")));
+        this.offsetXBox = this.addRenderableWidget(new ThemedEditBox(this.font, 0, 0, 80, 16, Component.translatable("gui.vn_edit.offset_x")));
         this.offsetXBox.setMaxLength(10);
         this.offsetXBox.setResponder(s -> {
             PortraitInfo info = this.getSelected();
@@ -254,7 +255,7 @@ public class PortraitListScreen extends Screen {
                 }
             }
         });
-        this.offsetYBox = this.addRenderableWidget(new EditBox(this.font, 0, 0, 80, 16, Component.translatable("gui.vn_edit.offset_y")));
+        this.offsetYBox = this.addRenderableWidget(new ThemedEditBox(this.font, 0, 0, 80, 16, Component.translatable("gui.vn_edit.offset_y")));
         this.offsetYBox.setMaxLength(10);
         this.offsetYBox.setResponder(s -> {
             PortraitInfo info = this.getSelected();

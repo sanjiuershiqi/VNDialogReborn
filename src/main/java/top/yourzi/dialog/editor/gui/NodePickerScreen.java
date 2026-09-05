@@ -3,6 +3,7 @@ package top.yourzi.dialog.editor.gui;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
+import top.yourzi.dialog.editor.gui.widget.ThemedEditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import top.yourzi.dialog.editor.util.EditorTheme;
@@ -52,7 +53,7 @@ public class NodePickerScreen extends Screen {
             }
         }
         // 搜索框：居中，宽 200，过滤节点列表
-        this.searchBox = new EditBox(this.font, this.width / 2 - 100, 34, 200, 18, Component.translatable("gui.vn_edit.search"));
+        this.searchBox = new ThemedEditBox(this.font, this.width / 2 - 100, 34, 200, 18, Component.translatable("gui.vn_edit.search"));
         this.searchBox.setMaxLength(999999999);
         this.searchBox.setHint(Component.translatable("gui.vn_edit.search_hint"));
         this.searchBox.setResponder(text -> { lastSearchText = text; this.applyFilter(); });

@@ -4,6 +4,7 @@ import com.google.gson.JsonPrimitive;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
+import top.yourzi.dialog.editor.gui.widget.ThemedEditBox;
 import top.yourzi.dialog.editor.gui.widget.BooleanOptionRow;
 import top.yourzi.dialog.editor.gui.property.Option;
 import net.minecraft.client.gui.components.EditBox;
@@ -78,7 +79,7 @@ public class OptionEditScreen extends Screen {
         // 选项文本：标签在输入框上方 LABEL_GAP
         this.textLabelY = cursorY;
         this.textBoxY = cursorY + LABEL_GAP;
-        this.textBox = new EditBox(this.font, fieldX, textBoxY, FIELD_WIDTH, INPUT_HEIGHT, Component.translatable("gui.vn_edit.option_text"));
+        this.textBox = new ThemedEditBox(this.font, fieldX, textBoxY, FIELD_WIDTH, INPUT_HEIGHT, Component.translatable("gui.vn_edit.option_text"));
         this.textBox.setMaxLength(999999999);
         this.textBox.setValue(this.draftText);
         this.addRenderableWidget(this.textBox);
@@ -105,7 +106,7 @@ public class OptionEditScreen extends Screen {
         // 可见性命令：标签在输入框上方
         this.visibilityLabelY = cursorY;
         this.visibilityBoxY = cursorY + LABEL_GAP;
-        this.visibilityCommandBox = new EditBox(this.font, fieldX, visibilityBoxY, FIELD_WIDTH, INPUT_HEIGHT, Component.translatable("gui.vn_edit.visibility_command"));
+        this.visibilityCommandBox = new ThemedEditBox(this.font, fieldX, visibilityBoxY, FIELD_WIDTH, INPUT_HEIGHT, Component.translatable("gui.vn_edit.visibility_command"));
         this.visibilityCommandBox.setMaxLength(999999999);
         this.visibilityCommandBox.setValue(this.draftVisibilityCommand != null ? this.draftVisibilityCommand : "");
         this.visibilityCommandBox.setVisible(!this.isAlwaysVisible());
@@ -184,7 +185,7 @@ public class OptionEditScreen extends Screen {
     private void addCommand(String initialValue) {
         int idx = this.commandBoxes.size();
         int rowY = this.commandListY + idx * COMMAND_ROW_HEIGHT;
-        EditBox box = new EditBox(this.font, this.width / 2 - 100, rowY, 170, 16, Component.translatable("gui.vn_edit.command"));
+        EditBox box = new ThemedEditBox(this.font, this.width / 2 - 100, rowY, 170, 16, Component.translatable("gui.vn_edit.command"));
         box.setMaxLength(999999999);
         box.setValue(initialValue);
         this.commandBoxes.add(box);

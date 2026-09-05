@@ -13,6 +13,7 @@ import top.yourzi.dialog.editor.gui.NodePickerScreen;
 import top.yourzi.dialog.editor.gui.OptionEditScreen;
 import top.yourzi.dialog.editor.gui.widget.BooleanOptionRow;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
+import top.yourzi.dialog.editor.gui.widget.ThemedEditBox;
 import top.yourzi.dialog.editor.util.AudioPreviewPlayer;
 import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.editor.util.EditorTheme;
@@ -129,7 +130,7 @@ public class LogicPropertyPage extends AbstractPropertyPage {
         int audioFolderW = 25;
         int audioBtnsTotal = audioBrowseW + audioPlayW + audioFolderW + EditorTheme.GAP * 3;
         int audioBoxW = Math.max(50, fieldW - audioBtnsTotal);
-        this.audioPathBox = new EditBox(this.font, fieldX, audioY, audioBoxW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.audio_path"));
+        this.audioPathBox = new ThemedEditBox(this.font, fieldX, audioY, audioBoxW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.audio_path"));
         this.audioPathBox.setMaxLength(999999999);
         this.audioPathBox.setResponder(s -> {
             if (this.currentEntry != null) {
@@ -156,7 +157,7 @@ public class LogicPropertyPage extends AbstractPropertyPage {
         this.visibilityHeaderY = layout.section();
         int visY = layout.fieldRow();
         this.visibilityLabelY = visY + 4;
-        this.visibilityCommandBox = new EditBox(this.font, fieldX, visY, fieldW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.visibility_command"));
+        this.visibilityCommandBox = new ThemedEditBox(this.font, fieldX, visY, fieldW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.visibility_command"));
         this.visibilityCommandBox.setMaxLength(999999999);
         this.visibilityCommandBox.setResponder(s -> {
             if (this.currentEntry != null) {
@@ -334,7 +335,7 @@ public class LogicPropertyPage extends AbstractPropertyPage {
         for (int i = 0; i < cmds.size(); i++) {
             int idx = i;
             int rowY = this.commandListStartY + i * (COMMAND_ROW_HEIGHT + EditorTheme.ROW_GAP);
-            EditBox box = new EditBox(this.font, fieldX, rowY, boxW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.command"));
+            EditBox box = new ThemedEditBox(this.font, fieldX, rowY, boxW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.command"));
             box.setMaxLength(999999999);
             box.setValue(cmds.get(i));
             box.setResponder(s -> { this.updateCommand(idx, s); this.notifyDirty(); });
@@ -537,19 +538,19 @@ public class LogicPropertyPage extends AbstractPropertyPage {
             int idx = i;
             DisplayItemInfo item = items.get(i);
             int rowY = this.displayItemsStartY + i * (COMMAND_ROW_HEIGHT + EditorTheme.ROW_GAP);
-            EditBox idBox = new EditBox(this.font, fieldX, rowY, idBoxW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.item_id"));
+                EditBox idBox = new ThemedEditBox(this.font, fieldX, rowY, idBoxW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.item_id"));
             idBox.setMaxLength(999999999);
             idBox.setValue(item.getItemId() != null ? item.getItemId() : "");
             idBox.setResponder(s -> { this.updateItem(idx, "id", s); this.notifyDirty(); });
             this.itemIdEdits.add(idBox);
             int xCursor = fieldX + idBoxW + EditorTheme.GAP;
-            EditBox countBox = new EditBox(this.font, xCursor, rowY, countBoxW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.count"));
+                EditBox countBox = new ThemedEditBox(this.font, xCursor, rowY, countBoxW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.count"));
             countBox.setMaxLength(5);
             countBox.setValue(String.valueOf(item.getCount()));
             countBox.setResponder(s -> { this.updateItem(idx, "count", s); this.notifyDirty(); });
             this.itemCountEdits.add(countBox);
             xCursor += countBoxW + EditorTheme.GAP;
-            EditBox nbtBox = new EditBox(this.font, xCursor, rowY, nbtBoxW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.nbt"));
+                EditBox nbtBox = new ThemedEditBox(this.font, xCursor, rowY, nbtBoxW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.nbt"));
             nbtBox.setMaxLength(999999999);
             nbtBox.setValue(item.getNbt() != null ? item.getNbt() : "");
             nbtBox.setResponder(s -> { this.updateItem(idx, "nbt", s); this.notifyDirty(); });

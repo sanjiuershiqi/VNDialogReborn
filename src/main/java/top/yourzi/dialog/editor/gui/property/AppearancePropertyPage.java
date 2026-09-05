@@ -14,6 +14,7 @@ import top.yourzi.dialog.editor.gui.PortraitListScreen;
 import top.yourzi.dialog.editor.gui.BuiltInTextureBrowserScreen;
 import top.yourzi.dialog.editor.gui.widget.DropdownWidget;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
+import top.yourzi.dialog.editor.gui.widget.ThemedEditBox;
 import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.editor.util.EditorTheme;
 import top.yourzi.dialog.editor.util.PageLayout;
@@ -97,7 +98,7 @@ public class AppearancePropertyPage extends AbstractPropertyPage {
         int totalBtnW = browseBtnW + builtinBtnW + folderBtnW + EditorTheme.GAP * 3;
         int pathBoxW = Math.max(50, fieldW - totalBtnW);
 
-        this.backgroundPathBox = new EditBox(this.font, fieldX, bgRowY, pathBoxW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.background_path"));
+        this.backgroundPathBox = new ThemedEditBox(this.font, fieldX, bgRowY, pathBoxW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.background_path"));
         this.backgroundPathBox.setMaxLength(999999999);
         this.backgroundPathBox.setResponder(s -> {
             String clean = s.toLowerCase(Locale.ROOT);

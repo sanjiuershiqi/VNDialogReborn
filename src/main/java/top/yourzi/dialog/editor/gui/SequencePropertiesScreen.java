@@ -3,6 +3,7 @@ package top.yourzi.dialog.editor.gui;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
+import top.yourzi.dialog.editor.gui.widget.ThemedEditBox;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -73,7 +74,7 @@ public class SequencePropertiesScreen extends Screen {
         this.titleLabelY = this.layout.currentY();
         int titleY = this.layout.customRow(EditorTheme.FIELD_HEIGHT + 12);
         // customRow 返回行顶部 Y（= 标签 Y），输入框在标签下方 12px，否则标签文字画进输入框里
-        this.titleBox = new EditBox(this.font, fieldX, titleY + 12, FIELD_WIDTH, 16, Component.translatable("gui.vn_edit.sequence_title"));
+        this.titleBox = new ThemedEditBox(this.font, fieldX, titleY + 12, FIELD_WIDTH, 16, Component.translatable("gui.vn_edit.sequence_title"));
         this.titleBox.setMaxLength(999999999);
         this.titleBox.setValue(curTitle != null ? curTitle : (this.sequence.getTitle() != null ? this.sequence.getTitle() : ""));
         this.addRenderableWidget(this.titleBox);
@@ -81,7 +82,7 @@ public class SequencePropertiesScreen extends Screen {
 
         this.descLabelY = this.layout.currentY();
         int descY = this.layout.customRow(EditorTheme.FIELD_HEIGHT + 12);
-        this.descriptionBox = new EditBox(this.font, fieldX, descY + 12, FIELD_WIDTH, 16, Component.translatable("gui.vn_edit.sequence_description"));
+        this.descriptionBox = new ThemedEditBox(this.font, fieldX, descY + 12, FIELD_WIDTH, 16, Component.translatable("gui.vn_edit.sequence_description"));
         this.descriptionBox.setMaxLength(999999999);
         this.descriptionBox.setValue(curDesc != null ? curDesc : (this.sequence.getDescription() != null ? this.sequence.getDescription() : ""));
         this.addRenderableWidget(this.descriptionBox);
@@ -89,7 +90,7 @@ public class SequencePropertiesScreen extends Screen {
 
         this.effectLabelY = this.layout.currentY();
         int effectY = this.layout.customRow(EditorTheme.FIELD_HEIGHT + 12);
-        this.effectBox = new EditBox(this.font, fieldX, effectY + 12, FIELD_WIDTH, 16, Component.translatable("gui.vn_edit.sequence_effect"));
+        this.effectBox = new ThemedEditBox(this.font, fieldX, effectY + 12, FIELD_WIDTH, 16, Component.translatable("gui.vn_edit.sequence_effect"));
         this.effectBox.setMaxLength(999999999);
         this.effectBox.setValue(curEffect != null ? curEffect : (this.sequence.getEffect() != null ? this.sequence.getEffect() : ""));
         this.addRenderableWidget(this.effectBox);
@@ -97,7 +98,7 @@ public class SequencePropertiesScreen extends Screen {
 
         this.startLabelY = this.layout.currentY();
         int startY = this.layout.customRow(EditorTheme.FIELD_HEIGHT + 12);
-        this.startIdBox = new EditBox(this.font, fieldX, startY + 12, FIELD_WIDTH - 60, 16, Component.translatable("gui.vn_edit.sequence_start"));
+        this.startIdBox = new ThemedEditBox(this.font, fieldX, startY + 12, FIELD_WIDTH - 60, 16, Component.translatable("gui.vn_edit.sequence_start"));
         this.startIdBox.setMaxLength(999999999);
         this.startIdBox.setValue(curStart != null ? curStart : (this.sequence.getStartId() != null ? this.sequence.getStartId() : ""));
         this.startIdBox.setResponder(s -> {});

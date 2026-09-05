@@ -293,7 +293,7 @@ public class MultiLineEditBox extends AbstractWidget {
                 } else {
                     // 使用当前样式渲染字符
                     MutableComponent ch = Component.literal(tok.text).setStyle(currentStyle);
-                    g.drawString(font, ch, x, y, 0xFFFFFFFF, false);
+                    g.drawString(font, ch, x, y, EditorTheme.TEXT_PRIMARY, false);
                     x += font.width(ch);
                 }
             }

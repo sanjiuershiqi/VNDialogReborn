@@ -17,6 +17,7 @@ import top.yourzi.dialog.editor.gui.widget.DialogTreeWidget;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import top.yourzi.dialog.editor.gui.widget.FlowViewWidget;
 import top.yourzi.dialog.editor.gui.widget.PropertyPanel;
+import top.yourzi.dialog.editor.gui.widget.ThemedEditBox;
 import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.editor.util.EditorHistory;
 import top.yourzi.dialog.editor.util.EditorTheme;
@@ -213,7 +214,7 @@ public class VNDialogEditorScreen extends Screen {
         int treeContentY = treeY;
         int contentHeight = this.height - treeY - STATUS_HEIGHT;
         // 搜索框单独占一行，保留原有的输入节奏与可读性。
-        this.treeSearchBox = new EditBox(this.font, 0, treeY + EditorTheme.PANEL_HEADER_H + 2,
+        this.treeSearchBox = new ThemedEditBox(this.font, 0, treeY + EditorTheme.PANEL_HEADER_H + 2,
                 this.sidebarWidth, 18, Component.translatable("gui.vn_edit.search"));
         this.treeSearchBox.setMaxLength(999999999);
         this.treeSearchBox.setHint(Component.translatable("gui.vn_edit.search_hint"));

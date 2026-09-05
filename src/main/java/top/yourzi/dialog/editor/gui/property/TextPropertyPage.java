@@ -18,6 +18,7 @@ import net.minecraft.network.chat.TextColor;
 import top.yourzi.dialog.editor.gui.VNDialogEditorScreen;
 import top.yourzi.dialog.editor.gui.widget.EditorButton;
 import top.yourzi.dialog.editor.gui.widget.MultiLineEditBox;
+import top.yourzi.dialog.editor.gui.widget.ThemedEditBox;
 import top.yourzi.dialog.editor.util.EditorConfig;
 import top.yourzi.dialog.editor.util.EditorTheme;
 import top.yourzi.dialog.editor.util.LangFileGenerator;
@@ -95,7 +96,7 @@ public class TextPropertyPage extends AbstractPropertyPage {
         this.speakerHeaderY = layout.section();
         int speakerY = layout.fieldRow();
         this.speakerLabelY = speakerY + 4;
-        this.speakerBox = new EditBox(this.font, fieldX, speakerY, fieldW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.speaker"));
+        this.speakerBox = new ThemedEditBox(this.font, fieldX, speakerY, fieldW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.speaker"));
         this.speakerBox.setMaxLength(999999999);
         this.speakerBox.setEditable(true);
         this.speakerBox.setResponder(s -> {
@@ -121,15 +122,15 @@ public class TextPropertyPage extends AbstractPropertyPage {
         // ===== 翻译分节（翻译模式下显示）=====
         this.translationHeaderY = layout.section();
         int transKeyY = layout.fieldRow();
-        this.translationKeyBox = new EditBox(this.font, fieldX, transKeyY, fieldW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.translation_key"));
+        this.translationKeyBox = new ThemedEditBox(this.font, fieldX, transKeyY, fieldW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.translation_key"));
         this.translationKeyBox.setMaxLength(999999999);
         this.translationKeyBox.setResponder(s -> { this.saveTranslationToEntry(); this.notifyDirty(); });
         int transZhY = layout.fieldRow();
-        this.translationZhCnBox = new EditBox(this.font, fieldX, transZhY, fieldW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.translation_zh_cn"));
+        this.translationZhCnBox = new ThemedEditBox(this.font, fieldX, transZhY, fieldW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.translation_zh_cn"));
         this.translationZhCnBox.setMaxLength(999999999);
         this.translationZhCnBox.setResponder(s -> { this.saveTranslationToEntry(); this.notifyDirty(); });
         int transEnY = layout.fieldRow();
-        this.translationEnUsBox = new EditBox(this.font, fieldX, transEnY, fieldW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.translation_en_us"));
+        this.translationEnUsBox = new ThemedEditBox(this.font, fieldX, transEnY, fieldW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.translation_en_us"));
         this.translationEnUsBox.setMaxLength(999999999);
         this.translationEnUsBox.setResponder(s -> { this.saveTranslationToEntry(); this.notifyDirty(); });
         int genLangY = layout.fieldRow();
@@ -175,7 +176,7 @@ public class TextPropertyPage extends AbstractPropertyPage {
         int hexY = layout.fieldRow();
         this.hexLabelY = hexY + 4;
         int hexBoxW = Math.min(50, fieldW / 3);
-        this.hexColorBox = new EditBox(this.font, fieldX, hexY, hexBoxW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.hex_color"));
+        this.hexColorBox = new ThemedEditBox(this.font, fieldX, hexY, hexBoxW, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.hex_color"));
         this.hexColorBox.setMaxLength(7);
         this.hexColorBox.setValue("#");
         this.applyHexBtn = new EditorButton(fieldX + hexBoxW + gap, hexY, 30, EditorTheme.FIELD_HEIGHT, Component.translatable("gui.vn_edit.apply"), b -> {
