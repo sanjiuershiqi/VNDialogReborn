@@ -71,8 +71,8 @@ public class EditorConfirmScreen extends Screen {
         graphics.fill(panelX, panelY, panelX + 1, panelY + panelH, EditorTheme.BORDER_LIGHT);
         graphics.fill(panelX + panelW - 1, panelY, panelX + panelW, panelY + panelH, EditorTheme.BORDER_LIGHT);
 
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, panelY + 6, EditorTheme.TEXT_PRIMARY);
-        graphics.drawCenteredString(this.font, this.message, this.width / 2, panelY + 22, EditorTheme.TEXT_SECONDARY);
+        EditorTheme.drawPanelHeader(graphics, this.font, panelX, panelY, panelW, "CF", this.title);
+        graphics.drawCenteredString(this.font, this.message, this.width / 2, panelY + 34, EditorTheme.TEXT_SECONDARY);
         super.render(graphics, mouseX, mouseY, partialTick);
     }
 

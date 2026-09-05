@@ -71,7 +71,8 @@ public class FileBrowserScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics, mouseX, mouseY, partialTick);
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, 10, EditorTheme.TEXT_PRIMARY);
+        int panelW = Math.min(420, this.width - 24);
+        EditorTheme.drawPanelHeader(graphics, this.font, (this.width - panelW) / 2, 4, panelW, "FS", this.title);
         int listHeight = this.height - LIST_Y - LIST_BOTTOM_PAD;
         graphics.enableScissor(0, LIST_Y, this.width, LIST_Y + listHeight);
         int yOffset = LIST_Y - this.scrollOffset;

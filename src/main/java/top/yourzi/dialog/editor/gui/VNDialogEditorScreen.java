@@ -171,7 +171,7 @@ public class VNDialogEditorScreen extends Screen {
                 .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight).build();
         EditorButton testBtn = EditorButton.builder(Component.translatable("gui.vn_edit.test"), b -> this.onTest())
                 .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight)
-                .tone(EditorButton.Tone.PRIMARY).build();
+                .tone(EditorButton.Tone.NORMAL).build();
         EditorButton importBtn = EditorButton.builder(Component.translatable("gui.vn_edit.import"), b -> this.onImport())
                 .bounds(btnX += btnWidth + EditorTheme.GAP, btnY, btnWidth, btnHeight).build();
         EditorButton propsBtn = EditorButton.builder(Component.translatable("gui.vn_edit.sequence_props"), b -> this.onSequenceProps())
@@ -206,9 +206,9 @@ public class VNDialogEditorScreen extends Screen {
         this.addRenderableWidget(this.addTabBtn);
         int treeY = TOOLBAR_HEIGHT + TAB_BAR_HEIGHT;
         // 保留原有的明确文字按钮，避免新建节点入口变成难以发现的图标。
-        this.addNodeBtn = EditorButton.builder(Component.translatable("gui.vn_edit.add_node"), b -> this.onAddNode())
+        this.addNodeBtn = EditorButton.builder(Component.literal("01  ").append(Component.translatable("gui.vn_edit.add_node")), b -> this.onAddNode())
                 .bounds(0, treeY, this.sidebarWidth, EditorTheme.PANEL_HEADER_H)
-                .tone(EditorButton.Tone.PRIMARY).build();
+                .tone(EditorButton.Tone.LIGHT).build();
         this.addRenderableWidget(this.addNodeBtn);
         int treeContentY = treeY;
         int contentHeight = this.height - treeY - STATUS_HEIGHT;
@@ -1149,6 +1149,8 @@ public class VNDialogEditorScreen extends Screen {
         graphics.fill(0, 0, 5, TOOLBAR_HEIGHT, EditorTheme.ACCENT);
         EditorTheme.drawHatch(graphics, Math.max(0, this.width - 100), 0, 100, TOOLBAR_HEIGHT,
                 EditorTheme.ACCENT_TINT);
+        graphics.drawString(this.font, "VN // DIALOG EDITOR", Math.max(8, this.width - 148), 11,
+                EditorTheme.TEXT_MUTED, false);
         graphics.fill(0, TOOLBAR_HEIGHT - 1, this.width, TOOLBAR_HEIGHT, EditorTheme.BORDER);
         int clipRight = this.width - TAB_AREA_RIGHT_MARGIN;
         int tabBarTop = TOOLBAR_HEIGHT;

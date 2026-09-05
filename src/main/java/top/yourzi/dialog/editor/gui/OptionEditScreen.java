@@ -217,7 +217,8 @@ public class OptionEditScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics, mouseX, mouseY, partialTick);
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, 10, EditorTheme.TEXT_PRIMARY);
+        int panelW = Math.min(460, this.width - 24);
+        EditorTheme.drawPanelHeader(graphics, this.font, (this.width - panelW) / 2, 4, panelW, "OP", this.title);
         // 用 init() 共享的 Y 字段绘制标签，消除双套游标错位
         graphics.drawString(this.font, Component.translatable("gui.vn_edit.option_text"), this.fieldX, this.textLabelY, EditorTheme.TEXT_SECONDARY);
         graphics.drawString(this.font, Component.translatable("gui.vn_edit.option_target"), this.fieldX, this.targetLabelY, EditorTheme.TEXT_SECONDARY);

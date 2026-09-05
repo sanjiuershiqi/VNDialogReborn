@@ -72,7 +72,8 @@ public class BuiltInTextureBrowserScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics, mouseX, mouseY, partialTick);
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, 10, EditorTheme.TEXT_PRIMARY);
+        int panelW = Math.min(520, this.width - 24);
+        EditorTheme.drawPanelHeader(graphics, this.font, 10, 4, panelW, "TX", this.title);
         int listHeight = this.height - LIST_Y - LIST_BOTTOM_PAD;
         int listWidth = this.width - PREVIEW_SIZE - 30;
         graphics.enableScissor(10, LIST_Y, 10 + listWidth, LIST_Y + listHeight);

@@ -205,7 +205,7 @@ public class FlowViewWidget extends AbstractWidget {
         if (entry.hasOptions()) {
             return EditorTheme.STATUS_WARNING;
         }
-        return EditorTheme.ACCENT;
+        return EditorTheme.ACCENT_CYAN;
     }
 
     private void clampScroll() {

@@ -19,7 +19,7 @@ import java.util.function.Consumer;
  */
 public class NodePickerScreen extends Screen {
     private static final int ROW_HEIGHT = 14;
-    private static final int LIST_TOP = 30;
+    private static final int LIST_TOP = 58;
     private static final int LIST_BOTTOM = 40;
     /** 搜索文本跨屏持久化（NodePicker 是临时屏，静态字段足够，不污染主编辑器状态）。 */
     private static String lastSearchText = "";
@@ -52,7 +52,7 @@ public class NodePickerScreen extends Screen {
             }
         }
         // 搜索框：居中，宽 200，过滤节点列表
-        this.searchBox = new EditBox(this.font, this.width / 2 - 100, 8, 200, 16, Component.translatable("gui.vn_edit.search"));
+        this.searchBox = new EditBox(this.font, this.width / 2 - 100, 34, 200, 18, Component.translatable("gui.vn_edit.search"));
         this.searchBox.setMaxLength(999999999);
         this.searchBox.setHint(Component.translatable("gui.vn_edit.search_hint"));
         this.searchBox.setResponder(text -> { lastSearchText = text; this.applyFilter(); });
@@ -66,7 +66,7 @@ public class NodePickerScreen extends Screen {
         this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.clear_selection"), btn -> {
             this.onSelected.accept("");
             this.onClose();
-        }).bounds(this.width - 90, 8, 80, 18).build());
+        }).bounds(this.width - 90, 34, 80, 18).tone(EditorButton.Tone.LIGHT).build());
         this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.vn_edit.cancel"), btn -> this.onClose())
                 .bounds(this.width / 2 - 50, this.height - 30, 100, 20).build());
     }
@@ -88,7 +88,8 @@ public class NodePickerScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics, mouseX, mouseY, partialTick);
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, 10, EditorTheme.TEXT_PRIMARY);
+        int panelW = Math.min(420, this.width - 24);
+        EditorTheme.drawPanelHeader(graphics, this.font, (this.width - panelW) / 2, 4, panelW, "ND", this.title);
         int listHeight = this.height - LIST_TOP - LIST_BOTTOM;
         graphics.enableScissor(0, LIST_TOP, this.width, LIST_TOP + listHeight);
         int yOffset = LIST_TOP - this.scrollOffset;

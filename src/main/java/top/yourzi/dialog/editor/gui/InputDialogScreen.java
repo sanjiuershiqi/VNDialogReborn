@@ -50,7 +50,8 @@ public class InputDialogScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics, mouseX, mouseY, partialTick);
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, 20, EditorTheme.TEXT_PRIMARY);
+        int panelW = Math.min(360, this.width - 24);
+        EditorTheme.drawPanelHeader(graphics, this.font, (this.width - panelW) / 2, 4, panelW, "IN", this.title);
         super.render(graphics, mouseX, mouseY, partialTick);
         EditorRenderHelper.drawFocusedEditBoxBorders(graphics, this.children());
     }

@@ -25,7 +25,7 @@ public class InventoryItemPickerScreen extends Screen {
     private static final int SLOT_SIZE = 18;
     private static final int COLS = 9;
     private static final int TITLE_Y = 10;
-    private static final int GRID_TOP = 28;
+    private static final int GRID_TOP = 34;
     private static final int GAP_BETWEEN_MAIN_AND_HOTBAR = 4;
     private static final int GAP_BETWEEN_HOTBAR_AND_ARMOR = 8;
 
@@ -57,7 +57,8 @@ public class InventoryItemPickerScreen extends Screen {
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
         this.renderBackground(g, mx, my, pt);
-        g.drawCenteredString(this.font, this.title, this.width / 2, TITLE_Y, EditorTheme.TEXT_PRIMARY);
+        int panelW = Math.min(360, this.width - 24);
+        EditorTheme.drawPanelHeader(g, this.font, (this.width - panelW) / 2, 4, panelW, "IT", this.title);
 
         Inventory inv = Minecraft.getInstance().player.getInventory();
 

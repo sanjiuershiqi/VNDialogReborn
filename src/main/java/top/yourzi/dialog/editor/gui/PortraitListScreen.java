@@ -355,7 +355,7 @@ public class PortraitListScreen extends Screen {
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
         this.renderBackground(g, mx, my, pt);
-        g.drawCenteredString(this.font, this.title, this.width / 2, 10, EditorTheme.TEXT_PRIMARY);
+        EditorTheme.drawPanelHeader(g, this.font, 8, 4, Math.min(this.width - 16, 300), "PR", this.title);
         int contentH = this.height - HEADER - FOOTER;
         // 计算本帧舞台视口：把实际屏幕等比映射到舞台区域，所有渲染共用此视口
         this.viewport = new StageViewport(this.width, this.height, STAGE_X, HEADER, stageWidth(), contentH);

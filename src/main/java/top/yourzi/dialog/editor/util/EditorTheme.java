@@ -14,7 +14,7 @@ public class EditorTheme {
     public static final int BG_SURFACE     = 0xFF171A1B;  // 深色面板
     public static final int BG_ELEVATED    = 0xFF272B2C;  // 工具栏/标题条
     public static final int BG_HOVER       = 0xFF34393A;  // 悬停
-    public static final int BG_SELECTED    = 0xFF3A3A20;  // 黄色选中底
+    public static final int BG_SELECTED    = 0xFF17383A;  // 深青色选中底
     public static final int BORDER         = 0xFF485052;  // 金属灰分隔线
     public static final int BORDER_LIGHT   = 0xFF6E7778;  // 高亮分隔线
     public static final int TEXT_PRIMARY   = 0xFFF4F1E8;

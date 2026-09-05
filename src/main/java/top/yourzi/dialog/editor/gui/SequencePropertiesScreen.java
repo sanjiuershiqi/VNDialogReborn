@@ -156,7 +156,8 @@ public class SequencePropertiesScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics, mouseX, mouseY, partialTick);
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, 10, EditorTheme.TEXT_PRIMARY);
+        int panelW = Math.min(FIELD_WIDTH + 40, this.width - 24);
+        EditorTheme.drawPanelHeader(graphics, this.font, (this.width - panelW) / 2, 4, panelW, "SQ", this.title);
         int fieldX = (this.width - FIELD_WIDTH) / 2;
         // 标签 Y 由 layout 推进得出，与 init 中输入框 Y 自动对齐，无需手写双处 y+=38。
         graphics.drawString(this.font, Component.translatable("gui.vn_edit.sequence_title"), fieldX, this.titleLabelY, EditorTheme.TEXT_SECONDARY);

@@ -44,8 +44,9 @@ public final class DialogValidationScreen extends Screen {
         this.clearWidgets();
         int panelW = Math.min(560, this.width - 24);
         int panelX = (this.width - panelW) / 2;
-        int top = Math.max(12, (this.height - 260) / 2);
-        int buttonY = top + 32;
+        int panelH = Math.min(this.height - 24, 300);
+        int panelY = (this.height - panelH) / 2;
+        int buttonY = panelY + 36;
         this.allButton = EditorButton.builder(Component.translatable("gui.vn_edit.validation.all"), b -> setFilter(Filter.ALL))
                 .bounds(panelX + 10, buttonY, 86, 18).tone(EditorButton.Tone.LIGHT).build();
         this.errorsButton = EditorButton.builder(Component.translatable("gui.vn_edit.validation.errors"), b -> setFilter(Filter.ERRORS))
@@ -63,7 +64,8 @@ public final class DialogValidationScreen extends Screen {
         this.scrollOffset = 0;
         int panelW = Math.min(560, this.width - 24);
         int panelX = (this.width - panelW) / 2;
-        rebuildIssueButtons(panelX, Math.max(12, (this.height - 260) / 2) + 56, panelW);
+        int panelH = Math.min(this.height - 24, 300);
+        rebuildIssueButtons(panelX, (this.height - panelH) / 2 + 60, panelW);
     }
 
     private List<DialogValidator.Issue> filteredIssues() {
@@ -106,7 +108,8 @@ public final class DialogValidationScreen extends Screen {
     }
 
     private int panelTop() {
-        return Math.max(12, (this.height - 260) / 2);
+        int panelH = Math.min(this.height - 24, 300);
+        return (this.height - panelH) / 2;
     }
 
     @Override
@@ -124,7 +127,7 @@ public final class DialogValidationScreen extends Screen {
         long warnings = this.issues.stream().filter(i -> i.severity() == DialogValidator.Severity.WARNING).count();
         String sequenceId = this.sequence == null || this.sequence.getId() == null ? "—" : this.sequence.getId();
         graphics.drawString(this.font, Component.translatable("gui.vn_edit.validation.summary", sequenceId, errors, warnings),
-                panelX + 10, panelY + 32, EditorTheme.TEXT_SECONDARY);
+                panelX + 10, panelY + 28, EditorTheme.TEXT_SECONDARY);
         if (this.filteredIssues().isEmpty()) {
             graphics.drawCenteredString(this.font, Component.translatable("gui.vn_edit.validation.clean"),
                     this.width / 2, panelY + 105, EditorTheme.STATUS_SUCCESS);

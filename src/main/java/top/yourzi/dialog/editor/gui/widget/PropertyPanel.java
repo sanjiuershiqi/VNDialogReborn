@@ -27,6 +27,7 @@ import java.util.List;
  */
 public class PropertyPanel extends AbstractWidget {
     private static final int TAB_HEIGHT = EditorTheme.PROP_TAB_H;
+    private static final int HEADER_HEIGHT = EditorTheme.PANEL_HEADER_H;
     private static final int TAB_WIDTH = EditorTheme.PROP_TAB_W;
     private static final int SCROLLBAR_WIDTH = EditorTheme.SCROLLBAR_W;
     private final List<Tab> tabs = new ArrayList<>();
@@ -149,9 +150,9 @@ public class PropertyPanel extends AbstractWidget {
 
     private void initializePages() {
         int pageX = this.getX() + 4;
-        int pageY = this.getY() + TAB_HEIGHT + 3;
+        int pageY = this.getY() + HEADER_HEIGHT + TAB_HEIGHT + 3;
         int pageWidth = this.getWidth() - 8;
-        int pageHeight = this.getHeight() - TAB_HEIGHT - 6;
+        int pageHeight = this.getHeight() - HEADER_HEIGHT - TAB_HEIGHT - 6;
         for (Tab tab : this.tabs) {
             tab.page.init(pageX, pageY, pageWidth, pageHeight);
             // 为页面内所有下拉框注册浮层回调，展开时跳过内容 scissor
@@ -162,11 +163,11 @@ public class PropertyPanel extends AbstractWidget {
     }
 
     private int getPageTop() {
-        return this.getY() + TAB_HEIGHT + 3;
+        return this.getY() + HEADER_HEIGHT + TAB_HEIGHT + 3;
     }
 
     private int getPageHeight() {
-        return this.getHeight() - TAB_HEIGHT - 6;
+        return this.getHeight() - HEADER_HEIGHT - TAB_HEIGHT - 6;
     }
 
     private int getActiveContentHeight() {
@@ -230,10 +231,10 @@ public class PropertyPanel extends AbstractWidget {
         }
         this.ensureInitialized();
         graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), EditorTheme.BG_SURFACE);
-        graphics.fill(this.getX(), this.getY(), this.getX() + 30, this.getY() + TAB_HEIGHT, EditorTheme.ACCENT);
-        graphics.drawString(this.font, "03", this.getX() + 8, this.getY() + 5, EditorTheme.PANEL_LIGHT_TEXT, false);
-        int tabX = this.getX() + 30;
-        int tabY = this.getY();
+        EditorTheme.drawPanelHeader(graphics, this.font, this.getX(), this.getY(), this.getWidth(), "03",
+                Component.translatable("gui.vn_edit.property"));
+        int tabX = this.getX();
+        int tabY = this.getY() + HEADER_HEIGHT;
         // 第八轮美化：标签 hover lerp 推进（项 4），dt 复用上一帧时间戳
         long nowTab = System.nanoTime();
         float dtTab = this.lastFrameNanos == 0L ? 0f : Math.min(0.1f, (nowTab - this.lastFrameNanos) / 1.0e9f);
@@ -331,8 +332,8 @@ public class PropertyPanel extends AbstractWidget {
                 return true;
             }
         }
-        int tabX = this.getX() + 30;
-        int tabY = this.getY();
+        int tabX = this.getX();
+        int tabY = this.getY() + HEADER_HEIGHT;
         for (int i = 0; i < this.tabs.size(); i++) {
             if (mouseX >= tabX && mouseX <= tabX + TAB_WIDTH && mouseY >= tabY && mouseY <= tabY + TAB_HEIGHT) {
                 this.setActiveTab(i);
