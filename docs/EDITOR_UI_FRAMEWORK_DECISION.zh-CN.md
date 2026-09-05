@@ -163,3 +163,16 @@ Workspace
 > 随模组打包的轻量 retained UI 核心 + NeoForge `GuiGraphics` 默认渲染。
 
 它满足无前置、跨平台、Minecraft 输入兼容和可维护性要求；同时保留未来接入 Skija 文本/矢量渲染的接口，不把整个编辑器锁死在某个原生图形库上。
+
+## 第一阶段实现状态
+
+已加入以下无外部依赖的核心：
+
+- `ui/core/UiRect`：统一矩形、命中测试和内缩；
+- `ui/core/UiStyle`：统一背景、前景、边框、强调色、间距；
+- `ui/core/UiNode`：稳定的父子组件树、可见性和生命周期；
+- `ui/core/UiEvent`：指针、滚轮、键盘和字符事件模型；
+- `ui/core/UiEventRouter`：capture/target/bubble 的入口和唯一拖拽捕获者；
+- `ui/layout/DockLayout`：左侧导航、中间工作区、右侧检查器的响应式计算。
+
+主编辑器已经使用 `DockLayout` 计算三栏宽度，后续控件迁移不再直接依赖散落的窗口比例和 magic number。

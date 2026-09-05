@@ -23,6 +23,7 @@ import top.yourzi.dialog.editor.util.EditorHistory;
 import top.yourzi.dialog.editor.util.EditorTheme;
 import top.yourzi.dialog.editor.util.TextureCacheService;
 import top.yourzi.dialog.editor.validation.DialogValidator;
+import top.yourzi.dialog.editor.ui.layout.DockLayout;
 import top.yourzi.dialog.model.DialogEntry;
 import top.yourzi.dialog.model.DialogOption;
 import top.yourzi.dialog.model.DialogSequence;
@@ -51,6 +52,7 @@ public class VNDialogEditorScreen extends Screen {
     private int sidebarWidth = EditorTheme.TREE_WIDTH;
     /** 当前窗口的检查器宽度；停靠时保留中心工作区的最小可用宽度。 */
     private int inspectorWidth = 300;
+    private final DockLayout dockLayout = new DockLayout();
     private static final int TAB_AREA_LEFT = 2;
     private static final int TAB_AREA_RIGHT_MARGIN = 56;
     private static final int MAX_TAB_WIDTH = 100;
@@ -152,8 +154,9 @@ public class VNDialogEditorScreen extends Screen {
     }
 
     private void buildWidgets() {
-        this.sidebarWidth = Mth.clamp(this.width * 22 / 100, 180, 250);
-        this.inspectorWidth = Mth.clamp(this.width * 28 / 100, 260, 360);
+        DockLayout.Layout workspace = this.dockLayout.calculate(0, 0, this.width, this.height, true);
+        this.sidebarWidth = workspace.sidebar().width();
+        this.inspectorWidth = workspace.inspector().width();
         int btnY = 2;
         int btnHeight = 20;
         int btnX = 2;
@@ -274,12 +277,12 @@ public class VNDialogEditorScreen extends Screen {
             return;
         }
         boolean panelDocked = this.propertyPanel.visible && this.editingEntry != null;
+        DockLayout.Layout workspace = this.dockLayout.calculate(0, 0, this.width, this.height, panelDocked);
+        this.sidebarWidth = workspace.sidebar().width();
         int panelX;
         int panelW;
         if (panelDocked) {
-            int minCenterWidth = Math.min(320, Math.max(1, this.width - this.sidebarWidth - 2));
-            panelX = Math.max(this.sidebarWidth + 1,
-                    Math.min(this.width - this.inspectorWidth, this.width - minCenterWidth));
+            panelX = workspace.inspector().x();
             panelW = this.width - panelX;
         } else {
             panelX = this.width;
