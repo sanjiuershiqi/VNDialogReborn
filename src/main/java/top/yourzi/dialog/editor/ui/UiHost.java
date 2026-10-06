@@ -107,15 +107,6 @@ public final class UiHost {
         return !this.layers.isEmpty();
     }
 
-    public boolean hasModal() {
-        for (Layer layer : this.layers) {
-            if (layer.modal()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private Layer topLayer() {
         return this.layers.isEmpty() ? null : this.layers.get(this.layers.size() - 1);
     }

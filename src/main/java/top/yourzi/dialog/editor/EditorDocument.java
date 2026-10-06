@@ -4,9 +4,7 @@ import top.yourzi.dialog.DialogManager;
 import top.yourzi.dialog.model.DialogSequence;
 
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Deque;
-import java.util.List;
 
 /**
  * One open dialogue file: the live model, its undo stack and its saved-state marker.
@@ -48,21 +46,6 @@ public final class EditorDocument {
 
     public boolean dirty() {
         return this.dirty;
-    }
-
-    public void renameTo(String newId) {
-        this.sequence.setId(newId);
-        this.touch(false);
-    }
-
-    /** Replaces the whole sequence, e.g. when the file was reloaded from disk. */
-    void replaceSequence(DialogSequence replacement) {
-        this.sequence = replacement;
-        this.currentSnapshot = this.snapshot();
-        this.savedSnapshot = this.currentSnapshot;
-        this.undo.clear();
-        this.redo.clear();
-        this.dirty = false;
     }
 
     private String snapshot() {
@@ -141,39 +124,5 @@ public final class EditorDocument {
         this.lastTouchAt = 0L;
         this.markDirty();
         return this.sequence;
-    }
-
-    /** Entries that point at missing nodes or options without a target. */
-    public List<String> danglingReferences() {
-        List<String> result = new ArrayList<>();
-        DialogSequence target = this.sequence;
-        if (target == null || target.getEntries() == null) {
-            return result;
-        }
-        java.util.Set<String> ids = new java.util.HashSet<>();
-        for (top.yourzi.dialog.model.DialogEntry entry : target.getEntries()) {
-            if (entry != null && entry.getId() != null) {
-                ids.add(entry.getId());
-            }
-        }
-        for (top.yourzi.dialog.model.DialogEntry entry : target.getEntries()) {
-            if (entry == null) {
-                continue;
-            }
-            String next = entry.getNextId();
-            if (next != null && !next.isBlank() && !ids.contains(next)) {
-                result.add(entry.getId() + " → next: " + next);
-            }
-            if (entry.getOptions() == null) {
-                continue;
-            }
-            for (top.yourzi.dialog.model.DialogOption option : entry.getOptions()) {
-                if (option != null && option.getTargetId() != null && !option.getTargetId().isBlank()
-                        && !ids.contains(option.getTargetId())) {
-                    result.add(entry.getId() + " → option: " + option.getTargetId());
-                }
-            }
-        }
-        return result;
     }
 }

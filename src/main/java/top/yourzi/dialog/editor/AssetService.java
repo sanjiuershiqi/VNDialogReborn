@@ -21,7 +21,7 @@ public final class AssetService {
     }
 
     /** {@code location} is null when the asset could not be resolved. */
-    public record Handle(ResourceLocation location, int width, int height, String path) {
+    public record Handle(ResourceLocation location, int width, int height) {
         public boolean present() {
             return this.location != null;
         }
@@ -32,7 +32,7 @@ public final class AssetService {
         }
     }
 
-    public static final Handle MISSING = new Handle(null, 0, 0, "");
+    public static final Handle MISSING = new Handle(null, 0, 0);
 
     public static Handle portrait(String path) {
         return resolve(path, EditorConfig.PORTRAITS_DIR, "textures/portraits/");
@@ -50,14 +50,14 @@ public final class AssetService {
         if (file != null && file.toFile().isFile()) {
             TextureCacheService.CachedTexture cached = TextureCacheService.load(file.toFile());
             if (cached != null) {
-                return new Handle(cached.location(), cached.width(), cached.height(), path);
+                return new Handle(cached.location(), cached.width(), cached.height());
             }
         }
         ResourceLocation builtin = builtin(builtinPrefix + path);
         if (builtin != null) {
-            return new Handle(builtin, 256, 256, path);
+            return new Handle(builtin, 256, 256);
         }
-        return new Handle(null, 0, 0, path);
+        return MISSING;
     }
 
     /** Built-in texture lookup; invalid paths (for example CJK file names) simply do not resolve. */

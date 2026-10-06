@@ -31,14 +31,6 @@ public final class Sheets {
         open(host, new ChooseSheet(title, message, options, onChoose));
     }
 
-    public static void info(UiHost host, Component title, List<Component> paragraphs) {
-        open(host, new InfoSheet(title, paragraphs));
-    }
-
-    public static void error(UiHost host, Component title, Component message) {
-        open(host, new InfoSheet(title, List.of(message)));
-    }
-
     private static void open(UiHost host, Modal sheet) {
         sheet.build();
         host.open(sheet, true, false);
@@ -138,22 +130,6 @@ public final class Sheets {
                 });
                 button.prefHeight(20);
                 body.add(button);
-            }
-        }
-    }
-
-    private static final class InfoSheet extends Modal {
-        private final List<Component> paragraphs;
-
-        InfoSheet(Component title, List<Component> paragraphs) {
-            super(title);
-            this.paragraphs = paragraphs;
-        }
-
-        @Override
-        protected void buildBody(Column body) {
-            for (Component paragraph : this.paragraphs) {
-                body.add(Paragraph.of(paragraph));
             }
         }
     }

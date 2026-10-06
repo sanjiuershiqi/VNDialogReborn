@@ -350,5 +350,7 @@
   "gui.vn_edit.help.stage_wheel_key": "滚轮",
   "gui.vn_edit.help.stage_wheel": "缩放立绘（Shift 精细）",
   "gui.vn_edit.help.stage_nudge": "微调位置",
-  "gui.vn_edit.help.stage_reset": "重置立绘"
+  "gui.vn_edit.help.stage_reset": "重置立绘",
+  "gui.vn_edit.picker.open_folder": "打开文件夹",
+  "gui.vn_edit.picker.empty_folder": "文件夹是空的：把图片或音频放进去后重新打开"
 }

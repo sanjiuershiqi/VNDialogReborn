@@ -21,17 +21,12 @@ public class TextArea extends UiNode {
     private final EditableText text;
     private Component placeholder;
     private Consumer<String> onChange;
-    private Consumer<String> onCommit;
     private boolean dragSelecting;
     private String lastValue;
 
     public TextArea(String value) {
         this.text = new EditableText(true, value);
         this.lastValue = this.text.value();
-    }
-
-    public static TextArea of(String value) {
-        return new TextArea(value);
     }
 
     public TextArea placeholder(Component placeholder) {
@@ -44,10 +39,6 @@ public class TextArea extends UiNode {
         return this;
     }
 
-    public TextArea onCommit(Consumer<String> onCommit) {
-        this.onCommit = onCommit;
-        return this;
-    }
 
     public EditableText model() {
         return this.text;
@@ -81,11 +72,6 @@ public class TextArea extends UiNode {
         }
     }
 
-    private void commit() {
-        if (this.onCommit != null) {
-            this.onCommit.accept(this.text.value());
-        }
-    }
 
     @Override
     public void setFocused(boolean focused) {
@@ -93,7 +79,6 @@ public class TextArea extends UiNode {
         super.setFocused(focused);
         if (was && !focused) {
             this.dragSelecting = false;
-            this.commit();
         }
     }
 

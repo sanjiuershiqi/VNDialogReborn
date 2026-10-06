@@ -34,11 +34,6 @@ public abstract class Modal extends UiNode {
         return this.body;
     }
 
-    /** Inner width available to the body; also the width used by {@link #wrap}. */
-    protected final int bodyWidth() {
-        return Math.min(this.cardWidth, Math.max(200, this.width() - 40)) - PAD * 2;
-    }
-
     /** Adds a footer button; footer buttons are laid out left to right in call order. */
     protected Button footerButton(Component label, Button.Tone tone, Runnable action) {
         Button button = Button.of(label, action).tone(tone);
@@ -107,10 +102,5 @@ public abstract class Modal extends UiNode {
 
     private int cardWidth() {
         return Math.min(this.cardWidth, Math.max(200, this.width() - 40));
-    }
-
-    /** Wraps text to the given width; used by prompts and confirmations. */
-    public static List<String> wrap(Component text, int width) {
-        return Wrap.text(text, width);
     }
 }

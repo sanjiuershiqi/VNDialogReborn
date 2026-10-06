@@ -9,6 +9,9 @@ import top.yourzi.dialog.editor.ui.TextBox;
 import top.yourzi.dialog.editor.ui.Theme;
 import top.yourzi.dialog.editor.ui.UiHost;
 
+import top.yourzi.dialog.editor.EditorConfig;
+
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -26,6 +29,7 @@ public final class PickerSheet extends Modal {
     private final Function<String, String> detail;
     private final Consumer<String> onChosen;
     private final Component clearLabel;
+    private Path folder;
     private final ItemList<String> list = new ItemList<>();
     private final TextBox filter = new TextBox("");
 
@@ -54,6 +58,16 @@ public final class PickerSheet extends Modal {
         host.focus(sheet.filter);
     }
 
+    /** File picker: lists the folder's files and offers to open the folder in the system browser. */
+    public static void openFiles(UiHost host, Component title, Path folder, List<String> files,
+                                 Consumer<String> onChosen) {
+        PickerSheet sheet = new PickerSheet(title, files, value -> "", onChosen, null);
+        sheet.folder = folder;
+        sheet.build();
+        host.open(sheet, true, false);
+        host.focus(sheet.filter);
+    }
+
     @Override
     protected void buildBody(Column body) {
         this.filter.placeholder(Theme.tr("picker.filter"));
@@ -71,7 +85,7 @@ public final class PickerSheet extends Modal {
                 Theme.text(graphics, text, x + width - textWidth - 8, rowY + (height - 8) / 2, Theme.TEXT_MUTED);
             }
         });
-        this.list.emptyText(Theme.tr("picker.empty"));
+        this.list.emptyText(Theme.tr(this.folder != null ? "picker.empty_folder" : "picker.empty"));
         this.list.activateOnClick(true);
         this.list.onActivate(this::choose);
         this.list.prefHeight(220);
@@ -84,6 +98,10 @@ public final class PickerSheet extends Modal {
     public void build() {
         if (this.clearLabel != null) {
             this.footerButton(this.clearLabel, Button.Tone.GHOST, () -> this.choose(""));
+        }
+        if (this.folder != null) {
+            Path target = this.folder;
+            this.footerButton(Theme.tr("picker.open_folder"), Button.Tone.GHOST, () -> EditorConfig.openFolder(target));
         }
         super.build();
     }

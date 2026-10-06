@@ -29,16 +29,6 @@ public class Panel extends UiNode {
         return this;
     }
 
-    public Panel style(int fill, int border) {
-        this.fill = fill;
-        this.border = border;
-        return this;
-    }
-
-    public UiNode child() {
-        return this.child;
-    }
-
     @Override
     protected void onLayout() {
         if (this.child != null) {

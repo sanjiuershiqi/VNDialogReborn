@@ -71,10 +71,6 @@ public class Button extends UiNode {
         this.label = label;
     }
 
-    public boolean isActive() {
-        return this.active;
-    }
-
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button != 0) {

@@ -763,7 +763,7 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
     private final class StagingActions implements StagingTab.Actions {
         @Override
         public void pickBackgroundFile() {
-            PickerSheet.open(DialogEditorScreen.this.host, Theme.tr("picker.background"),
+            PickerSheet.openFiles(DialogEditorScreen.this.host, Theme.tr("picker.background"), EditorConfig.BACKGROUNDS_DIR,
                     listFiles(EditorConfig.BACKGROUNDS_DIR, "png", "jpg", "jpeg"),
                     DialogEditorScreen.this.inspector::setBackgroundPath);
         }
@@ -776,7 +776,7 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
 
         @Override
         public void pickPortraitFile() {
-            PickerSheet.open(DialogEditorScreen.this.host, Theme.tr("picker.portrait"),
+            PickerSheet.openFiles(DialogEditorScreen.this.host, Theme.tr("picker.portrait"), EditorConfig.PORTRAITS_DIR,
                     listFiles(EditorConfig.PORTRAITS_DIR, "png", "jpg", "jpeg"), DialogEditorScreen.this.stage::addPortrait);
         }
 
@@ -788,7 +788,7 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
 
         @Override
         public void pickAudio() {
-            PickerSheet.open(DialogEditorScreen.this.host, Theme.tr("picker.audio"),
+            PickerSheet.openFiles(DialogEditorScreen.this.host, Theme.tr("picker.audio"), EditorConfig.SOUNDS_DIR,
                     listFiles(EditorConfig.SOUNDS_DIR, "ogg", "wav"), DialogEditorScreen.this.inspector::setAudioPath);
         }
 

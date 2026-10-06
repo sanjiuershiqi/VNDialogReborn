@@ -34,10 +34,6 @@ public final class EditorStore {
         this.directory = directory.toAbsolutePath().normalize();
     }
 
-    public Path directory() {
-        return this.directory;
-    }
-
     public static boolean isSafeId(String id) {
         return id != null && !id.isBlank() && SAFE_ID.matcher(id).matches();
     }

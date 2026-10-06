@@ -8,7 +8,6 @@ import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
 
 /**
  * Text editing model shared by single-line and multi-line fields.
@@ -30,38 +29,18 @@ public final class EditableText {
     private boolean selecting;
     private int scrollLine;
     private int scrollX;
-    private Consumer<String> responder = value -> {
-    };
 
     public EditableText(boolean multiline, String value) {
         this.multiline = multiline;
-        this.setValue(value == null ? "" : value);
-    }
-
-    public void setResponder(Consumer<String> responder) {
-        this.responder = responder;
-    }
-
-    public boolean multiline() {
-        return this.multiline;
+        this.setValueSilently(value);
     }
 
     public String value() {
         return String.join("\n", this.lines);
     }
 
-    /** Replaces the content and moves the caret to the end, notifying the responder. */
-    public void setValue(String value) {
-        this.applyValue(value);
-        this.responder.accept(this.value());
-    }
-
-    /** Replaces the content without notifying the responder; used when binding a fresh model. */
+    /** Replaces the content and moves the caret to the end. Widgets decide whether to notify. */
     public void setValueSilently(String value) {
-        this.applyValue(value);
-    }
-
-    private void applyValue(String value) {
         this.lines.clear();
         String text = value == null ? "" : value;
         if (this.multiline) {
@@ -213,7 +192,6 @@ public final class EditableText {
             this.cursorColumn = parts[parts.length - 1].length();
         }
         this.clearSelection();
-        this.notifyChanged();
     }
 
     public void newLine() {
@@ -224,14 +202,9 @@ public final class EditableText {
         return line.length() <= MAX_LENGTH ? line : line.substring(0, MAX_LENGTH);
     }
 
-    private void notifyChanged() {
-        this.responder.accept(this.value());
-    }
-
     public void backspace() {
         if (this.hasSelection()) {
             this.deleteSelection();
-            this.notifyChanged();
             return;
         }
         String current = this.lines.get(this.cursorLine);
@@ -248,7 +221,6 @@ public final class EditableText {
             return;
         }
         this.clearSelection();
-        this.notifyChanged();
     }
 
     /** Backspaces a whole word, matching the usual editor behaviour. */
@@ -272,13 +244,11 @@ public final class EditableText {
         this.lines.set(this.cursorLine, current.substring(0, target) + current.substring(this.cursorColumn));
         this.cursorColumn = target;
         this.clearSelection();
-        this.notifyChanged();
     }
 
     public void delete() {
         if (this.hasSelection()) {
             this.deleteSelection();
-            this.notifyChanged();
             return;
         }
         String current = this.lines.get(this.cursorLine);
@@ -291,7 +261,6 @@ public final class EditableText {
             return;
         }
         this.clearSelection();
-        this.notifyChanged();
     }
 
     public void moveCaret(int deltaLines, int deltaColumns, boolean extend) {

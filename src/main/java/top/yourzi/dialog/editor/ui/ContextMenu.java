@@ -21,10 +21,6 @@ public final class ContextMenu extends UiNode {
             return new Item(label, action, enabled);
         }
 
-        public static Item disabled(Component label) {
-            return new Item(label, null, false);
-        }
-
         public static Item separator() {
             return new Item(Component.empty(), null, false);
         }

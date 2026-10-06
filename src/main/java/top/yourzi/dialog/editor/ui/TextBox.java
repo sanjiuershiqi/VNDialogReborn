@@ -11,14 +11,12 @@ import java.util.function.Consumer;
 /**
  * Single-line text field: caret, selection, horizontal scroll and clipboard keys.
  *
- * <p>Focus and commit are explicit. {@link #onCommit} fires when the field loses focus or the user
- * presses Enter, which lets callers treat each finished edit as one undo entry instead of one entry
- * per keystroke.
+ * <p>{@link #onChange} fires only when the text itself changes, never on caret moves, so callers can
+ * write every edit straight through to the model.
  */
 public class TextBox extends UiNode {
     private final EditableText text;
     private Component placeholder;
-    private Consumer<String> onCommit;
     private Consumer<String> onChange;
     private Runnable onSubmit;
     private String lastValue;
@@ -44,10 +42,6 @@ public class TextBox extends UiNode {
         return this;
     }
 
-    public TextBox onCommit(Consumer<String> onCommit) {
-        this.onCommit = onCommit;
-        return this;
-    }
 
     public TextBox onChange(Consumer<String> onChange) {
         this.onChange = onChange;
@@ -70,11 +64,6 @@ public class TextBox extends UiNode {
         this.lastValue = this.text.value();
     }
 
-    private void commit() {
-        if (this.onCommit != null) {
-            this.onCommit.accept(this.text.value());
-        }
-    }
 
     /** Notifies listeners only when the text itself changed, not on caret moves. */
     private void changed() {
@@ -94,7 +83,6 @@ public class TextBox extends UiNode {
         super.setFocused(focused);
         if (was && !focused) {
             this.dragSelecting = false;
-            this.commit();
         }
     }
 
@@ -177,7 +165,6 @@ public class TextBox extends UiNode {
             }
         }
         if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
-            this.commit();
             if (this.onSubmit != null) {
                 this.onSubmit.run();
             }

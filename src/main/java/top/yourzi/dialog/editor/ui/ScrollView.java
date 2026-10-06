@@ -25,10 +25,6 @@ public class ScrollView extends UiNode {
         return this.content;
     }
 
-    public double offset() {
-        return this.offset;
-    }
-
     public void setOffset(double offset) {
         this.offset = offset;
         this.invalidateLayout();

@@ -16,12 +16,6 @@ public class Row extends UiNode {
         return this;
     }
 
-    public static Row of(UiNode... nodes) {
-        Row row = new Row();
-        row.addAll(nodes);
-        return row;
-    }
-
     @Override
     protected void onLayout() {
         List<UiNode> visible = this.visibleChildren();

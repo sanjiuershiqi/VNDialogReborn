@@ -57,14 +57,6 @@ public final class Theme {
         g.fill(x + w - 1, y, x + w, y + h, color);
     }
 
-    public static void box(GuiGraphics g, int x, int y, int w, int h, int fill, int border) {
-        if (w <= 0 || h <= 0) {
-            return;
-        }
-        g.fill(x, y, x + w, y + h, fill);
-        border(g, x, y, w, h, border);
-    }
-
     public static String ellipsize(String text, int maxWidth) {
         Font font = font();
         if (text == null) {

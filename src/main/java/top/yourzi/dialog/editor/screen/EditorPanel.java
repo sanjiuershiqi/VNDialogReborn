@@ -2,25 +2,21 @@ package top.yourzi.dialog.editor.screen;
 
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
-import top.yourzi.dialog.editor.ui.Chrome;
 import top.yourzi.dialog.editor.ui.Row;
-import top.yourzi.dialog.editor.ui.Stack;
 import top.yourzi.dialog.editor.ui.Theme;
 import top.yourzi.dialog.editor.ui.UiNode;
 
 /**
- * Workspace panel: a numbered title rail, an optional toolbar, one content slot and an optional
- * footer.
- *
- * <p>Panels are laid out side by side rather than floated, so the workspace keeps three readable
- * columns at every window size and no panel needs to know where its neighbours are.
+ * Workspace panel: a numbered title rail, an optional toolbar and a content area that subclasses
+ * fill with their own nodes in {@link #onLayout()}.
  */
 public abstract class EditorPanel extends UiNode {
+    private static final int RAIL_H = Theme.ROW + 4;
+
     private final String index;
     private final Component title;
-    private final Stack content = new Stack();
+    private final Slot content = new Slot();
     private Row toolbar;
-    private UiNode footer;
     private int toolbarHeight;
 
     protected EditorPanel(String index, Component title) {
@@ -29,7 +25,7 @@ public abstract class EditorPanel extends UiNode {
         this.add(this.content);
     }
 
-    /** Reserves a toolbar strip under the title rail; call before adding toolbar nodes. */
+    /** Reserves a toolbar strip under the title rail. */
     protected final Row createToolbar(int height) {
         this.toolbarHeight = height;
         this.toolbar = new Row().gap(2);
@@ -37,52 +33,38 @@ public abstract class EditorPanel extends UiNode {
         return this.toolbar;
     }
 
-    protected final Row toolbar() {
-        return this.toolbar;
-    }
-
-    protected final Stack content() {
+    /** The area below the title rail and toolbar; subclasses place their nodes inside it. */
+    protected final UiNode content() {
         return this.content;
-    }
-
-    protected final void showOnly(UiNode node) {
-        for (UiNode child : this.content.children()) {
-            child.setVisible(child == node);
-        }
-    }
-
-    protected final void setFooter(UiNode footer) {
-        this.footer = footer;
-        this.add(footer);
     }
 
     @Override
     protected void onLayout() {
-        int top = this.y() + Theme.ROW + 4;
+        int top = this.y() + RAIL_H;
         if (this.toolbar != null) {
             this.toolbar.setBounds(this.x() + 2, top, this.width() - 4, this.toolbarHeight);
             top += this.toolbarHeight + 3;
         }
-        int bottom = this.y() + this.height();
-        if (this.footer != null) {
-            int footerHeight = this.footer.measureHeight(this.width());
-            this.footer.setBounds(this.x(), bottom - footerHeight, this.width(), footerHeight);
-            bottom -= footerHeight;
-        }
-        this.content.setBounds(this.x(), top, this.width(), Math.max(0, bottom - top));
+        this.content.setBounds(this.x(), top, this.width(), Math.max(0, this.bottom() - top));
     }
 
     @Override
     protected void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(this.x(), this.y(), this.right(), this.bottom(), Theme.SURFACE);
-        if (this.index != null) {
-            Chrome.titleRail(graphics, this.x(), this.y(), this.width(), this.index, this.title);
-        } else {
-            graphics.fill(this.x(), this.y(), this.right(), this.y() + Theme.ROW + 4, Theme.RAISED);
-            graphics.fill(this.x(), this.y(), this.x() + 3, this.y() + Theme.ROW + 4, Theme.ACCENT);
-            Theme.textIn(graphics, this.title.getString(), this.x() + 10, this.y() + 2, this.width() - 16,
-                    Theme.ROW, Theme.TEXT);
+        int x = this.x();
+        int y = this.y();
+        graphics.fill(x, y, this.right(), this.bottom(), Theme.SURFACE);
+        graphics.fill(x, y, this.right(), y + RAIL_H, Theme.RAISED);
+        graphics.fill(x, y, x + 3, y + RAIL_H, Theme.ACCENT);
+        Theme.text(graphics, this.index, x + 9, y + (RAIL_H - 8) / 2, Theme.ACCENT);
+        Theme.textIn(graphics, this.title.getString(), x + 28, y, Math.max(1, this.width() - 34), RAIL_H, Theme.TEXT);
+        graphics.fill(x, y + RAIL_H - 1, this.right(), y + RAIL_H, Theme.BORDER);
+        graphics.fill(this.right() - 1, y, this.right(), this.bottom(), Theme.BORDER);
+    }
+
+    /** Layout-only region; disabled so it never swallows clicks meant for the panel. */
+    private static final class Slot extends UiNode {
+        Slot() {
+            this.setEnabled(false);
         }
-        graphics.fill(this.right() - 1, this.y(), this.right(), this.bottom(), Theme.BORDER);
     }
 }

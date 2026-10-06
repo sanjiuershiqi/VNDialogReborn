@@ -1,7 +1,6 @@
 package top.yourzi.dialog.editor.screen;
 
 import com.google.gson.JsonPrimitive;
-import top.yourzi.dialog.editor.EditorDocument;
 import top.yourzi.dialog.model.DialogEntry;
 import top.yourzi.dialog.model.DialogOption;
 import top.yourzi.dialog.model.DialogSequence;
@@ -325,10 +324,5 @@ public final class NodeGraph {
 
     public static boolean isStart(DialogSequence sequence, DialogEntry entry) {
         return sequence != null && entry != null && entry.getId() != null && entry.getId().equals(sequence.getStartId());
-    }
-
-    /** True when the node ends the dialogue, either explicitly or by having no successor. */
-    public static boolean terminates(DialogSequence sequence, DialogEntry entry) {
-        return entry != null && (entry.isEndDialog() || implicitNext(sequence, entry) == null && !hasOptions(entry));
     }
 }

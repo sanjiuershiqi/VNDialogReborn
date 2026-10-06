@@ -350,5 +350,7 @@
   "gui.vn_edit.help.stage_wheel_key": "Wheel",
   "gui.vn_edit.help.stage_wheel": "Resize portrait (Shift: fine)",
   "gui.vn_edit.help.stage_nudge": "Nudge position",
-  "gui.vn_edit.help.stage_reset": "Reset portrait"
+  "gui.vn_edit.help.stage_reset": "Reset portrait",
+  "gui.vn_edit.picker.open_folder": "Open folder",
+  "gui.vn_edit.picker.empty_folder": "Folder is empty - put files in it and reopen"
 }
