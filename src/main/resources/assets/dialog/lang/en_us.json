@@ -215,7 +215,7 @@
   "gui.vn_edit.stage.portrait_exists": "That portrait is already on stage",
   "gui.vn_edit.stage.missing": "Image not found: %s",
   "gui.vn_edit.stage.no_asset": "Not set",
-  "gui.vn_edit.stage.help": "Drag to move · wheel to resize (Shift: fine) · arrows nudge · R resets. The yellow box is the dialogue box.",
+  "gui.vn_edit.stage.help": "Drag a portrait to move it, wheel to resize (Shift: fine), arrows nudge 1px (Shift: 10px), R resets. The scene uses your real game window size.",
   "gui.vn_edit.logic.visibility_hint": "e.g. execute if entity @s[gamemode=survival]",
   "gui.vn_edit.logic.visibility_help": "The node only shows when this command succeeds. Leave empty to always show.",
   "gui.vn_edit.logic.add_command": "+ Add command",
@@ -358,5 +358,15 @@
   "gui.vn_edit.document.settings": "Settings…",
   "gui.vn_edit.document.close": "Close this file",
   "gui.vn_edit.cancel": "Cancel",
-  "gui.vn_edit.close": "Close"
+  "gui.vn_edit.close": "Close",
+  "gui.vn_edit.view.graph": "Graph",
+  "gui.vn_edit.graph.mode_nodes": "Nodes in file",
+  "gui.vn_edit.graph.mode_files": "All files",
+  "gui.vn_edit.graph.fit": "Fit",
+  "gui.vn_edit.graph.actual": "100%",
+  "gui.vn_edit.graph.focus": "Find selected",
+  "gui.vn_edit.graph.empty": "Nothing to show",
+  "gui.vn_edit.graph.hint": "Click a node to edit · drag to pan · wheel to zoom",
+  "gui.vn_edit.graph.other_file": "another dialogue file",
+  "gui.vn_edit.graph.missing_file": "file not found"
 }

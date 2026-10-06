@@ -1,8 +1,11 @@
 package top.yourzi.dialog.editor.screen;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.math.Axis;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
 import org.lwjgl.glfw.GLFW;
 import top.yourzi.dialog.config.ClientConfig;
@@ -17,9 +20,9 @@ import top.yourzi.dialog.editor.ui.ScrollView;
 import top.yourzi.dialog.editor.ui.Select;
 import top.yourzi.dialog.editor.ui.Theme;
 import top.yourzi.dialog.editor.ui.UiNode;
-import top.yourzi.dialog.editor.ui.Wrap;
 import top.yourzi.dialog.model.BackgroundImageInfo;
 import top.yourzi.dialog.model.DialogEntry;
+import top.yourzi.dialog.model.DialogOption;
 import top.yourzi.dialog.model.PortraitAnimationType;
 import top.yourzi.dialog.model.PortraitInfo;
 import top.yourzi.dialog.model.PortraitPosition;
@@ -31,29 +34,33 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Stage view: the selected node's scene as the player will see it, edited by direct manipulation.
+ * Stage view: the selected node exactly as the player will see it.
  *
- * <p>A fixed 16:9 virtual screen is scaled into the available space, and portraits use the runtime's
- * sizing and anchoring rules (height = 68% of the screen times size, 20px side margin, bottom
- * aligned, offsets as a fraction of the screen). Drag moves a portrait, the wheel resizes it and the
- * arrow keys nudge it; the side column holds the exact values.
+ * <p>The scene is drawn in the coordinates of the real game screen - the GUI-scaled window size the
+ * dialogue screen will open at - with the same formulas as {@code DialogScreen}: portrait height is
+ * 68% of the screen times size, a 20px side margin, bottom alignment, offsets as screen fractions,
+ * a dialogue box sized from the client config, and choice buttons above it. The whole scene is then
+ * scaled into the panel, so what lines up here lines up in game.
  */
 final class StageView extends UiNode {
-    private static final int VIRTUAL_WIDTH = 480;
-    private static final int VIRTUAL_HEIGHT = 270;
     private static final int SIDE_MARGIN = 20;
     private static final float PORTRAIT_HEIGHT = 0.68f;
+    private static final int PAD = 8;
+    private static final int MIN_CONTROLS = 132;
 
     private final EditorContext context;
-    private final Column side = new Column().gap(3).padding(4);
-    private final ScrollView sideScroller = new ScrollView(this.side);
-    private final Column portraitList = new Column().gap(2);
+    private final Column portraits = new Column().gap(2);
+    private final Column sliders = new Column().gap(2);
     private final Column details = new Column().gap(3);
+    private final Band band = new Band(this.portraits, this.sliders, this.details);
+    private final ScrollView controls = new ScrollView(this.band);
     private final Map<String, AssetService.Handle> assets = new HashMap<>();
     private StagingTab.Actions actions;
 
     private DialogEntry entry;
     private PortraitInfo selected;
+    private int screenWidth = 480;
+    private int screenHeight = 270;
     private int stageX;
     private int stageY;
     private int stageWidth;
@@ -69,22 +76,7 @@ final class StageView extends UiNode {
 
     StageView(EditorContext context) {
         this.context = context;
-        this.add(this.sideScroller);
-        Row assetButtons = new Row().gap(2);
-        assetButtons.add(Button.of(Theme.tr("stage.add_portrait"), () -> this.actions.pickPortraitFile()).fit());
-        assetButtons.add(Button.of(Theme.tr("staging.builtin"), () -> this.actions.pickBuiltinPortrait()).fit());
-        assetButtons.add(Nodes.fill());
-        Row backgroundButtons = new Row().gap(2);
-        backgroundButtons.add(Button.of(Theme.tr("stage.background"), () -> this.actions.pickBackgroundFile()).fit());
-        backgroundButtons.add(Button.of(Theme.tr("staging.builtin"), () -> this.actions.pickBuiltinBackground()).fit());
-        backgroundButtons.add(Nodes.fill());
-        this.side.add(Nodes.section(Theme.tr("section.portraits")));
-        this.side.add(assetButtons);
-        this.side.add(this.portraitList);
-        this.side.add(this.details);
-        this.side.add(Nodes.section(Theme.tr("section.background")));
-        this.side.add(backgroundButtons);
-        this.side.add(Paragraph.of(Theme.tr("stage.help")).color(Theme.TEXT_MUTED));
+        this.add(this.controls);
     }
 
     void setActions(StagingTab.Actions actions) {
@@ -93,43 +85,41 @@ final class StageView extends UiNode {
 
     @Override
     protected void onLayout() {
-        int sideWidth = Mth.clamp(this.width() / 3, 150, 230);
-        this.sideScroller.setBounds(this.x(), this.y(), sideWidth, this.height());
-        int available = Math.max(1, this.width() - sideWidth - 8);
-        int availableHeight = Math.max(1, this.height() - 8);
-        this.scale = Math.min((float) available / VIRTUAL_WIDTH, (float) availableHeight / VIRTUAL_HEIGHT);
-        this.stageWidth = Math.max(1, (int) (VIRTUAL_WIDTH * this.scale));
-        this.stageHeight = Math.max(1, (int) (VIRTUAL_HEIGHT * this.scale));
-        this.stageX = this.x() + sideWidth + 4 + (available - this.stageWidth) / 2;
-        this.stageY = this.y() + 4 + (availableHeight - this.stageHeight) / 2;
+        Minecraft minecraft = Minecraft.getInstance();
+        this.screenWidth = Math.max(1, minecraft.getWindow().getGuiScaledWidth());
+        this.screenHeight = Math.max(1, minecraft.getWindow().getGuiScaledHeight());
+        int availableWidth = Math.max(1, this.width() - PAD * 2);
+        int controlsHeight = Math.max(MIN_CONTROLS, this.band.measureHeight(availableWidth));
+        int availableHeight = Math.max(60, this.height() - PAD * 3 - Math.min(controlsHeight, this.height() / 2));
+        this.scale = Math.min((float) availableWidth / this.screenWidth, (float) availableHeight / this.screenHeight);
+        this.stageWidth = Math.max(1, Math.round(this.screenWidth * this.scale));
+        this.stageHeight = Math.max(1, Math.round(this.screenHeight * this.scale));
+        this.stageX = this.x() + (this.width() - this.stageWidth) / 2;
+        this.stageY = this.y() + PAD;
+        int controlsY = this.stageY + this.stageHeight + PAD;
+        this.controls.setBounds(this.x() + PAD, controlsY, availableWidth, Math.max(0, this.bottom() - controlsY - 4));
     }
 
     void bind(DialogEntry entry) {
         PortraitInfo previous = this.selected;
         this.entry = entry;
-        this.selected = null;
-        List<PortraitInfo> portraits = this.portraits();
-        if (portraits.contains(previous)) {
-            this.selected = previous;
-        } else if (!portraits.isEmpty()) {
-            this.selected = portraits.get(0);
-        }
-        this.rebuildSide();
+        List<PortraitInfo> list = this.portraitList();
+        this.selected = list.contains(previous) ? previous : list.isEmpty() ? null : list.get(0);
+        this.rebuildControls();
     }
 
-    /** Selects a portrait from outside, e.g. a row in the staging tab. */
     void focus(PortraitInfo portrait) {
-        if (portrait != null && this.portraits().contains(portrait)) {
+        if (portrait != null && this.portraitList().contains(portrait)) {
             this.selected = portrait;
-            this.rebuildSide();
+            this.rebuildControls();
         }
     }
 
-    private List<PortraitInfo> portraits() {
+    private List<PortraitInfo> portraitList() {
         List<PortraitInfo> result = new ArrayList<>();
         if (this.entry != null && this.entry.getPortraits() != null) {
             for (PortraitInfo portrait : this.entry.getPortraits()) {
-                if (portrait != null) {
+                if (portrait != null && portrait.getPath() != null && !portrait.getPath().isEmpty()) {
                     result.add(portrait);
                 }
             }
@@ -137,27 +127,55 @@ final class StageView extends UiNode {
         return result;
     }
 
-    private void rebuildSide() {
-        this.portraitList.clear();
+    // ----- controls -----
+
+    private void rebuildControls() {
+        this.portraits.clear();
+        this.sliders.clear();
         this.details.clear();
-        List<PortraitInfo> portraits = this.portraits();
-        if (portraits.isEmpty()) {
-            this.portraitList.add(Paragraph.of(Theme.tr(this.entry == null ? "inspector.hint" : "stage.no_portraits"))
-                    .color(Theme.TEXT_MUTED));
+        this.size = null;
+        if (this.entry == null) {
+            return;
         }
-        for (PortraitInfo portrait : portraits) {
-            String path = portrait.getPath() == null ? "—" : portrait.getPath();
-            Button chip = Button.of(Component.literal(path), () -> {
+        this.portraits.add(Nodes.section(Theme.tr("section.portraits")));
+        for (PortraitInfo portrait : this.portraitList()) {
+            this.portraits.add(Button.of(Component.literal(portrait.getPath()), () -> {
                 this.selected = portrait;
-                this.rebuildSide();
-            }).selected(portrait == this.selected);
-            this.portraitList.add(chip);
+                this.rebuildControls();
+            }).tone(Button.Tone.GHOST).selected(portrait == this.selected));
         }
+        Row add = new Row().gap(3);
+        add.add(Button.of(Theme.tr("stage.add_portrait"), () -> this.actions.pickPortraitFile()).fit());
+        add.add(Button.of(Theme.tr("staging.builtin"), () -> this.actions.pickBuiltinPortrait()).tone(Button.Tone.GHOST).fit());
+        add.add(Nodes.fill());
+        this.portraits.add(add);
+        this.portraits.add(Nodes.section(Theme.tr("section.background")));
+        Row background = new Row().gap(3);
+        background.add(Button.of(Theme.tr("stage.background"), () -> this.actions.pickBackgroundFile()).fit());
+        background.add(Button.of(Theme.tr("staging.builtin"), () -> this.actions.pickBuiltinBackground()).tone(Button.Tone.GHOST).fit());
+        background.add(Nodes.fill());
+        this.portraits.add(background);
+
         if (this.selected == null) {
+            this.sliders.add(Paragraph.of(Theme.tr("stage.no_portraits")).color(Theme.TEXT_MUTED));
+            this.details.add(Paragraph.of(Theme.tr("stage.help")).color(Theme.TEXT_MUTED));
             return;
         }
         PortraitInfo target = this.selected;
-        this.details.add(Nodes.caption(Theme.tr("stage.position")));
+        this.sliders.add(Nodes.section(Component.literal(target.getPath())));
+        this.size = new Slider(Theme.tr("stage.size"), 0.1f, 3.0f, target.getSize(), value -> this.edit(() -> target.setSize(value)));
+        this.brightness = new Slider(Theme.tr("stage.brightness"), 0.0f, 1.0f, target.getBrightness(),
+                value -> this.edit(() -> target.setBrightness(value)));
+        this.offsetX = new Slider(Theme.tr("stage.offset_x"), -1.0f, 1.0f, target.getOffsetX(),
+                value -> this.edit(() -> target.setOffsetX(value)));
+        this.offsetY = new Slider(Theme.tr("stage.offset_y"), -1.0f, 1.0f, target.getOffsetY(),
+                value -> this.edit(() -> target.setOffsetY(value)));
+        this.sliders.add(this.size);
+        this.sliders.add(this.brightness);
+        this.sliders.add(this.offsetX);
+        this.sliders.add(this.offsetY);
+
+        this.details.add(Nodes.section(Theme.tr("stage.position")));
         this.details.add(new Select<>(List.of(PortraitPosition.values()), target.getPosition(),
                 position -> Theme.tr("position." + position.name().toLowerCase(Locale.ROOT)),
                 position -> this.edit(() -> target.setPosition(position))));
@@ -166,23 +184,12 @@ final class StageView extends UiNode {
                 target.getAnimationType() == null ? PortraitAnimationType.NONE : target.getAnimationType(),
                 animation -> Theme.tr("animation." + animation.name().toLowerCase(Locale.ROOT)),
                 animation -> this.edit(() -> target.setAnimationType(animation))));
-        this.size = new Slider(Theme.tr("stage.size"), 0.1f, 3.0f, target.getSize(),
-                value -> this.edit(() -> target.setSize(value)));
-        this.brightness = new Slider(Theme.tr("stage.brightness"), 0.0f, 1.0f, target.getBrightness(),
-                value -> this.edit(() -> target.setBrightness(value)));
-        this.offsetX = new Slider(Theme.tr("stage.offset_x"), -1.0f, 1.0f, target.getOffsetX(),
-                value -> this.edit(() -> target.setOffsetX(value)));
-        this.offsetY = new Slider(Theme.tr("stage.offset_y"), -1.0f, 1.0f, target.getOffsetY(),
-                value -> this.edit(() -> target.setOffsetY(value)));
-        this.details.add(this.size);
-        this.details.add(this.brightness);
-        this.details.add(this.offsetX);
-        this.details.add(this.offsetY);
-        Row actionsRow = new Row().gap(2);
+        Row actionsRow = new Row().gap(3);
         actionsRow.add(Button.of(Theme.tr("stage.reset"), this::resetSelected).fit());
-        actionsRow.add(Button.of(Theme.tr("stage.remove"), this::removeSelected).tone(Button.Tone.GHOST).fit());
         actionsRow.add(Nodes.fill());
+        actionsRow.add(Button.of(Theme.tr("stage.remove"), this::removeSelected).tone(Button.Tone.DANGER).fit());
         this.details.add(actionsRow);
+        this.details.add(Paragraph.of(Theme.tr("stage.help")).color(Theme.TEXT_MUTED));
     }
 
     private void edit(Runnable change) {
@@ -217,9 +224,9 @@ final class StageView extends UiNode {
         if (this.entry == null || this.selected == null) {
             return;
         }
-        List<PortraitInfo> portraits = this.portraits();
-        portraits.remove(this.selected);
-        this.entry.setPortraits(portraits.isEmpty() ? null : portraits);
+        List<PortraitInfo> list = new ArrayList<>(this.entry.getPortraits());
+        list.remove(this.selected);
+        this.entry.setPortraits(list.isEmpty() ? null : list);
         this.selected = null;
         this.context.touchStructure();
     }
@@ -230,52 +237,53 @@ final class StageView extends UiNode {
             return;
         }
         String clean = path.toLowerCase(Locale.ROOT);
-        List<PortraitInfo> portraits = this.portraits();
-        for (PortraitInfo portrait : portraits) {
+        for (PortraitInfo portrait : this.portraitList()) {
             if (clean.equalsIgnoreCase(portrait.getPath())) {
                 this.selected = portrait;
-                this.rebuildSide();
+                this.rebuildControls();
                 this.context.status(Theme.tr("stage.portrait_exists"), EditorContext.StatusKind.WARNING);
                 return;
             }
         }
+        List<PortraitInfo> list = this.entry.getPortraits() == null ? new ArrayList<>() : new ArrayList<>(this.entry.getPortraits());
         PortraitInfo portrait = new PortraitInfo(clean, PortraitPosition.RIGHT, 1.0f, PortraitAnimationType.NONE);
-        portraits.add(portrait);
-        this.entry.setPortraits(portraits);
+        list.add(portrait);
+        this.entry.setPortraits(list);
         this.selected = portrait;
         this.context.touchStructure();
     }
 
-    // ----- geometry, shared by drawing and hit testing -----
-
-    private int scaled(int virtualPixels) {
-        return (int) (virtualPixels * this.scale);
-    }
+    // ----- runtime geometry, in game-screen pixels -----
 
     private AssetService.Handle asset(PortraitInfo portrait) {
-        String path = portrait.getPath();
-        if (path == null || path.isBlank()) {
-            return AssetService.MISSING;
-        }
-        return this.assets.computeIfAbsent(path, AssetService::portrait);
+        return this.assets.computeIfAbsent(portrait.getPath(), AssetService::portrait);
     }
 
-    /** {x, y, width, height} of a portrait on the stage, or null when its texture is missing. */
+    /** {x, y, width, height} as DialogScreen computes them, or null when the image is missing. */
     private int[] portraitBox(PortraitInfo portrait) {
         AssetService.Handle handle = this.asset(portrait);
         if (!handle.present()) {
             return null;
         }
-        int height = Math.max(1, (int) (this.stageHeight * PORTRAIT_HEIGHT * Mth.clamp(portrait.getSize(), 0.1f, 5.0f)));
+        int height = (int) (this.screenHeight * PORTRAIT_HEIGHT * Mth.clamp(portrait.getSize(), 0.1f, 5.0f));
         int width = Math.max(1, (int) (height * handle.aspect()));
-        int x = switch (portrait.getPosition()) {
-            case LEFT -> this.stageX + this.scaled(SIDE_MARGIN);
-            case CENTER -> this.stageX + (this.stageWidth - width) / 2;
-            case RIGHT -> this.stageX + this.stageWidth - width - this.scaled(SIDE_MARGIN);
+        int x = switch (portrait.getPosition() == null ? PortraitPosition.RIGHT : portrait.getPosition()) {
+            case LEFT -> SIDE_MARGIN;
+            case CENTER -> (this.screenWidth - width) / 2;
+            case RIGHT -> this.screenWidth - width - SIDE_MARGIN;
         };
-        int y = this.stageY + this.stageHeight - height;
-        return new int[]{x + (int) (portrait.getOffsetX() * this.stageWidth),
-                y + (int) (portrait.getOffsetY() * this.stageHeight), width, height};
+        boolean topAligned = portrait.getAnimationType() == PortraitAnimationType.REVERSE;
+        int y = topAligned ? 0 : this.screenHeight - height;
+        return new int[]{x + (int) (Mth.clamp(portrait.getOffsetX(), -1.0f, 1.0f) * this.screenWidth),
+                y + (int) (Mth.clamp(portrait.getOffsetY(), -1.0f, 1.0f) * this.screenHeight), width, height};
+    }
+
+    private double gameX(double mouseX) {
+        return (mouseX - this.stageX) / this.scale;
+    }
+
+    private double gameY(double mouseY) {
+        return (mouseY - this.stageY) / this.scale;
     }
 
     private boolean onStage(double mouseX, double mouseY) {
@@ -284,11 +292,13 @@ final class StageView extends UiNode {
     }
 
     private PortraitInfo portraitAt(double mouseX, double mouseY) {
-        List<PortraitInfo> portraits = this.portraits();
-        for (int i = portraits.size() - 1; i >= 0; i--) {
-            int[] box = this.portraitBox(portraits.get(i));
-            if (box != null && mouseX >= box[0] && mouseX < box[0] + box[2] && mouseY >= box[1] && mouseY < box[1] + box[3]) {
-                return portraits.get(i);
+        double x = this.gameX(mouseX);
+        double y = this.gameY(mouseY);
+        List<PortraitInfo> list = this.portraitList();
+        for (int i = list.size() - 1; i >= 0; i--) {
+            int[] box = this.portraitBox(list.get(i));
+            if (box != null && x >= box[0] && x < box[0] + box[2] && y >= box[1] && y < box[1] + box[3]) {
+                return list.get(i);
             }
         }
         return null;
@@ -298,102 +308,142 @@ final class StageView extends UiNode {
 
     @Override
     protected void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(this.x(), this.y(), this.right(), this.bottom(), Theme.BG);
-        graphics.fill(this.stageX, this.stageY, this.stageX + this.stageWidth, this.stageY + this.stageHeight, 0xFF06090A);
+        graphics.fill(this.x(), this.y(), this.right(), this.bottom(), Theme.SURFACE);
         if (this.entry == null) {
+            graphics.fill(this.stageX, this.stageY, this.stageX + this.stageWidth, this.stageY + this.stageHeight, Theme.FIELD);
             Theme.centered(graphics, Theme.tr("inspector.hint").getString(), this.stageX + this.stageWidth / 2,
                     this.stageY + this.stageHeight / 2 - 4, Theme.TEXT_MUTED);
             return;
         }
         graphics.enableScissor(this.stageX, this.stageY, this.stageX + this.stageWidth, this.stageY + this.stageHeight);
+        graphics.pose().pushPose();
+        graphics.pose().translate(this.stageX, this.stageY, 0.0f);
+        graphics.pose().scale(this.scale, this.scale, 1.0f);
         this.renderBackground(graphics);
-        this.renderThirds(graphics);
         this.renderPortraits(graphics);
         this.renderDialogBox(graphics);
+        this.renderChoices(graphics);
+        this.renderSelection(graphics);
+        graphics.pose().popPose();
         graphics.disableScissor();
-        Theme.border(graphics, this.stageX - 1, this.stageY - 1, this.stageWidth + 2, this.stageHeight + 2,
-                Theme.BORDER_STRONG);
+        Theme.border(graphics, this.stageX - 1, this.stageY - 1, this.stageWidth + 2, this.stageHeight + 2, Theme.BORDER_STRONG);
+        String size = this.screenWidth + " × " + this.screenHeight;
+        Theme.text(graphics, size, this.stageX + this.stageWidth - Theme.font().width(size), this.stageY + this.stageHeight + 2,
+                Theme.TEXT_MUTED);
     }
 
     private void renderBackground(GuiGraphics graphics) {
         BackgroundImageInfo background = this.entry.getBackgroundImage();
-        if (background == null || background.getPath() == null || background.getPath().isBlank()) {
+        String path = background == null ? null : background.getPath();
+        if (path == null || path.isBlank()) {
+            // In game the world shows through a light dim; a flat tone stands in for it here.
+            graphics.fill(0, 0, this.screenWidth, this.screenHeight, 0xFF3A4046);
+            graphics.fill(0, 0, this.screenWidth, this.screenHeight, 0x66000000);
             return;
         }
-        AssetService.Handle handle = this.assets.computeIfAbsent("bg:" + background.getPath(),
-                key -> AssetService.background(background.getPath()));
+        AssetService.Handle handle = this.assets.computeIfAbsent("bg:" + path, key -> AssetService.background(path));
         if (handle.present()) {
-            // The runtime stretches the background over the whole screen; the preview does the same.
-            AssetService.blitStretched(graphics, handle, this.stageX, this.stageY, this.stageWidth, this.stageHeight);
+            AssetService.blitStretched(graphics, handle, 0, 0, this.screenWidth, this.screenHeight);
         } else {
-            Theme.centered(graphics, Theme.tr("stage.missing", background.getPath()).getString(),
-                    this.stageX + this.stageWidth / 2, this.stageY + 6, Theme.WARNING);
-        }
-    }
-
-    private void renderThirds(GuiGraphics graphics) {
-        int color = 0x22FFFFFF;
-        for (int i = 1; i <= 2; i++) {
-            int x = this.stageX + this.stageWidth * i / 3;
-            int y = this.stageY + this.stageHeight * i / 3;
-            graphics.fill(x, this.stageY, x + 1, this.stageY + this.stageHeight, color);
-            graphics.fill(this.stageX, y, this.stageX + this.stageWidth, y + 1, color);
+            graphics.fill(0, 0, this.screenWidth, this.screenHeight, 0xFF2A2B30);
+            Theme.centered(graphics, Theme.tr("stage.missing", path).getString(), this.screenWidth / 2, 8, Theme.WARNING);
         }
     }
 
     private void renderPortraits(GuiGraphics graphics) {
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
-        for (PortraitInfo portrait : this.portraits()) {
+        for (PortraitInfo portrait : this.portraitList()) {
             int[] box = this.portraitBox(portrait);
             if (box == null) {
                 continue;
             }
             float light = Mth.clamp(portrait.getBrightness(), 0.0f, 1.0f);
             RenderSystem.setShaderColor(light, light, light, 1.0f);
+            boolean upsideDown = portrait.getAnimationType() == PortraitAnimationType.REVERSE;
+            if (upsideDown) {
+                graphics.pose().pushPose();
+                graphics.pose().translate(box[0] + box[2] / 2.0f, box[1] + box[3] / 2.0f, 0.0f);
+                graphics.pose().mulPose(Axis.ZP.rotationDegrees(180.0f));
+                graphics.pose().translate(-(box[0] + box[2] / 2.0f), -(box[1] + box[3] / 2.0f), 0.0f);
+            }
             graphics.blit(this.asset(portrait).location(), box[0], box[1], box[2], box[3], 0.0f, 0.0f,
                     box[2], box[3], box[2], box[3]);
+            if (upsideDown) {
+                graphics.pose().popPose();
+            }
             RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
         }
         RenderSystem.disableBlend();
-        if (this.selected != null) {
-            int[] box = this.portraitBox(this.selected);
-            if (box != null) {
-                Theme.border(graphics, box[0], box[1], box[2], box[3], this.dragging ? Theme.ACCENT : Theme.CYAN);
-                String info = String.format(Locale.ROOT, "%.2f  x%.2f y%.2f", this.selected.getSize(),
-                        this.selected.getOffsetX(), this.selected.getOffsetY());
-                Theme.text(graphics, info, box[0] + 2, Math.max(this.stageY + 2, box[1] + 2), Theme.ACCENT);
-            } else {
-                Theme.centered(graphics, Theme.tr("stage.missing", this.selected.getPath()).getString(),
-                        this.stageX + this.stageWidth / 2, this.stageY + this.stageHeight / 2, Theme.WARNING);
-            }
+    }
+
+    private int boxWidth() {
+        return Math.min(ClientConfig.DIALOG_BOX_WIDTH.get(), this.screenWidth - 20);
+    }
+
+    private int boxY() {
+        return this.screenHeight - ClientConfig.DIALOG_BOX_HEIGHT.get() - 20;
+    }
+
+    private void renderDialogBox(GuiGraphics graphics) {
+        int width = this.boxWidth();
+        int height = ClientConfig.DIALOG_BOX_HEIGHT.get();
+        int x = (this.screenWidth - width) / 2;
+        int y = this.boxY();
+        int color = (ClientConfig.DIALOG_BACKGROUND_OPACITY.get() << 24) | (ClientConfig.DIALOG_BACKGROUND_COLOR.get() & 0xFFFFFF);
+        graphics.fill(x, y, x + width, y + height, color);
+        int padding = ClientConfig.DIALOG_BOX_PADDING.get();
+        int textX = x + padding;
+        int textY = y + padding;
+        String speaker = TextCodec.preview(this.entry.getSpeaker());
+        if (ClientConfig.SHOW_SPEAKER_NAME.get() && !speaker.isEmpty()) {
+            graphics.drawString(Theme.font(), TextCodec.styled(this.entry.getSpeaker()), textX, textY, 0xFFFFFF);
+            textY += Theme.font().lineHeight + 5;
+        }
+        for (FormattedCharSequence line : Theme.font().split(TextCodec.styled(this.entry.getText()), width - padding * 2)) {
+            graphics.drawString(Theme.font(), line, textX, textY, ClientConfig.DIALOG_TEXT_COLOR.get());
+            textY += Theme.font().lineHeight + 2;
         }
     }
 
-    /** Mirrors the runtime dialogue box so placement can be judged against it. */
-    private void renderDialogBox(GuiGraphics graphics) {
-        int boxWidth = Math.min(ClientConfig.DIALOG_BOX_WIDTH.get(), VIRTUAL_WIDTH - 20);
-        int boxHeight = ClientConfig.DIALOG_BOX_HEIGHT.get();
-        int x = this.stageX + this.scaled((VIRTUAL_WIDTH - boxWidth) / 2);
-        int y = this.stageY + this.scaled(VIRTUAL_HEIGHT - boxHeight - 20);
-        int width = this.scaled(boxWidth);
-        int height = this.scaled(boxHeight);
-        graphics.fill(x, y, x + width, y + height, 0xA0000000);
-        Theme.border(graphics, x, y, width, height, Theme.ACCENT_DIM);
-        String speaker = TextCodec.preview(this.entry.getSpeaker());
-        int textY = y + 4;
-        if (!speaker.isEmpty()) {
-            Theme.text(graphics, Theme.ellipsize(speaker, width - 8), x + 4, textY, Theme.ACCENT);
-            textY += 11;
+    /** Choice buttons where DialogScreen places them, above the box. */
+    private void renderChoices(GuiGraphics graphics) {
+        DialogOption[] options = this.entry.getOptions();
+        if (options == null || options.length == 0) {
+            return;
         }
-        for (net.minecraft.util.FormattedCharSequence line : Wrap.lines(TextCodec.styled(this.entry.getText()),
-                Math.max(20, width - 8), 4)) {
-            if (textY + 9 > y + height) {
-                break;
-            }
-            graphics.drawString(Theme.font(), line, x + 4, textY, Theme.TEXT, false);
-            textY += 10;
+        int width = Math.min(240, this.screenWidth - 40);
+        int startY = this.boxY() - options.length * 25 - 10;
+        if (this.entry.getDisplayItems() != null && !this.entry.getDisplayItems().isEmpty()) {
+            startY -= 30;
         }
+        int x = (this.screenWidth - width) / 2;
+        for (int i = 0; i < options.length; i++) {
+            int y = startY + i * 25;
+            graphics.fill(x, y, x + width, y + 20, 0xFF000000);
+            graphics.fill(x + 1, y + 1, x + width - 1, y + 19, 0xFF6F6F6F);
+            graphics.fill(x + 1, y + 18, x + width - 1, y + 19, 0xFF3C3C3C);
+            String label = options[i] == null ? "" : TextCodec.preview(options[i].getText());
+            Theme.centered(graphics, Theme.ellipsize(label, width - 8), x + width / 2, y + 6, 0xFFFFFFFF);
+        }
+    }
+
+    private void renderSelection(GuiGraphics graphics) {
+        if (this.selected == null) {
+            return;
+        }
+        int[] box = this.portraitBox(this.selected);
+        if (box == null) {
+            Theme.centered(graphics, Theme.tr("stage.missing", this.selected.getPath()).getString(),
+                    this.screenWidth / 2, this.screenHeight / 2, Theme.WARNING);
+            return;
+        }
+        int line = Math.max(1, Math.round(1.0f / this.scale));
+        int color = this.dragging ? Theme.ACCENT : 0xCCFFFFFF;
+        graphics.fill(box[0], box[1], box[0] + box[2], box[1] + line, color);
+        graphics.fill(box[0], box[1] + box[3] - line, box[0] + box[2], box[1] + box[3], color);
+        graphics.fill(box[0], box[1], box[0] + line, box[1] + box[3], color);
+        graphics.fill(box[0] + box[2] - line, box[1], box[0] + box[2], box[1] + box[3], color);
     }
 
     // ----- interaction -----
@@ -405,9 +455,9 @@ final class StageView extends UiNode {
         }
         this.host().focus(this);
         PortraitInfo hit = this.portraitAt(mouseX, mouseY);
-        if (hit != this.selected) {
+        if (hit != null && hit != this.selected) {
             this.selected = hit;
-            this.rebuildSide();
+            this.rebuildControls();
         }
         if (hit != null && button == 0) {
             this.dragging = true;
@@ -423,14 +473,15 @@ final class StageView extends UiNode {
         if (!this.dragging || this.selected == null) {
             return false;
         }
-        // Offsets are fractions of the screen, so a drag converts back through the stage size and
-        // stays correct whatever the window or GUI scale is.
-        this.selected.setOffsetX(this.selected.getOffsetX() + (float) ((mouseX - this.lastMouseX) / this.stageWidth));
-        this.selected.setOffsetY(this.selected.getOffsetY() + (float) ((mouseY - this.lastMouseY) / this.stageHeight));
+        PortraitInfo target = this.selected;
+        float dx = (float) ((mouseX - this.lastMouseX) / this.stageWidth);
+        float dy = (float) ((mouseY - this.lastMouseY) / this.stageHeight);
         this.lastMouseX = mouseX;
         this.lastMouseY = mouseY;
-        this.syncSliders();
-        this.context.touch(true);
+        this.edit(() -> {
+            target.setOffsetX(target.getOffsetX() + dx);
+            target.setOffsetY(target.getOffsetY() + dy);
+        });
         return true;
     }
 
@@ -454,7 +505,7 @@ final class StageView extends UiNode {
         }
         if (target != this.selected) {
             this.selected = target;
-            this.rebuildSide();
+            this.rebuildControls();
         }
         float step = this.context.shiftDown() ? 0.02f : 0.08f;
         PortraitInfo portrait = target;
@@ -467,13 +518,15 @@ final class StageView extends UiNode {
         if (this.selected == null) {
             return false;
         }
-        float step = this.context.shiftDown() ? 0.005f : 0.02f;
+        // One step is one game-screen pixel; Shift moves ten.
+        float stepX = (this.context.shiftDown() ? 10.0f : 1.0f) / this.screenWidth;
+        float stepY = (this.context.shiftDown() ? 10.0f : 1.0f) / this.screenHeight;
         PortraitInfo portrait = this.selected;
         switch (keyCode) {
-            case GLFW.GLFW_KEY_LEFT -> this.edit(() -> portrait.setOffsetX(portrait.getOffsetX() - step));
-            case GLFW.GLFW_KEY_RIGHT -> this.edit(() -> portrait.setOffsetX(portrait.getOffsetX() + step));
-            case GLFW.GLFW_KEY_UP -> this.edit(() -> portrait.setOffsetY(portrait.getOffsetY() - step));
-            case GLFW.GLFW_KEY_DOWN -> this.edit(() -> portrait.setOffsetY(portrait.getOffsetY() + step));
+            case GLFW.GLFW_KEY_LEFT -> this.edit(() -> portrait.setOffsetX(portrait.getOffsetX() - stepX));
+            case GLFW.GLFW_KEY_RIGHT -> this.edit(() -> portrait.setOffsetX(portrait.getOffsetX() + stepX));
+            case GLFW.GLFW_KEY_UP -> this.edit(() -> portrait.setOffsetY(portrait.getOffsetY() - stepY));
+            case GLFW.GLFW_KEY_DOWN -> this.edit(() -> portrait.setOffsetY(portrait.getOffsetY() + stepY));
             case GLFW.GLFW_KEY_R -> this.resetSelected();
             case GLFW.GLFW_KEY_DELETE -> this.removeSelected();
             default -> {
@@ -481,5 +534,54 @@ final class StageView extends UiNode {
             }
         }
         return true;
+    }
+
+    /** Three control columns side by side when there is room, stacked when there is not. */
+    private static final class Band extends UiNode {
+        private static final int GAP = 12;
+        private static final int STACK_BELOW = 420;
+        private final UiNode[] columns;
+
+        Band(UiNode... columns) {
+            this.columns = columns;
+            for (UiNode column : columns) {
+                this.add(column);
+            }
+        }
+
+        @Override
+        public int measureHeight(int width) {
+            if (width < STACK_BELOW) {
+                int total = 0;
+                for (UiNode column : this.columns) {
+                    total += column.measureHeight(width) + GAP;
+                }
+                return total;
+            }
+            int columnWidth = (width - GAP * 2) / 3;
+            int max = 0;
+            for (UiNode column : this.columns) {
+                max = Math.max(max, column.measureHeight(columnWidth));
+            }
+            return max;
+        }
+
+        @Override
+        protected void onLayout() {
+            if (this.width() < STACK_BELOW) {
+                int y = this.y();
+                for (UiNode column : this.columns) {
+                    int height = column.measureHeight(this.width());
+                    column.setBounds(this.x(), y, this.width(), height);
+                    y += height + GAP;
+                }
+                return;
+            }
+            int columnWidth = (this.width() - GAP * 2) / 3;
+            for (int i = 0; i < this.columns.length; i++) {
+                UiNode column = this.columns[i];
+                column.setBounds(this.x() + i * (columnWidth + GAP), this.y(), columnWidth, column.measureHeight(columnWidth));
+            }
+        }
     }
 }

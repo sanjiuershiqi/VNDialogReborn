@@ -215,7 +215,7 @@
   "gui.vn_edit.stage.portrait_exists": "这个立绘已经在场上了",
   "gui.vn_edit.stage.missing": "找不到图片：%s",
   "gui.vn_edit.stage.no_asset": "未设置",
-  "gui.vn_edit.stage.help": "拖动立绘移动 · 滚轮缩放（Shift 精细）· 方向键微调 · R 重置。黄框是对话框位置。",
+  "gui.vn_edit.stage.help": "在画面上拖动立绘移动，滚轮缩放（Shift 精细），方向键按 1 像素微调（Shift 为 10 像素），R 重置。画面按游戏实际窗口比例绘制。",
   "gui.vn_edit.logic.visibility_hint": "例如 execute if entity @s[gamemode=survival]",
   "gui.vn_edit.logic.visibility_help": "命令成功时才显示该节点；留空表示总是显示。",
   "gui.vn_edit.logic.add_command": "+ 添加命令",
@@ -358,5 +358,15 @@
   "gui.vn_edit.document.settings": "文件设置…",
   "gui.vn_edit.document.close": "关闭此文件",
   "gui.vn_edit.cancel": "取消",
-  "gui.vn_edit.close": "关闭"
+  "gui.vn_edit.close": "关闭",
+  "gui.vn_edit.view.graph": "关系图",
+  "gui.vn_edit.graph.mode_nodes": "本文件节点",
+  "gui.vn_edit.graph.mode_files": "所有文件",
+  "gui.vn_edit.graph.fit": "适应窗口",
+  "gui.vn_edit.graph.actual": "100%",
+  "gui.vn_edit.graph.focus": "定位选中",
+  "gui.vn_edit.graph.empty": "没有可显示的内容",
+  "gui.vn_edit.graph.hint": "单击节点编辑 · 拖动空白处平移 · 滚轮缩放",
+  "gui.vn_edit.graph.other_file": "另一个对话文件",
+  "gui.vn_edit.graph.missing_file": "文件不存在"
 }

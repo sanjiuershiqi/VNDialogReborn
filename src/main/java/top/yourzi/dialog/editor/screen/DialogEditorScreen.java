@@ -63,6 +63,7 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
 
     private enum View {
         FLOW,
+        GRAPH,
         STAGE,
         VALIDATION,
         STRUCTURE,
@@ -79,6 +80,7 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
     private final OutlinePanel outline;
     private final FlowPanel flow;
     private final StageView stage;
+    private final GraphPanel graph;
     private final ValidationPanel validation = new ValidationPanel();
     private final InspectorPanel inspector;
     private final StatusBar statusBar;
@@ -87,6 +89,7 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
     private final Button redoButton;
     private final Button flowView;
     private final Button stageView;
+    private final Button graphView;
     private final Button validationView;
     private final Button structureView;
     private final Button inspectorView;
@@ -102,6 +105,7 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
         this.outline = new OutlinePanel(this);
         this.flow = new FlowPanel(this);
         this.stage = new StageView(this);
+        this.graph = new GraphPanel(this);
         this.inspector = new InspectorPanel(this);
         this.statusBar = new StatusBar(this::summary);
 
@@ -110,6 +114,7 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
         this.redoButton = this.action("redo", Button.Tone.GHOST, this::redo);
         this.flowView = this.viewButton("view.flow", View.FLOW);
         this.stageView = this.viewButton("view.stage", View.STAGE);
+        this.graphView = this.viewButton("view.graph", View.GRAPH);
         this.validationView = this.viewButton("view.validation", View.VALIDATION);
         this.structureView = this.viewButton("view.structure", View.STRUCTURE);
         this.inspectorView = this.viewButton("view.inspector", View.INSPECTOR);
@@ -121,6 +126,7 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
         this.topBar.add(Nodes.spacer(8));
         this.topBar.add(this.structureView);
         this.topBar.add(this.flowView);
+        this.topBar.add(this.graphView);
         this.topBar.add(this.stageView);
         this.topBar.add(this.validationView);
         this.topBar.add(this.inspectorView);
@@ -135,6 +141,7 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
         this.workspace.add(this.outline);
         this.workspace.add(this.flow);
         this.workspace.add(this.stage);
+        this.workspace.add(this.graph);
         this.workspace.add(this.validation);
         this.workspace.add(this.inspector);
         this.workspace.add(this.statusBar);
@@ -144,6 +151,8 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
         this.inspector.setActions(this::pickNode, staging, this::pickInventoryItem);
         this.stage.setActions(staging);
         this.validation.setOnIssueSelected(this::focusIssue);
+        this.graph.setOpenDocument(this::openDocument);
+        this.graph.setAllFiles(this::allFiles);
         this.restoreSession();
     }
 
@@ -213,6 +222,9 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
         this.outline.revealSelected();
         this.flow.refresh(true);
         this.bindSelection(false);
+        if (this.view == View.GRAPH) {
+            this.graph.focusSelected();
+        }
     }
 
     @Override
@@ -221,6 +233,7 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
             this.outline.refresh();
             this.flow.refresh(false);
             this.refreshValidation();
+            this.refreshGraph();
         }
     }
 
@@ -256,6 +269,34 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
         this.flow.refresh(false);
         this.bindSelection(true);
         this.refreshValidation();
+        this.refreshGraph();
+    }
+
+    private void refreshGraph() {
+        if (this.view == View.GRAPH) {
+            this.graph.refresh();
+        }
+    }
+
+    /** Every dialogue file, using the in-memory version of open files so unsaved edits show. */
+    private List<DialogSequence> allFiles() {
+        List<DialogSequence> files = new ArrayList<>();
+        List<String> seen = new ArrayList<>();
+        for (EditorDocument document : this.documents) {
+            files.add(document.sequence());
+            seen.add(document.id());
+        }
+        for (String id : this.store.listIds()) {
+            if (seen.contains(id)) {
+                continue;
+            }
+            try {
+                files.add(this.store.read(id));
+            } catch (IOException e) {
+                Dialog.LOGGER.warn("Graph skipped unreadable dialogue '{}'", id);
+            }
+        }
+        return files;
     }
 
     private void refreshValidation() {
@@ -707,6 +748,9 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
         if (target == View.VALIDATION) {
             this.validation.setIssues(this.sequence() == null ? List.of() : DialogValidator.validate(this.sequence()));
         }
+        if (target == View.GRAPH) {
+            this.graph.refresh();
+        }
         this.workspace.invalidateLayout();
     }
 
@@ -896,6 +940,7 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
             screen.structureView.selected(current == View.STRUCTURE);
             screen.flowView.selected(current == View.FLOW);
             screen.stageView.selected(current == View.STAGE);
+            screen.graphView.selected(current == View.GRAPH);
             screen.validationView.selected(current == View.VALIDATION);
             screen.inspectorView.selected(current == View.INSPECTOR);
 
@@ -906,6 +951,7 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
                     inspectorWidth > 0 ? inspectorWidth : centerWidth, bottom - top);
             place(screen.flow, current == View.FLOW, centerX, top, centerWidth, bottom - top);
             place(screen.stage, current == View.STAGE, centerX, top, centerWidth, bottom - top);
+            place(screen.graph, current == View.GRAPH, centerX, top, centerWidth, bottom - top);
             place(screen.validation, current == View.VALIDATION, centerX, top, centerWidth, bottom - top);
         }
 

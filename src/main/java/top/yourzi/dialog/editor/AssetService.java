@@ -26,9 +26,9 @@ public final class AssetService {
             return this.location != null;
         }
 
-        /** Aspect ratio of the source image, falling back to a square for built-in placeholders. */
+        /** Width / height of the source image. */
         public float aspect() {
-            return this.height <= 0 ? 1.0f : (float) this.width / (float) this.height;
+            return this.width <= 0 || this.height <= 0 ? (float) FALLBACK_WIDTH / FALLBACK_HEIGHT : (float) this.width / this.height;
         }
     }
 
@@ -42,9 +42,24 @@ public final class AssetService {
         return resolve(path, EditorConfig.BACKGROUNDS_DIR, "textures/backgrounds/");
     }
 
+    /** Size the runtime assumes when an image cannot be measured (DialogScreen uses the same). */
+    private static final int FALLBACK_WIDTH = 65;
+    private static final int FALLBACK_HEIGHT = 100;
+    private static final java.util.Map<ResourceLocation, int[]> BUILTIN_SIZES = new java.util.HashMap<>();
+
+    /**
+     * Resolves the way {@code DialogScreen} does: a texture shipped in a resource pack wins, the
+     * editor folder is the fallback. Using the same order and the real image size is what keeps the
+     * stage preview identical to the game.
+     */
     private static Handle resolve(String path, Path directory, String builtinPrefix) {
         if (path == null || path.isBlank()) {
             return MISSING;
+        }
+        ResourceLocation builtin = builtin(builtinPrefix + path);
+        if (builtin != null) {
+            int[] size = BUILTIN_SIZES.computeIfAbsent(builtin, AssetService::measure);
+            return new Handle(builtin, size[0], size[1]);
         }
         Path file = EditorConfig.resolveInside(directory, path);
         if (file != null && file.toFile().isFile()) {
@@ -53,11 +68,15 @@ public final class AssetService {
                 return new Handle(cached.location(), cached.width(), cached.height());
             }
         }
-        ResourceLocation builtin = builtin(builtinPrefix + path);
-        if (builtin != null) {
-            return new Handle(builtin, 256, 256);
-        }
         return MISSING;
+    }
+
+    private static int[] measure(ResourceLocation location) {
+        try (top.yourzi.dialog.util.STBBackendImage image = top.yourzi.dialog.util.STBBackendImage.read(location)) {
+            return new int[]{image.getWidth(), image.getHeight()};
+        } catch (Exception e) {
+            return new int[]{FALLBACK_WIDTH, FALLBACK_HEIGHT};
+        }
     }
 
     /** Built-in texture lookup; invalid paths (for example CJK file names) simply do not resolve. */
