@@ -54,9 +54,7 @@ import java.util.function.Consumer;
  * surface is never squeezed below a readable width.
  */
 public final class DialogEditorScreen extends Screen implements EditorContext {
-    private static final int TOP_H = 24;
-    private static final int TABS_H = 20;
-    private static final int VIEW_H = 20;
+    private static final int TOP_H = 26;
     private static final int STATUS_H = 14;
     private static final int WIDE = 760;
     private static final int MEDIUM = 520;
@@ -75,9 +73,9 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
     private final List<EditorDocument> documents = new ArrayList<>();
     private final Workspace workspace = new Workspace();
     private final UiHost host;
-    private final Row topBar = new Row().gap(3);
-    private final TabStrip tabs = new TabStrip();
-    private final Row viewBar = new Row().gap(2);
+    private final Row topBar = new Row().gap(4);
+    private final Button documentMenu = Button.of(Component.empty(), () -> {
+    });
     private final OutlinePanel outline;
     private final FlowPanel flow;
     private final StageView stage;
@@ -92,12 +90,10 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
     private final Button validationView;
     private final Button structureView;
     private final Button inspectorView;
-    private final Button navigatorToggle;
 
     private EditorDocument active;
     private String selectedId;
     private View view = View.FLOW;
-    private boolean navigatorVisible = true;
     private boolean closing;
 
     public DialogEditorScreen() {
@@ -109,41 +105,33 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
         this.inspector = new InspectorPanel(this);
         this.statusBar = new StatusBar(this::summary);
 
-        this.saveButton = this.action("save", Button.Tone.PRIMARY, this::save);
-        this.undoButton = this.action("undo", Button.Tone.NORMAL, this::undo);
-        this.redoButton = this.action("redo", Button.Tone.NORMAL, this::redo);
-        this.topBar.add(this.action("new", Button.Tone.NORMAL, this::promptNewDocument));
-        this.topBar.add(this.action("open", Button.Tone.NORMAL, this::promptOpenDocument));
-        this.topBar.add(this.action("import", Button.Tone.NORMAL, this::promptImport));
-        this.topBar.add(this.saveButton);
-        this.topBar.add(Nodes.spacer(6));
-        this.topBar.add(this.undoButton);
-        this.topBar.add(this.redoButton);
-        this.topBar.add(Nodes.fill());
-        this.topBar.add(this.action("props", Button.Tone.NORMAL, this::editSequence));
-        this.topBar.add(this.action("help", Button.Tone.GHOST, this::openHelp));
-        this.topBar.add(this.action("playtest", Button.Tone.PRIMARY, this::playtest));
-
+        this.saveButton = this.action("save", Button.Tone.NORMAL, this::save);
+        this.undoButton = this.action("undo", Button.Tone.GHOST, this::undo);
+        this.redoButton = this.action("redo", Button.Tone.GHOST, this::redo);
         this.flowView = this.viewButton("view.flow", View.FLOW);
         this.stageView = this.viewButton("view.stage", View.STAGE);
         this.validationView = this.viewButton("view.validation", View.VALIDATION);
         this.structureView = this.viewButton("view.structure", View.STRUCTURE);
         this.inspectorView = this.viewButton("view.inspector", View.INSPECTOR);
-        this.navigatorToggle = Button.of(Theme.tr("view.toggle_structure"), () -> {
-            this.navigatorVisible = !this.navigatorVisible;
-            this.workspace.invalidateLayout();
-        }).tone(Button.Tone.GHOST).fit();
-        this.viewBar.add(this.structureView);
-        this.viewBar.add(this.flowView);
-        this.viewBar.add(this.stageView);
-        this.viewBar.add(this.validationView);
-        this.viewBar.add(this.inspectorView);
-        this.viewBar.add(Nodes.fill());
-        this.viewBar.add(this.navigatorToggle);
+        this.documentMenu.setAction(this::openDocumentMenu);
+        this.documentMenu.withTooltip(Theme.tr("document.menu_tip"));
+
+        // One bar: which file, which view, then the actions that apply to the whole file.
+        this.topBar.add(this.documentMenu);
+        this.topBar.add(Nodes.spacer(8));
+        this.topBar.add(this.structureView);
+        this.topBar.add(this.flowView);
+        this.topBar.add(this.stageView);
+        this.topBar.add(this.validationView);
+        this.topBar.add(this.inspectorView);
+        this.topBar.add(Nodes.fill());
+        this.topBar.add(this.undoButton);
+        this.topBar.add(this.redoButton);
+        this.topBar.add(this.saveButton);
+        this.topBar.add(this.action("playtest", Button.Tone.PRIMARY, this::playtest));
+        this.topBar.add(this.action("help", Button.Tone.GHOST, this::openHelp));
 
         this.workspace.add(this.topBar);
-        this.workspace.add(this.tabs);
-        this.workspace.add(this.viewBar);
         this.workspace.add(this.outline);
         this.workspace.add(this.flow);
         this.workspace.add(this.stage);
@@ -151,8 +139,6 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
         this.workspace.add(this.inspector);
         this.workspace.add(this.statusBar);
         this.host = new UiHost(this.workspace);
-
-        this.outline.setAddAction(this::addNodeAfterSelection);
         this.flow.setCommands(new FlowCommands());
         StagingActions staging = new StagingActions();
         this.inspector.setActions(this::pickNode, staging, this::pickInventoryItem);
@@ -172,7 +158,37 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
     }
 
     private Button viewButton(String key, View target) {
-        return Button.of(Theme.tr(key), () -> this.showView(target)).fit();
+        return Button.of(Theme.tr(key), () -> this.showView(target)).tone(Button.Tone.TAB).fit();
+    }
+
+    /** File switcher: open files first, then the file-level commands. */
+    private void openDocumentMenu() {
+        List<ContextMenu.Item> items = new ArrayList<>();
+        for (EditorDocument document : this.documents) {
+            String mark = document == this.active ? "● " : "   ";
+            String dirty = document.dirty() ? "  *" : "";
+            items.add(ContextMenu.Item.of(Component.literal(mark + document.id() + dirty), () -> this.activate(document)));
+        }
+        if (!this.documents.isEmpty()) {
+            items.add(ContextMenu.Item.separator());
+        }
+        items.add(ContextMenu.Item.of(Theme.tr("document.new"), this::promptNewDocument));
+        items.add(ContextMenu.Item.of(Theme.tr("document.open"), this::promptOpenDocument));
+        items.add(ContextMenu.Item.of(Theme.tr("document.import"), this::promptImport));
+        if (this.active != null) {
+            EditorDocument current = this.active;
+            items.add(ContextMenu.Item.separator());
+            items.add(ContextMenu.Item.of(Theme.tr("document.settings"), this::editSequence));
+            items.add(ContextMenu.Item.of(Theme.tr("document.close"), () -> this.closeDocument(current)));
+        }
+        ContextMenu.open(this.host, this.documentMenu.x(), this.documentMenu.bottom() + 2, null, items);
+    }
+
+    private void updateDocumentLabel() {
+        String label = this.active == null ? Theme.tr("document.none").getString()
+                : this.active.id() + (this.active.dirty() ? " *" : "");
+        this.documentMenu.setLabel(Component.literal(label + "  ▾"));
+        this.documentMenu.prefWidth(Mth.clamp(Theme.font().width(label) + 34, 90, 200));
     }
 
     // ===== EditorContext =====
@@ -264,7 +280,11 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
         EditorStore.Session session = this.store.readSession();
         List<String> ids = new ArrayList<>(session.openIds() == null ? List.of() : session.openIds());
         if (ids.isEmpty()) {
-            ids.addAll(this.store.listIds());
+            // First launch: open one file rather than every file in the folder.
+            List<String> available = this.store.listIds();
+            if (!available.isEmpty()) {
+                ids.add(available.get(0));
+            }
         }
         for (String id : ids) {
             if (this.find(id) != null) {
@@ -840,58 +860,53 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
     // ===== layout =====
 
     /**
-     * Root of the tree. Places every region explicitly so the arrangement for each width class is
-     * visible in one method rather than spread across nested containers.
+     * Root of the tree. Places every region explicitly so each width class is readable in one
+     * method: three columns when wide, the outline folded into the view tabs when medium, and only
+     * the centre column (with outline and properties as tabs) when narrow.
      */
     private final class Workspace extends UiNode {
+        private String documentLabel;
+
         @Override
         protected void onLayout() {
             DialogEditorScreen screen = DialogEditorScreen.this;
             int width = this.width();
             int height = this.height();
-            screen.topBar.setBounds(4, 3, width - 8, TOP_H - 6);
-            screen.tabs.setBounds(0, TOP_H, width, TABS_H);
+            screen.topBar.setBounds(6, 4, width - 12, TOP_H - 8);
             screen.statusBar.setBounds(0, height - STATUS_H, width, STATUS_H);
 
-            int top = TOP_H + TABS_H;
+            int top = TOP_H;
             int bottom = height - STATUS_H;
             boolean wide = width >= WIDE;
             boolean medium = !wide && width >= MEDIUM;
-            int treeWidth = wide && screen.navigatorVisible ? Mth.clamp(width / 5, 170, 250) : 0;
-            int inspectorWidth = wide ? Mth.clamp(width * 3 / 10, 250, 380) : medium ? Mth.clamp(width * 2 / 5, 230, 320) : 0;
+            int treeWidth = wide ? Mth.clamp(width / 5, 180, 260) : 0;
+            int inspectorWidth = wide ? Mth.clamp(width * 3 / 10, 260, 380) : medium ? Mth.clamp(width * 2 / 5, 240, 320) : 0;
+            int gutter = 1;
 
-            View current = screen.view;
-            if (current == View.STRUCTURE && treeWidth > 0 || current == View.INSPECTOR && inspectorWidth > 0) {
-                current = View.FLOW;
-                screen.view = current;
+            if (screen.view == View.STRUCTURE && treeWidth > 0 || screen.view == View.INSPECTOR && inspectorWidth > 0) {
+                screen.view = View.FLOW;
             }
-            int centerX = treeWidth;
-            int centerWidth = width - treeWidth - inspectorWidth;
-            screen.viewBar.setBounds(centerX + 3, top + 1, centerWidth - 6, VIEW_H - 2);
-            int panelTop = top + VIEW_H;
-            int panelHeight = bottom - panelTop;
+            View current = screen.view;
+            int centerX = treeWidth == 0 ? 0 : treeWidth + gutter;
+            int centerRight = inspectorWidth == 0 ? width : width - inspectorWidth - gutter;
+            int centerWidth = centerRight - centerX;
 
             screen.structureView.setVisible(treeWidth == 0);
             screen.inspectorView.setVisible(inspectorWidth == 0);
-            screen.navigatorToggle.setVisible(wide);
             screen.structureView.selected(current == View.STRUCTURE);
             screen.flowView.selected(current == View.FLOW);
             screen.stageView.selected(current == View.STAGE);
             screen.validationView.selected(current == View.VALIDATION);
             screen.inspectorView.selected(current == View.INSPECTOR);
-            screen.navigatorToggle.selected(screen.navigatorVisible);
 
-            place(screen.outline, treeWidth > 0, 0, top, treeWidth, bottom - top);
-            place(screen.inspector, inspectorWidth > 0, width - inspectorWidth, top, inspectorWidth, bottom - top);
-            if (current == View.STRUCTURE) {
-                place(screen.outline, true, centerX, panelTop, centerWidth, panelHeight);
-            }
-            if (current == View.INSPECTOR) {
-                place(screen.inspector, true, centerX, panelTop, centerWidth, panelHeight);
-            }
-            place(screen.flow, current == View.FLOW, centerX, panelTop, centerWidth, panelHeight);
-            place(screen.stage, current == View.STAGE, centerX, panelTop, centerWidth, panelHeight);
-            place(screen.validation, current == View.VALIDATION, centerX, panelTop, centerWidth, panelHeight);
+            place(screen.outline, treeWidth > 0 || current == View.STRUCTURE,
+                    treeWidth > 0 ? 0 : centerX, top, treeWidth > 0 ? treeWidth : centerWidth, bottom - top);
+            place(screen.inspector, inspectorWidth > 0 || current == View.INSPECTOR,
+                    inspectorWidth > 0 ? width - inspectorWidth : centerX, top,
+                    inspectorWidth > 0 ? inspectorWidth : centerWidth, bottom - top);
+            place(screen.flow, current == View.FLOW, centerX, top, centerWidth, bottom - top);
+            place(screen.stage, current == View.STAGE, centerX, top, centerWidth, bottom - top);
+            place(screen.validation, current == View.VALIDATION, centerX, top, centerWidth, bottom - top);
         }
 
         private static void place(UiNode node, boolean visible, int x, int y, int width, int height) {
@@ -905,129 +920,17 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
         protected void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
             DialogEditorScreen screen = DialogEditorScreen.this;
             graphics.fill(0, 0, this.width(), this.height(), Theme.BG);
-            graphics.fill(0, 0, this.width(), TOP_H, Theme.SURFACE);
-            graphics.fill(0, 0, 3, TOP_H, Theme.ACCENT);
             graphics.fill(0, TOP_H - 1, this.width(), TOP_H, Theme.BORDER);
-            int viewTop = TOP_H + TABS_H;
-            graphics.fill(screen.viewBar.x() - 3, viewTop, screen.viewBar.right() + 3, viewTop + VIEW_H, Theme.SURFACE);
-            graphics.fill(screen.viewBar.x() - 3, viewTop + VIEW_H - 1, screen.viewBar.right() + 3, viewTop + VIEW_H,
-                    Theme.BORDER);
-            boolean undo = screen.active != null && screen.active.canUndo();
-            boolean redo = screen.active != null && screen.active.canRedo();
-            screen.undoButton.active(undo);
-            screen.redoButton.active(redo);
+            String label = screen.active == null ? "" : screen.active.id() + screen.active.dirty();
+            if (!label.equals(this.documentLabel)) {
+                this.documentLabel = label;
+                screen.updateDocumentLabel();
+            }
+            screen.undoButton.active(screen.active != null && screen.active.canUndo());
+            screen.redoButton.active(screen.active != null && screen.active.canRedo());
             screen.saveButton.active(screen.active != null && screen.active.dirty());
         }
     }
-
-    /** Open documents as tabs: click to switch, right click for file actions, wheel to scroll. */
-    private final class TabStrip extends UiNode {
-        private static final int TAB_GAP = 2;
-        private int scroll;
-
-        private int tabWidth(EditorDocument document) {
-            return Mth.clamp(Theme.font().width(document.id()) + 26, 60, 170);
-        }
-
-        private int contentWidth() {
-            int total = 24;
-            for (EditorDocument document : DialogEditorScreen.this.documents) {
-                total += this.tabWidth(document) + TAB_GAP;
-            }
-            return total;
-        }
-
-        private EditorDocument documentAt(double mouseX) {
-            int x = this.x() + 4 - this.scroll;
-            for (EditorDocument document : DialogEditorScreen.this.documents) {
-                int width = this.tabWidth(document);
-                if (mouseX >= x && mouseX < x + width) {
-                    return document;
-                }
-                x += width + TAB_GAP;
-            }
-            return null;
-        }
-
-        private int plusX() {
-            int x = this.x() + 4 - this.scroll;
-            for (EditorDocument document : DialogEditorScreen.this.documents) {
-                x += this.tabWidth(document) + TAB_GAP;
-            }
-            return x;
-        }
-
-        @Override
-        public boolean mouseClicked(double mouseX, double mouseY, int button) {
-            DialogEditorScreen screen = DialogEditorScreen.this;
-            screen.host.focus(null);
-            int plusX = this.plusX();
-            if (button == 0 && mouseX >= plusX && mouseX < plusX + 18) {
-                screen.promptNewDocument();
-                return true;
-            }
-            EditorDocument document = this.documentAt(mouseX);
-            if (document == null) {
-                return true;
-            }
-            if (button == 0) {
-                screen.activate(document);
-            } else if (button == 2) {
-                screen.closeDocument(document);
-            } else if (button == 1) {
-                screen.activate(document);
-                List<ContextMenu.Item> items = new ArrayList<>();
-                items.add(ContextMenu.Item.of(Theme.tr("tab.save"), screen::save, document.dirty()));
-                items.add(ContextMenu.Item.of(Theme.tr("tab.properties"), screen::editSequence));
-                items.add(ContextMenu.Item.of(Theme.tr("tab.close"), () -> screen.closeDocument(document)));
-                items.add(ContextMenu.Item.separator());
-                items.add(ContextMenu.Item.of(Theme.tr("tab.delete_file"), () -> screen.deleteDocument(document)));
-                ContextMenu.open(screen.host, (int) mouseX, (int) mouseY, Component.literal(document.id()), items);
-            }
-            return true;
-        }
-
-        @Override
-        public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-            int max = Math.max(0, this.contentWidth() - this.width());
-            this.scroll = Mth.clamp(this.scroll - (int) Math.signum(scrollY) * 40, 0, max);
-            return true;
-        }
-
-        @Override
-        protected void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-            DialogEditorScreen screen = DialogEditorScreen.this;
-            graphics.fill(this.x(), this.y(), this.right(), this.bottom(), Theme.BG);
-            graphics.fill(this.x(), this.bottom() - 1, this.right(), this.bottom(), Theme.BORDER);
-            this.scroll = Mth.clamp(this.scroll, 0, Math.max(0, this.contentWidth() - this.width()));
-            graphics.enableScissor(this.x(), this.y(), this.right(), this.bottom());
-            int x = this.x() + 4 - this.scroll;
-            boolean hovered = this.isHovered();
-            for (EditorDocument document : screen.documents) {
-                int width = this.tabWidth(document);
-                boolean current = document == screen.active;
-                boolean over = hovered && mouseX >= x && mouseX < x + width;
-                graphics.fill(x, this.y() + 3, x + width, this.bottom(),
-                        current ? Theme.SURFACE : over ? Theme.HOVER : Theme.RAISED);
-                if (current) {
-                    graphics.fill(x, this.y() + 3, x + width, this.y() + 5, Theme.ACCENT);
-                }
-                int textX = x + 8;
-                if (document.dirty()) {
-                    graphics.fill(x + 6, this.y() + 10, x + 10, this.y() + 14, Theme.WARNING);
-                    textX = x + 14;
-                }
-                Theme.textIn(graphics, document.id(), textX, this.y() + 3, x + width - textX - 4, this.height() - 3,
-                        current ? Theme.TEXT : Theme.TEXT_DIM);
-                x += width + TAB_GAP;
-            }
-            boolean plusHover = hovered && mouseX >= x && mouseX < x + 18;
-            graphics.fill(x, this.y() + 3, x + 18, this.bottom() - 1, plusHover ? Theme.HOVER : Theme.BG);
-            Theme.centered(graphics, "+", x + 9, this.y() + 8, plusHover ? Theme.ACCENT : Theme.TEXT_DIM);
-            graphics.disableScissor();
-        }
-    }
-
     // ===== Screen plumbing =====
 
     @Override

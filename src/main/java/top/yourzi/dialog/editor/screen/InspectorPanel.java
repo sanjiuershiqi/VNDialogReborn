@@ -36,7 +36,7 @@ public final class InspectorPanel extends EditorPanel {
     private DialogEntry bound;
 
     public InspectorPanel(EditorContext context) {
-        super("03", Theme.tr("panel.inspector"));
+        super(null);
         this.content = new ContentTab(context);
         this.branch = new BranchTab(context);
         this.staging = new StagingTab(context);
@@ -44,7 +44,7 @@ public final class InspectorPanel extends EditorPanel {
         UiNode[] tabs = {this.content, this.branch, this.staging, this.logic};
         for (int i = 0; i < tabs.length; i++) {
             int index = i;
-            Button tab = Button.of(Theme.tr(TAB_KEYS[i]), () -> this.setActiveTab(index));
+            Button tab = Button.of(Theme.tr(TAB_KEYS[i]), () -> this.setActiveTab(index)).tone(Button.Tone.TAB);
             tab.flex(1);
             this.tabButtons.add(tab);
             this.tabBar.add(tab);
@@ -78,13 +78,13 @@ public final class InspectorPanel extends EditorPanel {
     @Override
     protected void onLayout() {
         super.onLayout();
-        int x = this.content().x() + 3;
-        int width = this.content().width() - 6;
+        int x = this.content().x();
+        int width = this.content().width();
         int y = this.content().y();
-        this.tabBar.setBounds(x, y, width, Theme.ROW);
-        int bodyY = y + Theme.ROW + 4;
+        this.tabBar.setBounds(x + 4, y, width - 8, Theme.ROW + 2);
+        int bodyY = y + Theme.ROW + 10;
         for (ScrollView page : this.pages) {
-            page.setBounds(x, bodyY, width, Math.max(0, this.content().bottom() - bodyY - 2));
+            page.setBounds(x + 8, bodyY, width - 10, Math.max(0, this.content().bottom() - bodyY - 4));
         }
     }
 
@@ -127,6 +127,9 @@ public final class InspectorPanel extends EditorPanel {
     @Override
     protected void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         super.render(graphics, mouseX, mouseY, partialTick);
+        if (this.bound != null) {
+            graphics.fill(this.tabBar.x(), this.tabBar.bottom(), this.tabBar.right(), this.tabBar.bottom() + 1, Theme.BORDER);
+        }
         if (this.bound == null) {
             int centerY = this.content().y() + this.content().height() / 2;
             Theme.centered(graphics, Theme.tr("inspector.hint").getString(), this.x() + this.width() / 2, centerY - 4,

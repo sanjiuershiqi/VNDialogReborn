@@ -47,11 +47,11 @@ public class Toggle extends UiNode {
     @Override
     protected void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         int boxY = this.y() + (this.height() - BOX) / 2;
-        int fill = this.value ? Theme.ACCENT : Theme.FIELD;
-        graphics.fill(this.x(), boxY, this.x() + BOX, boxY + BOX, fill);
-        Theme.border(graphics, this.x(), boxY, BOX, BOX, this.value ? Theme.ACCENT : Theme.BORDER_STRONG);
+        graphics.fill(this.x(), boxY, this.x() + BOX, boxY + BOX, this.value ? Theme.ACCENT : Theme.FIELD);
         if (this.value) {
-            graphics.fill(this.x() + 2, boxY + 2, this.x() + BOX - 2, boxY + BOX - 2, 0xFF241F0A);
+            graphics.fill(this.x() + 3, boxY + 3, this.x() + BOX - 3, boxY + BOX - 3, Theme.FIELD);
+        } else {
+            Theme.border(graphics, this.x(), boxY, BOX, BOX, Theme.BORDER_STRONG);
         }
         Theme.textIn(graphics, this.label.getString(), this.x() + BOX + 6, this.y(),
                 this.width() - BOX - 6, this.height(), this.isHovered() ? Theme.TEXT : Theme.TEXT_DIM);

@@ -3,6 +3,7 @@ package top.yourzi.dialog.editor.screen;
 import com.google.gson.JsonPrimitive;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
 import top.yourzi.dialog.editor.TextCodec;
 import top.yourzi.dialog.editor.ui.Button;
 import top.yourzi.dialog.editor.ui.Column;
@@ -24,18 +25,19 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Writing surface: the script as a vertical list of cards in file order.
+ * Writing surface: the script as a column of cards in file order.
  *
- * <p>File order is the script, so cards are never rearranged by a layout algorithm. Each card shows
- * who speaks, what they say and where the node goes next; choices are listed inside the card and
- * clicking one jumps to its target, which is how branches are followed without a graph canvas.
- * Right click opens the node's actions.
+ * <p>A card reads like a screenplay line - speaker, then text with its formatting applied - followed
+ * by the choices and a one-line note of where the script goes next. Clicking a choice on the
+ * selected card jumps to its target; right click opens the node's actions.
  */
 public final class FlowPanel extends EditorPanel {
-    private static final int HEAD = 14;
-    private static final int OPTION_ROW = 13;
-    private static final int PAD = 6;
-    private static final int MAX_TEXT_LINES = 4;
+    private static final int PAD = 8;
+    private static final int LINE_H = 10;
+    private static final int OPTION_ROW = 14;
+    private static final int EXIT_H = 14;
+    private static final int MAX_TEXT_LINES = 5;
+    private static final int MAX_CARD_WIDTH = 560;
 
     /** Actions the flow delegates to the screen. */
     public interface Commands {
@@ -51,31 +53,31 @@ public final class FlowPanel extends EditorPanel {
     }
 
     private final EditorContext context;
-    private final Column body = new Column().gap(3).padding(4);
+    private final Column body = new Column().gap(4).padding(8);
     private final ScrollView scroller = new ScrollView(this.body);
     private final Map<String, Integer> branchColors = new HashMap<>();
     private final Button addButton = Button.of(Theme.tr("add_node"), () -> {
     }).tone(Button.Tone.PRIMARY);
     private final Button duplicateButton = Button.of(Theme.tr("action.duplicate"), () -> {
-    });
-    private final Button upButton = Button.of(Component.literal("▲"), () -> {
-    });
-    private final Button downButton = Button.of(Component.literal("▼"), () -> {
-    });
-    private final Button deleteButton = Button.of(Theme.tr("action.delete"), () -> {
     }).tone(Button.Tone.GHOST);
+    private final Button upButton = Button.of(Theme.tr("flow.up"), () -> {
+    }).tone(Button.Tone.GHOST);
+    private final Button downButton = Button.of(Theme.tr("flow.down"), () -> {
+    }).tone(Button.Tone.GHOST);
+    private final Button deleteButton = Button.of(Theme.tr("action.delete"), () -> {
+    }).tone(Button.Tone.DANGER);
     private Commands commands;
     private boolean revealPending;
 
     public FlowPanel(EditorContext context) {
-        super("02", Theme.tr("panel.flow"));
+        super(null);
         this.context = context;
         Row toolbar = this.createToolbar(Theme.ROW);
         toolbar.add(this.addButton.fit());
-        toolbar.add(this.duplicateButton.fit());
-        toolbar.add(this.upButton.prefWidth(18));
-        toolbar.add(this.downButton.prefWidth(18));
         toolbar.add(Nodes.fill());
+        toolbar.add(this.upButton.fit());
+        toolbar.add(this.downButton.fit());
+        toolbar.add(this.duplicateButton.fit());
         toolbar.add(this.deleteButton.fit());
         this.upButton.withTooltip(Theme.tr("flow.move_up"));
         this.downButton.withTooltip(Theme.tr("flow.move_down"));
@@ -94,7 +96,10 @@ public final class FlowPanel extends EditorPanel {
     @Override
     protected void onLayout() {
         super.onLayout();
-        this.scroller.setBounds(this.content().x(), this.content().y(), this.content().width(), this.content().height());
+        // Cards stop growing past a readable measure and stay centred on wide screens.
+        int width = Math.min(this.content().width(), MAX_CARD_WIDTH + 24);
+        int x = this.content().x() + (this.content().width() - width) / 2;
+        this.scroller.setBounds(x, this.content().y(), width, this.content().height());
     }
 
     /**
@@ -121,6 +126,7 @@ public final class FlowPanel extends EditorPanel {
         DialogEntry selected = NodeGraph.byId(sequence, this.context.selectedId());
         int index = selected == null ? -1 : NodeGraph.indexOf(sequence, selected);
         int count = NodeGraph.entries(sequence).size();
+        this.addButton.active(sequence != null);
         this.duplicateButton.active(selected != null);
         this.deleteButton.active(selected != null);
         this.upButton.active(index > 0);
@@ -138,16 +144,11 @@ public final class FlowPanel extends EditorPanel {
             for (DialogOption option : entry.getOptions()) {
                 String target = option == null ? null : option.getTargetId();
                 if (target != null && !target.isBlank() && !this.branchColors.containsKey(target)) {
-                    this.branchColors.put(target, goldenColor(counter++));
+                    float hue = (0.58f + counter++ * 0.61803398875f) % 1.0f;
+                    this.branchColors.put(target, 0xFF000000 | (java.awt.Color.HSBtoRGB(hue, 0.45f, 0.95f) & 0xFFFFFF));
                 }
             }
         }
-    }
-
-    private static int goldenColor(int index) {
-        float hue = (index * 0.61803398875f) % 1.0f;
-        int rgb = java.awt.Color.HSBtoRGB(hue, 0.55f, 0.95f);
-        return 0xFF000000 | (rgb & 0xFFFFFF);
     }
 
     @Override
@@ -158,7 +159,7 @@ public final class FlowPanel extends EditorPanel {
         this.revealPending = false;
         for (UiNode child : this.body.children()) {
             if (child instanceof Card card && card.isSelected()) {
-                this.scroller.reveal(card.y() - 4, card.bottom() + 4);
+                this.scroller.reveal(card.y() - 6, card.bottom() + 6);
                 return;
             }
         }
@@ -178,22 +179,30 @@ public final class FlowPanel extends EditorPanel {
             return this.entry.getId() != null && this.entry.getId().equals(FlowPanel.this.context.selectedId());
         }
 
-        private List<String> lines(int width) {
-            return Wrap.dialogue(this.entry.getText(), Math.max(20, width - PAD * 2), MAX_TEXT_LINES);
+        private List<FormattedCharSequence> lines(int width) {
+            return Wrap.lines(TextCodec.styled(this.entry.getText()), width - PAD * 2, MAX_TEXT_LINES);
         }
 
         private int optionCount() {
             return this.entry.getOptions() == null ? 0 : this.entry.getOptions().length;
         }
 
+        private int textTop() {
+            return this.y() + PAD + LINE_H + 3;
+        }
+
         private int optionsTop() {
-            return this.y() + HEAD + 4 + this.lines(this.width()).size() * 10 + 3;
+            return this.textTop() + this.lines(this.width()).size() * LINE_H + 4;
         }
 
         @Override
         public int measureHeight(int width) {
-            int textLines = Math.max(1, this.lines(width).size());
-            return HEAD + 4 + textLines * 10 + 3 + this.optionCount() * OPTION_ROW + 12;
+            int options = this.optionCount() == 0 ? 0 : this.optionCount() * OPTION_ROW + 2;
+            return PAD + LINE_H + 3 + this.lines(width).size() * LINE_H + 4 + options + PAD - 4 + EXIT_H;
+        }
+
+        private int cardBottom() {
+            return this.bottom() - EXIT_H;
         }
 
         private int optionAt(double mouseY) {
@@ -233,10 +242,11 @@ public final class FlowPanel extends EditorPanel {
         private void openMenu(int menuX, int menuY) {
             EditorContext context = FlowPanel.this.context;
             DialogSequence sequence = context.sequence();
+            Commands commands = FlowPanel.this.commands;
             List<ContextMenu.Item> items = new ArrayList<>();
-            items.add(ContextMenu.Item.of(Theme.tr("menu.insert_after"), FlowPanel.this.commands::addNode));
-            items.add(ContextMenu.Item.of(Theme.tr("menu.rename"), FlowPanel.this.commands::renameSelected));
-            items.add(ContextMenu.Item.of(Theme.tr("menu.duplicate"), FlowPanel.this.commands::duplicateSelected));
+            items.add(ContextMenu.Item.of(Theme.tr("menu.insert_after"), commands::addNode));
+            items.add(ContextMenu.Item.of(Theme.tr("menu.rename"), commands::renameSelected));
+            items.add(ContextMenu.Item.of(Theme.tr("menu.duplicate"), commands::duplicateSelected));
             items.add(ContextMenu.Item.of(Theme.tr("menu.set_start"), () -> {
                 sequence.setStartId(this.entry.getId());
                 context.touchStructure();
@@ -256,12 +266,11 @@ public final class FlowPanel extends EditorPanel {
                 context.touchStructure();
             }));
             items.add(ContextMenu.Item.separator());
-            items.add(ContextMenu.Item.of(Theme.tr("menu.move_up"), () -> FlowPanel.this.commands.moveSelected(-1),
-                    this.position > 0));
-            items.add(ContextMenu.Item.of(Theme.tr("menu.move_down"), () -> FlowPanel.this.commands.moveSelected(1),
+            items.add(ContextMenu.Item.of(Theme.tr("menu.move_up"), () -> commands.moveSelected(-1), this.position > 0));
+            items.add(ContextMenu.Item.of(Theme.tr("menu.move_down"), () -> commands.moveSelected(1),
                     this.position < NodeGraph.entries(sequence).size() - 1));
             items.add(ContextMenu.Item.separator());
-            items.add(ContextMenu.Item.of(Theme.tr("menu.delete"), FlowPanel.this.commands::deleteSelected));
+            items.add(ContextMenu.Item.of(Theme.tr("menu.delete"), commands::deleteSelected));
             ContextMenu.open(FlowPanel.this.host(), menuX, menuY, Component.literal(this.entry.getId()), items);
         }
 
@@ -270,43 +279,41 @@ public final class FlowPanel extends EditorPanel {
             DialogSequence sequence = FlowPanel.this.context.sequence();
             boolean selected = this.isSelected();
             boolean hovered = this.isHovered();
-            int bottomOfCard = this.bottom() - 12;
-            graphics.fill(this.x(), this.y(), this.right(), bottomOfCard,
-                    selected ? Theme.SELECTED : hovered ? Theme.HOVER : Theme.RAISED);
-            Theme.border(graphics, this.x(), this.y(), this.width(), bottomOfCard - this.y(),
-                    selected ? Theme.ACCENT : Theme.BORDER);
-            graphics.fill(this.x(), this.y(), this.x() + 3, bottomOfCard, OutlinePanel.kindColor(this.entry));
+            int bottom = this.cardBottom();
+            graphics.fill(this.x(), this.y(), this.right(), bottom, selected ? Theme.SELECTED : hovered ? Theme.HOVER : Theme.RAISED);
+            graphics.fill(this.x(), this.y(), this.x() + 2, bottom, OutlinePanel.kindColor(this.entry));
+            if (selected) {
+                graphics.fill(this.x(), bottom - 1, this.right(), bottom, Theme.ACCENT);
+            }
 
-            // Header: ordinal, id, start / end markers and the speaker on the right.
-            int headY = this.y() + 4;
-            String ordinal = String.format("%02d", this.position + 1);
-            Theme.text(graphics, ordinal, this.x() + PAD, headY, Theme.TEXT_MUTED);
-            int idX = this.x() + PAD + Theme.font().width(ordinal) + 5;
-            String id = this.entry.getId() == null ? "?" : this.entry.getId();
-            Theme.text(graphics, id, idX, headY, Theme.ACCENT);
-            int tagX = idX + Theme.font().width(id) + 6;
+            // Lead line: speaker on the left, ordinal and id on the right.
+            int headY = this.y() + PAD;
+            String meta = String.format("%02d  %s", this.position + 1, this.entry.getId() == null ? "?" : this.entry.getId());
             if (NodeGraph.isStart(sequence, this.entry)) {
-                Theme.text(graphics, Theme.tr("flow.start").getString(), tagX, headY, Theme.SUCCESS);
-                tagX += Theme.font().width(Theme.tr("flow.start").getString()) + 6;
+                meta = Theme.tr("flow.start").getString() + "  " + meta;
             }
-            if (!this.entry.isSkipAllowed()) {
-                Theme.text(graphics, Theme.tr("flow.no_skip").getString(), tagX, headY, Theme.TEXT_MUTED);
-            }
+            int metaWidth = Math.min(Theme.font().width(meta), this.width() / 2);
+            Theme.textIn(graphics, meta, this.right() - PAD - metaWidth, headY - 1, metaWidth, LINE_H,
+                    NodeGraph.isStart(sequence, this.entry) ? Theme.SUCCESS : Theme.TEXT_MUTED);
             String speaker = TextCodec.preview(this.entry.getSpeaker());
-            if (!speaker.isEmpty()) {
-                String shown = Theme.ellipsize(speaker, this.width() / 3);
-                Theme.text(graphics, shown, this.right() - PAD - Theme.font().width(shown), headY, Theme.TEXT_DIM);
+            int speakerWidth = this.width() - PAD * 3 - metaWidth;
+            if (speaker.isEmpty()) {
+                Theme.textIn(graphics, Theme.tr("flow.narration").getString(), this.x() + PAD, headY - 1, speakerWidth,
+                        LINE_H, Theme.TEXT_MUTED);
+            } else {
+                Theme.textIn(graphics, speaker, this.x() + PAD, headY - 1, speakerWidth, LINE_H, Theme.ACCENT);
             }
 
-            // Dialogue text.
-            int textY = this.y() + HEAD + 4;
-            List<String> lines = this.lines(this.width());
-            if (lines.isEmpty() || (lines.size() == 1 && lines.get(0).isEmpty())) {
+            // Text, with the writer's formatting applied.
+            int textY = this.textTop();
+            List<FormattedCharSequence> lines = this.lines(this.width());
+            if (TextCodec.preview(this.entry.getText()).isEmpty()) {
                 Theme.text(graphics, Theme.tr("flow.no_text").getString(), this.x() + PAD, textY, Theme.TEXT_MUTED);
-            }
-            for (String line : lines) {
-                Theme.text(graphics, line, this.x() + PAD, textY, Theme.TEXT);
-                textY += 10;
+            } else {
+                for (FormattedCharSequence line : lines) {
+                    graphics.drawString(Theme.font(), line, this.x() + PAD, textY, Theme.TEXT, false);
+                    textY += LINE_H;
+                }
             }
 
             // Choices.
@@ -317,27 +324,24 @@ public final class FlowPanel extends EditorPanel {
                 boolean missing = target != null && !target.isBlank() && NodeGraph.byId(sequence, target) == null;
                 int color = target == null || target.isBlank() ? Theme.TEXT_MUTED
                         : missing ? Theme.DANGER : FlowPanel.this.branchColors.getOrDefault(target, Theme.CYAN);
-                if (hovered && mouseY >= optionY && mouseY < optionY + OPTION_ROW) {
-                    graphics.fill(this.x() + 4, optionY, this.right() - 4, optionY + OPTION_ROW, 0x22FFFFFF);
+                if (hovered && selected && mouseY >= optionY && mouseY < optionY + OPTION_ROW) {
+                    graphics.fill(this.x() + PAD - 3, optionY, this.right() - PAD + 3, optionY + OPTION_ROW, 0x18FFFFFF);
                 }
-                graphics.fill(this.x() + PAD, optionY + 3, this.x() + PAD + 3, optionY + OPTION_ROW - 3, color);
                 String targetLabel = target == null || target.isBlank() ? Theme.tr("flow.ends").getString()
                         : (missing ? "! " : "→ ") + target;
                 int targetWidth = Math.min(this.width() / 3, Theme.font().width(targetLabel));
-                String label = (i + 1) + ". " + (option == null ? "" : TextCodec.preview(option.getText()));
-                Theme.textIn(graphics, label, this.x() + PAD + 7, optionY, this.width() - PAD * 2 - targetWidth - 12,
-                        OPTION_ROW, Theme.TEXT_DIM);
-                Theme.textIn(graphics, targetLabel, this.right() - PAD - targetWidth, optionY, targetWidth, OPTION_ROW,
-                        color);
+                Theme.textIn(graphics, "› " + (option == null ? "" : TextCodec.preview(option.getText())),
+                        this.x() + PAD, optionY, this.width() - PAD * 3 - targetWidth, OPTION_ROW, Theme.TEXT_DIM);
+                Theme.textIn(graphics, targetLabel, this.right() - PAD - targetWidth, optionY, targetWidth, OPTION_ROW, color);
                 optionY += OPTION_ROW;
             }
 
-            // Connector to whatever runs next, drawn in the gap below the card.
-            this.renderExit(graphics, sequence, bottomOfCard);
+            this.renderExit(graphics, sequence, bottom);
         }
 
+        /** One quiet line under the card saying where the script continues. */
         private void renderExit(GuiGraphics graphics, DialogSequence sequence, int top) {
-            int x = this.x() + 14;
+            int x = this.x() + 12;
             String label;
             int color;
             if (this.entry.isEndDialog()) {
@@ -349,21 +353,21 @@ public final class FlowPanel extends EditorPanel {
                 DialogEntry next = NodeGraph.implicitNext(sequence, this.entry);
                 boolean explicit = this.entry.getNextId() != null && !this.entry.getNextId().isBlank();
                 if (explicit && next == null) {
-                    label = "! " + this.entry.getNextId();
+                    label = Theme.tr("flow.exit_missing", this.entry.getNextId()).getString();
                     color = Theme.DANGER;
                 } else if (next == null) {
                     label = Theme.tr("flow.exit_end").getString();
                     color = Theme.TEXT_MUTED;
                 } else if (explicit) {
-                    label = "↳ " + next.getId();
+                    label = Theme.tr("flow.exit_jump", next.getId()).getString();
                     color = Theme.CYAN;
                 } else {
-                    graphics.fill(x, top, x + 1, top + 12, Theme.BORDER_STRONG);
+                    graphics.fill(x, top, x + 1, top + EXIT_H, Theme.BORDER_STRONG);
                     return;
                 }
             }
             graphics.fill(x, top, x + 1, top + 5, color);
-            Theme.text(graphics, label, x + 5, top + 2, color);
+            Theme.text(graphics, label, x + 6, top + 3, color);
         }
     }
 }

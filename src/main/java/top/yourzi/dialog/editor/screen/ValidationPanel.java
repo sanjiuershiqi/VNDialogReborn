@@ -29,11 +29,11 @@ public final class ValidationPanel extends EditorPanel {
     private Filter filter = Filter.ALL;
 
     public ValidationPanel() {
-        super("02", Theme.tr("panel.validation"));
+        super(null);
         Row toolbar = this.createToolbar(Theme.ROW);
-        toolbar.add(this.all.fit());
-        toolbar.add(this.errors.fit());
-        toolbar.add(this.warnings.fit());
+        toolbar.add(this.all.tone(Button.Tone.TAB).fit());
+        toolbar.add(this.errors.tone(Button.Tone.TAB).fit());
+        toolbar.add(this.warnings.tone(Button.Tone.TAB).fit());
         toolbar.add(Nodes.fill());
         this.add(this.list);
         this.list.labeler(issue -> Component.empty());
@@ -86,20 +86,20 @@ public final class ValidationPanel extends EditorPanel {
     @Override
     protected void onLayout() {
         super.onLayout();
-        this.list.setBounds(this.content().x() + 3, this.content().y(), this.content().width() - 6,
-                this.content().height() - 2);
+        this.list.setBounds(this.content().x(), this.content().y(), this.content().width(), this.content().height());
     }
 
     private void drawIssue(GuiGraphics graphics, DialogValidator.Issue issue, int rowY, int x, int width, int height,
                            boolean selected) {
         boolean error = issue.severity() == DialogValidator.Severity.ERROR;
         int color = error ? Theme.DANGER : Theme.WARNING;
-        graphics.fill(x, rowY + 1, x + 2, rowY + height - 1, color);
         int textY = rowY + (height - 8) / 2;
+        int dotY = rowY + height / 2 - 2;
+        graphics.fill(x + 8, dotY, x + 12, dotY + 4, color);
         String node = issue.nodeId() == null ? "—" : issue.nodeId();
         String head = node + "  ";
-        Theme.text(graphics, head, x + 6, textY, Theme.TEXT);
-        int messageX = x + 6 + Theme.font().width(head);
+        Theme.text(graphics, head, x + 18, textY, Theme.TEXT);
+        int messageX = x + 18 + Theme.font().width(head);
         String message = Theme.tr("issue." + issue.code().toLowerCase(java.util.Locale.ROOT)).getString();
         Theme.textIn(graphics, message, messageX, rowY, width - (messageX - x) - 4, height, color);
     }

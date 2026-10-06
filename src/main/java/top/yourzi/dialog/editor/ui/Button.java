@@ -5,13 +5,17 @@ import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;
 
-/** Flat themed button. Tones carry meaning: primary confirms, danger destroys, ghost stays quiet. */
+/**
+ * Flat button. Tones carry meaning: primary confirms, danger destroys, ghost stays quiet, and tab
+ * marks the current page of a segmented control with an underline.
+ */
 public class Button extends UiNode {
     public enum Tone {
         NORMAL,
         PRIMARY,
         GHOST,
-        DANGER
+        DANGER,
+        TAB
     }
 
     private Component label;
@@ -89,46 +93,47 @@ public class Button extends UiNode {
         boolean hovered = this.active && this.isHovered();
         if (this.swatch != 0) {
             graphics.fill(this.x(), this.y(), this.right(), this.bottom(), this.swatch);
-            Theme.border(graphics, this.x(), this.y(), this.width(), this.height(), hovered ? Theme.TEXT : Theme.BORDER);
+            if (hovered) {
+                Theme.border(graphics, this.x(), this.y(), this.width(), this.height(), Theme.TEXT);
+            }
             return;
         }
-        int fill;
-        int border;
+        int fill = 0;
         int text;
-        if (!this.active) {
-            fill = Theme.SURFACE;
-            border = Theme.BORDER;
+        if (this.tone == Tone.TAB) {
+            text = this.selected || hovered ? Theme.TEXT : Theme.TEXT_MUTED;
+            if (this.selected) {
+                graphics.fill(this.x() + 2, this.bottom() - 2, this.right() - 2, this.bottom(), Theme.ACCENT);
+            }
+        } else if (!this.active) {
+            fill = this.tone == Tone.NORMAL || this.tone == Tone.PRIMARY ? Theme.SURFACE : 0;
             text = Theme.TEXT_MUTED;
         } else if (this.selected) {
             fill = Theme.SELECTED;
-            border = Theme.ACCENT;
             text = Theme.TEXT;
         } else {
             switch (this.tone) {
                 case PRIMARY -> {
-                    fill = hovered ? 0xFFE8CE45 : Theme.ACCENT;
-                    border = Theme.ACCENT;
-                    text = 0xFF1A1A12;
+                    fill = hovered ? 0xFF85ACFF : Theme.ACCENT;
+                    text = 0xFF0E1526;
                 }
                 case DANGER -> {
-                    fill = hovered ? 0xFFF07C6E : Theme.DANGER;
-                    border = Theme.DANGER;
-                    text = 0xFF201210;
+                    fill = hovered ? 0x40EC7A8C : 0;
+                    text = Theme.DANGER;
                 }
                 case GHOST -> {
-                    fill = hovered ? Theme.HOVER : Theme.SURFACE;
-                    border = hovered ? Theme.BORDER_STRONG : Theme.SURFACE;
-                    text = Theme.TEXT_DIM;
+                    fill = hovered ? Theme.HOVER : 0;
+                    text = hovered ? Theme.TEXT : Theme.TEXT_DIM;
                 }
                 default -> {
                     fill = hovered ? Theme.HOVER : Theme.RAISED;
-                    border = Theme.BORDER;
                     text = Theme.TEXT;
                 }
             }
         }
-        graphics.fill(this.x(), this.y(), this.right(), this.bottom(), fill);
-        Theme.border(graphics, this.x(), this.y(), this.width(), this.height(), border);
+        if (fill != 0) {
+            graphics.fill(this.x(), this.y(), this.right(), this.bottom(), fill);
+        }
         Theme.centered(graphics, Theme.ellipsize(this.label.getString(), this.width() - 6),
                 this.x() + this.width() / 2, this.y() + (this.height() - 8) / 2, text);
     }

@@ -7,58 +7,64 @@ import top.yourzi.dialog.editor.ui.Theme;
 import top.yourzi.dialog.editor.ui.UiNode;
 
 /**
- * Workspace panel: a numbered title rail, an optional toolbar and a content area that subclasses
- * fill with their own nodes in {@link #onLayout()}.
+ * Workspace panel: an optional slim header, an optional toolbar and a content area that subclasses
+ * fill with their own nodes in {@link #onLayout()}. Panels are separated from each other by surface
+ * tone, not by boxes.
  */
 public abstract class EditorPanel extends UiNode {
-    private static final int RAIL_H = Theme.ROW + 4;
+    private static final int HEADER_H = 20;
 
-    private final String index;
     private final Component title;
     private final Slot content = new Slot();
     private Row toolbar;
     private int toolbarHeight;
 
-    protected EditorPanel(String index, Component title) {
-        this.index = index;
+    /** @param title header text, or null for a header-less panel */
+    protected EditorPanel(Component title) {
         this.title = title;
         this.add(this.content);
     }
 
-    /** Reserves a toolbar strip under the title rail. */
+    /** Reserves a toolbar strip under the header. */
     protected final Row createToolbar(int height) {
         this.toolbarHeight = height;
-        this.toolbar = new Row().gap(2);
+        this.toolbar = new Row().gap(3);
         this.add(this.toolbar);
         return this.toolbar;
     }
 
-    /** The area below the title rail and toolbar; subclasses place their nodes inside it. */
+    /** The area below header and toolbar; subclasses place their nodes inside it. */
     protected final UiNode content() {
         return this.content;
     }
 
+    /** Short right-aligned header note such as a count; empty by default. */
+    protected String headerNote() {
+        return "";
+    }
+
     @Override
     protected void onLayout() {
-        int top = this.y() + RAIL_H;
+        int top = this.y() + (this.title == null ? 4 : HEADER_H);
         if (this.toolbar != null) {
-            this.toolbar.setBounds(this.x() + 2, top, this.width() - 4, this.toolbarHeight);
-            top += this.toolbarHeight + 3;
+            this.toolbar.setBounds(this.x() + 6, top, this.width() - 12, this.toolbarHeight);
+            top += this.toolbarHeight + 6;
         }
         this.content.setBounds(this.x(), top, this.width(), Math.max(0, this.bottom() - top));
     }
 
     @Override
     protected void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        int x = this.x();
-        int y = this.y();
-        graphics.fill(x, y, this.right(), this.bottom(), Theme.SURFACE);
-        graphics.fill(x, y, this.right(), y + RAIL_H, Theme.RAISED);
-        graphics.fill(x, y, x + 3, y + RAIL_H, Theme.ACCENT);
-        Theme.text(graphics, this.index, x + 9, y + (RAIL_H - 8) / 2, Theme.ACCENT);
-        Theme.textIn(graphics, this.title.getString(), x + 28, y, Math.max(1, this.width() - 34), RAIL_H, Theme.TEXT);
-        graphics.fill(x, y + RAIL_H - 1, this.right(), y + RAIL_H, Theme.BORDER);
-        graphics.fill(this.right() - 1, y, this.right(), this.bottom(), Theme.BORDER);
+        graphics.fill(this.x(), this.y(), this.right(), this.bottom(), Theme.SURFACE);
+        if (this.title != null) {
+            String note = this.headerNote();
+            int noteWidth = note.isEmpty() ? 0 : Theme.font().width(note) + 8;
+            Theme.textIn(graphics, this.title.getString(), this.x() + 8, this.y() + 4, this.width() - noteWidth - 16,
+                    HEADER_H - 6, Theme.TEXT_DIM);
+            if (!note.isEmpty()) {
+                Theme.text(graphics, note, this.right() - noteWidth, this.y() + 4 + (HEADER_H - 14) / 2, Theme.TEXT_MUTED);
+            }
+        }
     }
 
     /** Layout-only region; disabled so it never swallows clicks meant for the panel. */

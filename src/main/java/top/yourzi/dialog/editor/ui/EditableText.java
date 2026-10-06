@@ -1,6 +1,6 @@
 package top.yourzi.dialog.editor.ui;
 
-import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.util.Mth;
@@ -386,47 +386,47 @@ public final class EditableText {
 
     // ----- measurement -----
 
-    /** Renders {@code line} into a styled component so formatting codes become real styles. */
+    /** Stand-in glyph for {@code §} while editing; Minecraft would otherwise swallow the code. */
+    private static final char MARK_GLYPH = '\u00b6';
+
+    /**
+     * Renders an editing line: text takes the style its codes select, and every code stays visible
+     * as a dim marker. Each raw character maps to exactly one drawn character, so caret and
+     * selection maths are plain prefix widths.
+     */
     public static MutableComponent styled(String line) {
-        MutableComponent result = net.minecraft.network.chat.Component.empty();
-        Style style = Style.EMPTY;
+        MutableComponent result = Component.empty();
+        Style code = Style.EMPTY.withColor(Theme.TEXT_MUTED & 0xFFFFFF);
         StringBuilder run = new StringBuilder();
         int i = 0;
+        Style style = Style.EMPTY;
         while (i < line.length()) {
-            char c = line.charAt(i);
-            if (c == '\u00a7' && i + 1 < line.length()) {
-                ChatFormatting formatting = ChatFormatting.getByCode(line.charAt(i + 1));
-                if (run.length() > 0) {
-                    result.append(net.minecraft.network.chat.Component.literal(run.toString()).withStyle(style));
-                    run.setLength(0);
-                }
-                if (formatting != null) {
-                    style = formatting == ChatFormatting.RESET ? Style.EMPTY : style.applyFormat(formatting);
-                } else {
-                    run.append(c);
-                }
-                i += 2;
+            int length = FormatCodes.codeLength(line, i);
+            if (length == 0) {
+                char c = line.charAt(i++);
+                run.append(c == FormatCodes.MARK ? MARK_GLYPH : c);
                 continue;
             }
-            run.append(c);
-            i++;
+            if (run.length() > 0) {
+                result.append(Component.literal(run.toString()).withStyle(style));
+                run.setLength(0);
+            }
+            String token = line.substring(i, i + length);
+            result.append(Component.literal(token.replace(FormatCodes.MARK, MARK_GLYPH)).withStyle(code));
+            style = FormatCodes.apply(style, line, i, length);
+            i += length;
         }
         if (run.length() > 0) {
-            result.append(net.minecraft.network.chat.Component.literal(run.toString()).withStyle(style));
+            result.append(Component.literal(run.toString()).withStyle(style));
         }
         return result;
     }
 
-    /**
-     * Visible width of {@code line} up to (excluding) {@code column}. Formatting codes count as
-     * zero width, so the caret tracks glyphs rather than raw indices.
-     */
+
+    /** Drawn width of {@code line} up to (excluding) {@code column}. */
     public static int widthTo(String line, int column) {
         int limit = Mth.clamp(column, 0, line.length());
-        if (limit == 0) {
-            return 0;
-        }
-        return Theme.font().width(styled(line.substring(0, limit)));
+        return limit == 0 ? 0 : Theme.font().width(styled(line.substring(0, limit)));
     }
 
     /** Character index in {@code line} closest to {@code pixelX}. */
@@ -434,17 +434,13 @@ public final class EditableText {
         if (pixelX <= 0) {
             return 0;
         }
-        int index = 0;
-        while (index < line.length()) {
-            if (line.charAt(index) == '\u00a7' && index + 1 < line.length()
-                    && ChatFormatting.getByCode(line.charAt(index + 1)) != null) {
-                index += 2;
-                continue;
+        int previous = 0;
+        for (int index = 1; index <= line.length(); index++) {
+            int width = widthTo(line, index);
+            if (width > pixelX) {
+                return pixelX - previous < width - pixelX ? index - 1 : index;
             }
-            index++;
-            if (widthTo(line, index) > pixelX) {
-                return index - 1;
-            }
+            previous = width;
         }
         return line.length();
     }

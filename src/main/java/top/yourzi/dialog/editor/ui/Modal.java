@@ -93,9 +93,8 @@ public abstract class Modal extends UiNode {
         graphics.fill(this.x(), this.y(), this.right(), this.bottom(), Theme.SCRIM);
         graphics.fill(this.cardX, this.cardY, this.cardX + this.cardWidth(), this.cardY + this.cardHeight, Theme.SURFACE);
         Theme.border(graphics, this.cardX, this.cardY, this.cardWidth(), this.cardHeight, Theme.BORDER_STRONG);
-        graphics.fill(this.cardX, this.cardY, this.cardX + 4, this.cardY + HEADER_H, Theme.ACCENT);
-        Theme.textIn(graphics, this.title.getString(), this.cardX + 12, this.cardY, this.cardWidth() - 20, HEADER_H,
-                Theme.TEXT);
+        Theme.textIn(graphics, this.title.getString(), this.cardX + PAD, this.cardY, this.cardWidth() - PAD * 2,
+                HEADER_H, Theme.TEXT);
         graphics.fill(this.cardX, this.cardY + HEADER_H, this.cardX + this.cardWidth(), this.cardY + HEADER_H + 1,
                 Theme.BORDER);
     }

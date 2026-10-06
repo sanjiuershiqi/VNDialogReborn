@@ -386,11 +386,12 @@ final class StageView extends UiNode {
             Theme.text(graphics, Theme.ellipsize(speaker, width - 8), x + 4, textY, Theme.ACCENT);
             textY += 11;
         }
-        for (String line : Wrap.dialogue(this.entry.getText(), Math.max(20, width - 8), 4)) {
+        for (net.minecraft.util.FormattedCharSequence line : Wrap.lines(TextCodec.styled(this.entry.getText()),
+                Math.max(20, width - 8), 4)) {
             if (textY + 9 > y + height) {
                 break;
             }
-            Theme.text(graphics, line, x + 4, textY, Theme.TEXT);
+            graphics.drawString(Theme.font(), line, x + 4, textY, Theme.TEXT, false);
             textY += 10;
         }
     }

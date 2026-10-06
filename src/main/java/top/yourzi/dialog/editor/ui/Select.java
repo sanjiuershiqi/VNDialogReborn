@@ -16,7 +16,7 @@ import java.util.function.Function;
  */
 public class Select<T> extends UiNode {
     private static final int MAX_ROWS = 10;
-    private static final int ROW = 14;
+    private static final int ROW = 16;
 
     private final List<T> items = new ArrayList<>();
     private final Function<T, Component> labeler;
@@ -67,6 +67,7 @@ public class Select<T> extends UiNode {
         list.setItems(new ArrayList<>(this.items));
         list.selectQuietly(this.selected);
         list.activateOnClick(true);
+        list.rowHeight(ROW);
         list.onActivate(item -> {
             this.selected = item;
             this.close();
@@ -95,8 +96,9 @@ public class Select<T> extends UiNode {
     protected void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         boolean hovered = this.isHovered() || this.layer != null;
         graphics.fill(this.x(), this.y(), this.right(), this.bottom(), hovered ? Theme.HOVER : Theme.RAISED);
-        Theme.border(graphics, this.x(), this.y(), this.width(), this.height(),
-                this.layer != null ? Theme.ACCENT : hovered ? Theme.BORDER_STRONG : Theme.BORDER);
+        if (this.layer != null) {
+            Theme.border(graphics, this.x(), this.y(), this.width(), this.height(), Theme.ACCENT);
+        }
         String label = this.selected == null ? "" : this.labeler.apply(this.selected).getString();
         Theme.textIn(graphics, label, this.x() + Theme.PAD, this.y(), this.width() - Theme.PAD * 2 - 8,
                 this.height(), Theme.TEXT);

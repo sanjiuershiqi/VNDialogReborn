@@ -1,61 +1,34 @@
 package top.yourzi.dialog.editor.ui;
 
 import net.minecraft.network.chat.Component;
-import top.yourzi.dialog.editor.TextCodec;
+import net.minecraft.network.chat.Style;
+import net.minecraft.util.FormattedCharSequence;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/** Word wrapping shared by paragraphs, flow cards and inspector hints. */
+/**
+ * Line wrapping through Minecraft's own splitter: it breaks CJK text between characters, Latin text
+ * between words, and carries styles across line breaks.
+ */
 public final class Wrap {
     private Wrap() {
     }
 
-    public static List<String> text(Component text, int width) {
-        return text(text.getString(), width);
+    public static List<FormattedCharSequence> lines(Component text, int width) {
+        List<FormattedCharSequence> lines = Theme.font().split(text, Math.max(10, width));
+        return lines.isEmpty() ? List.of(FormattedCharSequence.EMPTY) : lines;
     }
 
-    public static List<String> text(String text, int width) {
-        List<String> lines = new ArrayList<>();
-        if (width <= 0) {
-            lines.add(text);
-            return lines;
-        }
-        for (String paragraph : text.split("\n", -1)) {
-            if (paragraph.isEmpty()) {
-                lines.add("");
-                continue;
-            }
-            StringBuilder current = new StringBuilder();
-            for (String word : paragraph.split(" ")) {
-                String candidate = current.length() == 0 ? word : current + " " + word;
-                if (Theme.font().width(candidate) > width && current.length() > 0) {
-                    lines.add(current.toString());
-                    current = new StringBuilder(word);
-                } else {
-                    current = new StringBuilder(candidate);
-                }
-            }
-            lines.add(current.toString());
-        }
-        return lines;
-    }
-
-    /** Wraps dialogue text after flattening formatting codes into plain glyphs. */
-    public static List<String> dialogue(String rawText, int width, int maxLines) {
-        String plain = rawText == null ? "" : rawText.replace('\u00a7', ' ').replace('\n', ' ');
-        List<String> lines = text(plain.trim(), width);
+    /** Wraps and keeps at most {@code maxLines}, ending the last kept line with an ellipsis. */
+    public static List<FormattedCharSequence> lines(Component text, int width, int maxLines) {
+        List<FormattedCharSequence> lines = lines(text, width);
         if (lines.size() <= maxLines) {
             return lines;
         }
-        List<String> trimmed = new ArrayList<>(lines.subList(0, maxLines));
-        String last = trimmed.get(maxLines - 1);
-        trimmed.set(maxLines - 1, Theme.ellipsize(last + " …", width));
-        return trimmed;
-    }
-
-    /** Convenience for components that hold dialogue text. */
-    public static List<String> dialogue(com.google.gson.JsonElement element, int width, int maxLines) {
-        return dialogue(TextCodec.preview(element), width, maxLines);
+        List<FormattedCharSequence> kept = new ArrayList<>(lines.subList(0, maxLines));
+        kept.set(maxLines - 1, FormattedCharSequence.composite(kept.get(maxLines - 1),
+                FormattedCharSequence.forward(" …", Style.EMPTY)));
+        return kept;
     }
 }

@@ -38,10 +38,13 @@ public final class Nodes {
 
         @Override
         protected void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-            int top = this.y() + 2;
-            graphics.fill(this.x(), top, this.right(), top + 13, Theme.RAISED);
-            graphics.fill(this.x(), top + 3, this.x() + 2, top + 10, Theme.ACCENT);
-            Theme.textIn(graphics, this.title.getString(), this.x() + 7, top, this.width() - 10, 13, Theme.TEXT);
+            // A quiet label with a hairline: sections read as groups without boxing anything in.
+            int top = this.y() + 3;
+            Theme.textIn(graphics, this.title.getString(), this.x(), top, this.width(), 11, Theme.TEXT_MUTED);
+            int lineX = this.x() + Theme.font().width(this.title.getString()) + 6;
+            if (lineX < this.right()) {
+                graphics.fill(lineX, top + 5, this.right(), top + 6, Theme.BORDER);
+            }
         }
     }
 

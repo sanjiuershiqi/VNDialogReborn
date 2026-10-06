@@ -9,27 +9,31 @@ import net.minecraft.network.chat.Component;
  * Single source of colors, metrics and primitive drawing for the editor.
  */
 public final class Theme {
-    public static final int BG = 0xFF101415;
-    public static final int SURFACE = 0xFF171C1E;
-    public static final int RAISED = 0xFF20272A;
-    public static final int HOVER = 0xFF2A3337;
-    public static final int SELECTED = 0xFF233B40;
-    public static final int FIELD = 0xFF0C0F10;
-    public static final int BORDER = 0xFF343F43;
-    public static final int BORDER_STRONG = 0xFF56656A;
-    public static final int TEXT = 0xFFE6EBE8;
-    public static final int TEXT_DIM = 0xFFAAB6B3;
-    public static final int TEXT_MUTED = 0xFF6F7D7B;
-    public static final int ACCENT = 0xFFD9BE3A;
-    public static final int ACCENT_DIM = 0xFF6E6220;
-    public static final int CYAN = 0xFF55C2C5;
-    public static final int SUCCESS = 0xFF62D6A5;
-    public static final int WARNING = 0xFFF0B35A;
-    public static final int DANGER = 0xFFE56B5D;
-    public static final int SCRIM = 0xB0000000;
-    public static final int SCROLL_TRACK = 0x30000000;
-    public static final int SCROLL_THUMB = 0x80A8B4B2;
+    // Neutral dark surfaces, separated by value rather than by outlines.
+    public static final int BG = 0xFF1B1C1F;
+    public static final int SURFACE = 0xFF222327;
+    public static final int RAISED = 0xFF2A2B30;
+    public static final int HOVER = 0xFF33353B;
+    public static final int SELECTED = 0xFF283553;
+    public static final int FIELD = 0xFF17181B;
+    public static final int BORDER = 0xFF2F3136;
+    public static final int BORDER_STRONG = 0xFF464951;
+    public static final int SCRIM = 0xA00E0F11;
 
+    public static final int TEXT = 0xFFE4E5E9;
+    public static final int TEXT_DIM = 0xFFA9ACB4;
+    public static final int TEXT_MUTED = 0xFF6E727B;
+
+    // One accent for focus and primary actions; the rest carry meaning only.
+    public static final int ACCENT = 0xFF6E9BFF;
+    public static final int ACCENT_DIM = 0xFF3D5A99;
+    public static final int CYAN = 0xFF6CC5B0;
+    public static final int SUCCESS = 0xFF8BC77A;
+    public static final int WARNING = 0xFFE5B567;
+    public static final int DANGER = 0xFFEC7A8C;
+
+    public static final int SCROLL_TRACK = 0x00000000;
+    public static final int SCROLL_THUMB = 0x60A9ACB4;
     public static final int ROW = 18;
     public static final int GAP = 4;
     public static final int PAD = 6;

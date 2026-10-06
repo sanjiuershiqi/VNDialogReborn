@@ -7,6 +7,7 @@ import com.google.gson.JsonObject;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
+import top.yourzi.dialog.editor.ui.FormatCodes;
 import top.yourzi.dialog.model.DialogEntry;
 import top.yourzi.dialog.model.DialogOption;
 import top.yourzi.dialog.util.ComponentJson;
@@ -56,9 +57,14 @@ public final class TextCodec {
         return toFormattedCodes(ComponentJson.fromJson(element));
     }
 
-    /** Plain, single-line preview text used by lists and cards. */
+    /** Single-line text as the player reads it, without formatting codes; used by lists. */
     public static String preview(JsonElement element) {
-        return toEditable(element).replace('\n', ' ').trim();
+        return FormatCodes.strip(toEditable(element)).replace('\n', ' ').trim();
+    }
+
+    /** The text with its formatting applied, for read-only display such as cards and the stage. */
+    public static MutableComponent styled(JsonElement element) {
+        return FormatCodes.parse(toEditable(element));
     }
 
     /** Converts editable text back into the stored component shape, or null when empty. */
@@ -66,46 +72,11 @@ public final class TextCodec {
         if (text == null || text.isEmpty()) {
             return null;
         }
-        if (text.indexOf('\u00a7') < 0) {
+        if (text.indexOf(FormatCodes.MARK) < 0) {
             // Plain text stays a plain JSON string, exactly what hand-written dialogue files use.
             return new com.google.gson.JsonPrimitive(text);
         }
-        return ComponentJson.toJsonTree(parse(text));
-    }
-
-    /** Parses legacy formatting codes into a styled component. */
-    public static MutableComponent parse(String text) {
-        MutableComponent result = Component.empty();
-        Style style = Style.EMPTY;
-        StringBuilder run = new StringBuilder();
-        int i = 0;
-        while (i < text.length()) {
-            char c = text.charAt(i);
-            if (c == '\u00a7' && i + 1 < text.length()) {
-                char code = Character.toLowerCase(text.charAt(i + 1));
-                if (run.length() > 0) {
-                    result.append(Component.literal(run.toString()).withStyle(style));
-                    run.setLength(0);
-                }
-                style = applyCode(style, code);
-                i += 2;
-                continue;
-            }
-            run.append(c);
-            i++;
-        }
-        if (run.length() > 0) {
-            result.append(Component.literal(run.toString()).withStyle(style));
-        }
-        return result;
-    }
-
-    private static Style applyCode(Style style, char code) {
-        if (code == 'r') {
-            return Style.EMPTY;
-        }
-        net.minecraft.ChatFormatting formatting = net.minecraft.ChatFormatting.getByCode(code);
-        return formatting == null ? style : style.applyFormat(formatting);
+        return ComponentJson.toJsonTree(FormatCodes.parse(text));
     }
 
     /** Serializes a component back into editable text, re-emitting codes only when they change. */

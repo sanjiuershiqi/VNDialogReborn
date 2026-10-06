@@ -34,6 +34,7 @@ public class ItemList<T> extends UiNode {
     private int scroll;
     private boolean draggingBar;
     private boolean activateOnClick;
+    private int rowHeight = 18;
 
     public ItemList<T> labeler(Function<T, Component> labeler) {
         this.labeler = labeler;
@@ -99,7 +100,12 @@ public class ItemList<T> extends UiNode {
 
 
     private int rowHeight() {
-        return Math.max(10, this.host() == null ? Theme.ROW : Theme.font().lineHeight + 5);
+        return this.rowHeight;
+    }
+
+    public ItemList<T> rowHeight(int rowHeight) {
+        this.rowHeight = Math.max(10, rowHeight);
+        return this;
     }
 
     private int maxScroll() {
@@ -248,7 +254,6 @@ public class ItemList<T> extends UiNode {
             }
             if (selected) {
                 graphics.fill(this.x(), rowY, this.right(), rowY + row, Theme.SELECTED);
-                graphics.fill(this.x(), rowY, this.x() + 2, rowY + row, Theme.ACCENT);
             } else if (hovered) {
                 graphics.fill(this.x(), rowY, this.right(), rowY + row, Theme.HOVER);
             }
