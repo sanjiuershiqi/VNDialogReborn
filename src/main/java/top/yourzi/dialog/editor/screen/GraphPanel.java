@@ -1,9 +1,13 @@
 package top.yourzi.dialog.editor.screen;
 
+import com.google.gson.JsonPrimitive;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
-import top.yourzi.dialog.editor.TextCodec;
+import top.yourzi.dialog.editor.LayoutStore;
 import top.yourzi.dialog.editor.ui.Button;
+import top.yourzi.dialog.editor.ui.ContextMenu;
+import top.yourzi.dialog.editor.ui.Lines;
 import top.yourzi.dialog.editor.ui.Nodes;
 import top.yourzi.dialog.editor.ui.Row;
 import top.yourzi.dialog.editor.ui.Theme;
@@ -12,98 +16,82 @@ import top.yourzi.dialog.model.DialogEntry;
 import top.yourzi.dialog.model.DialogOption;
 import top.yourzi.dialog.model.DialogSequence;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
- * Relationship graph: every node of the file and how they connect, plus the other dialogue files it
- * starts through {@code dialog show} commands.
+ * Relationship graph for large scripts.
  *
- * <p>The layout is computed, not stored: columns are the distance from the start node, so reading
- * left to right follows the story; rows inside a column follow their parents to keep lines short.
- * Nothing the writer arranges here can drift out of sync with the file, which keeps the graph a
- * reliable overview for large scripts. Click a node to edit it, drag the background to pan and use
- * the wheel to zoom.
+ * <ul>
+ *     <li>drag a node to arrange it; the arrangement is saved per file, outside the dialogue JSON;</li>
+ *     <li>drag from a port (the dots on a node's right edge) onto another node to link it, or onto
+ *     empty space to create a new linked node there;</li>
+ *     <li>double-click empty space to add a node, right-click nodes and ports for actions;</li>
+ *     <li>drag the background to pan, wheel to zoom around the cursor, minimap to jump.</li>
+ * </ul>
+ * The "all files" mode shows dialogue files and the {@code dialog show} links between them.
  */
 public final class GraphPanel extends EditorPanel {
-    private static final int NODE_W = 150;
-    private static final int NODE_H = 40;
-    private static final int COLUMN_GAP = 70;
-    private static final int ROW_GAP = 14;
-    private static final int GROUP_GAP = 36;
-    private static final float MIN_ZOOM = 0.25f;
+    private static final float MIN_ZOOM = 0.2f;
     private static final float MAX_ZOOM = 2.0f;
-    private static final String FILE = "file:";
-
-    /** One drawn box: a node of this file, or a stub for another dialogue file. */
-    private record Box(String id, DialogEntry entry, int x, int y) {
-        boolean external() {
-            return this.entry == null;
-        }
-    }
-
-    /** One connection; {@code kind} 0 = continues, 1 = choice, 2 = starts another file. */
-    private record Edge(String from, String to, int kind, int color, boolean missing) {
-    }
+    private static final int PORT_HIT = 7;
+    private static final int GRID = 40;
+    private static final int MAP_W = 150;
+    private static final int MAP_H = 96;
+    private static final long DOUBLE_CLICK_MS = 350L;
 
     private final EditorContext context;
     private final Canvas canvas = new Canvas();
-    private final Map<String, Box> boxes = new LinkedHashMap<>();
-    private final List<Edge> edges = new ArrayList<>();
-    private final Map<String, Integer> fileSizes = new HashMap<>();
+    private final Button nodesMode;
+    private final Button filesMode;
+    private GraphModel model = new GraphModel();
+    private Map<String, int[]> positions = new java.util.LinkedHashMap<>();
+    private String layoutKey;
     private Consumer<String> openDocument;
     private Supplier<List<DialogSequence>> allFiles;
+    private FlowPanel.Commands commands;
     private boolean filesOverview;
-    private final Button fileModeButton;
-    private final Button overviewModeButton;
     private float zoom = 1.0f;
     private double panX;
     private double panY;
     private boolean fitPending = true;
-    private String shownSequence;
-    private int contentWidth;
-    private int contentHeight;
 
     public GraphPanel(EditorContext context) {
         super(null);
         this.context = context;
         Row toolbar = this.createToolbar(Theme.ROW);
-        this.fileModeButton = Button.of(Theme.tr("graph.mode_nodes"), () -> this.setFilesOverview(false))
-                .tone(Button.Tone.TAB).fit();
-        this.overviewModeButton = Button.of(Theme.tr("graph.mode_files"), () -> this.setFilesOverview(true))
-                .tone(Button.Tone.TAB).fit();
-        toolbar.add(this.fileModeButton);
-        toolbar.add(this.overviewModeButton);
+        this.nodesMode = Button.of(Theme.tr("graph.mode_nodes"), () -> this.setFilesOverview(false)).tone(Button.Tone.TAB).fit();
+        this.filesMode = Button.of(Theme.tr("graph.mode_files"), () -> this.setFilesOverview(true)).tone(Button.Tone.TAB).fit();
+        toolbar.add(this.nodesMode);
+        toolbar.add(this.filesMode);
         toolbar.add(Nodes.fill());
+        toolbar.add(Button.of(Theme.tr("graph.arrange"), this::autoArrange).tone(Button.Tone.GHOST).fit()
+                .withTooltip(Theme.tr("graph.arrange_tip")));
         toolbar.add(Button.of(Theme.tr("graph.fit"), this::fit).tone(Button.Tone.GHOST).fit());
-        toolbar.add(Button.of(Theme.tr("graph.actual"), () -> this.zoomAround(1.0f, this.canvas.x() + this.canvas.width() / 2.0,
-                this.canvas.y() + this.canvas.height() / 2.0)).tone(Button.Tone.GHOST).fit());
         toolbar.add(Button.of(Theme.tr("graph.focus"), this::focusSelected).tone(Button.Tone.GHOST).fit());
+        this.nodesMode.selected(true);
         this.add(this.canvas);
-        this.fileModeButton.selected(true);
     }
 
-    /** Opens another dialogue file when its box is clicked. */
     public void setOpenDocument(Consumer<String> openDocument) {
         this.openDocument = openDocument;
     }
 
-    /** Reads every dialogue file in the editor folder, for the files overview. */
     public void setAllFiles(Supplier<List<DialogSequence>> allFiles) {
         this.allFiles = allFiles;
     }
 
+    public void setCommands(FlowPanel.Commands commands) {
+        this.commands = commands;
+    }
+
     private void setFilesOverview(boolean filesOverview) {
         this.filesOverview = filesOverview;
-        this.fileModeButton.selected(!filesOverview);
-        this.overviewModeButton.selected(filesOverview);
-        this.fitPending = true;
+        this.nodesMode.selected(!filesOverview);
+        this.filesMode.selected(filesOverview);
         this.refresh();
     }
 
@@ -113,477 +101,628 @@ public final class GraphPanel extends EditorPanel {
         this.canvas.setBounds(this.content().x(), this.content().y(), this.content().width(), this.content().height());
     }
 
-    // ----- model → layout -----
+    // ----- model -----
 
     public void refresh() {
+        String key;
         if (this.filesOverview) {
-            this.refreshFiles();
-            return;
+            key = LayoutStore.FILES_KEY;
+        } else {
+            key = this.context.document() == null ? null : this.context.document().id();
         }
-        DialogSequence sequence = this.context.sequence();
-        String sequenceId = sequence == null ? null : sequence.getId();
-        if (!java.util.Objects.equals(sequenceId, this.shownSequence)) {
-            this.shownSequence = sequenceId;
+        if (!java.util.Objects.equals(key, this.layoutKey)) {
+            this.layoutKey = key;
+            this.positions = LayoutStore.load(key);
             this.fitPending = true;
         }
-        this.boxes.clear();
-        this.edges.clear();
-        List<DialogEntry> entries = NodeGraph.entries(sequence);
-        if (entries.isEmpty()) {
-            this.contentWidth = 0;
-            this.contentHeight = 0;
+        if (this.filesOverview) {
+            String active = this.context.document() == null ? null : this.context.document().id();
+            this.model = GraphModel.ofFiles(this.allFiles == null ? List.of() : this.allFiles.get(), active, this.positions);
+        } else {
+            this.model = GraphModel.ofSequence(this.context.sequence(), this.positions);
+        }
+    }
+
+    /** Keeps a hand arrangement when a node is renamed. */
+    public void renameNode(String oldId, String newId) {
+        if (this.filesOverview || this.layoutKey == null) {
             return;
         }
-        Map<String, List<String>> next = new HashMap<>();
-        Map<String, Integer> branchColors = new HashMap<>();
-        for (DialogEntry entry : entries) {
-            List<String> targets = new ArrayList<>();
-            if (NodeGraph.hasOptions(entry)) {
-                for (DialogOption option : entry.getOptions()) {
-                    String target = option == null ? null : option.getTargetId();
-                    if (target != null && !target.isBlank()) {
-                        targets.add(target);
-                        int color = branchColors.computeIfAbsent(target, key -> branchColor(branchColors.size()));
-                        this.edges.add(new Edge(entry.getId(), target, 1, color, NodeGraph.byId(sequence, target) == null));
-                    }
-                }
-            } else if (!entry.isEndDialog()) {
-                DialogEntry following = NodeGraph.implicitNext(sequence, entry);
-                boolean explicit = entry.getNextId() != null && !entry.getNextId().isBlank();
-                if (following != null) {
-                    targets.add(following.getId());
-                    this.edges.add(new Edge(entry.getId(), following.getId(), 0, Theme.TEXT_MUTED, false));
-                } else if (explicit) {
-                    this.edges.add(new Edge(entry.getId(), entry.getNextId(), 0, Theme.DANGER, true));
-                }
-            }
-            for (String file : externalTargets(entry)) {
-                this.edges.add(new Edge(entry.getId(), FILE + file, 2, Theme.CYAN, false));
-            }
-            next.put(entry.getId(), targets);
+        int[] position = this.positions.remove(oldId);
+        if (position != null) {
+            this.positions.put(newId, position);
+            LayoutStore.save(this.layoutKey, this.positions);
         }
-        this.layout(sequence, entries, next);
     }
 
-    /**
-     * Files overview: one box per dialogue file and an edge wherever a node starts another file, so a
-     * story split across many files can be navigated without opening each one. Files that nothing
-     * starts are the roots of the first column.
-     */
-    private void refreshFiles() {
-        this.boxes.clear();
-        this.edges.clear();
-        List<DialogSequence> files = this.allFiles == null ? List.of() : this.allFiles.get();
-        Map<String, List<String>> links = new LinkedHashMap<>();
-        java.util.Set<String> started = new java.util.HashSet<>();
-        for (DialogSequence file : files) {
-            List<String> targets = new ArrayList<>();
-            for (DialogEntry entry : NodeGraph.entries(file)) {
-                for (String target : externalTargets(entry)) {
-                    if (!targets.contains(target)) {
-                        targets.add(target);
-                        started.add(target);
-                    }
-                }
-            }
-            links.put(file.getId(), targets);
+    private void remember(GraphModel.Node node) {
+        if (this.layoutKey == null) {
+            return;
         }
-        List<String> roots = new ArrayList<>();
-        for (String id : links.keySet()) {
-            if (!started.contains(id)) {
-                roots.add(id);
-            }
-        }
-        roots.addAll(links.keySet());
-
-        Map<String, Integer> column = new HashMap<>();
-        Map<Integer, Integer> rowsPerColumn = new HashMap<>();
-        Map<String, Integer> row = new HashMap<>();
-        for (String root : roots) {
-            if (column.containsKey(root)) {
-                continue;
-            }
-            ArrayDeque<String> queue = new ArrayDeque<>();
-            queue.add(root);
-            column.put(root, 0);
-            while (!queue.isEmpty()) {
-                String id = queue.poll();
-                int col = column.get(id);
-                row.put(id, rowsPerColumn.merge(col, 1, Integer::sum) - 1);
-                for (String target : links.getOrDefault(id, List.of())) {
-                    if (!column.containsKey(target)) {
-                        column.put(target, col + 1);
-                        queue.add(target);
-                    }
-                }
-            }
-        }
-        int right = 0;
-        int bottom = 0;
-        for (Map.Entry<String, Integer> placed : column.entrySet()) {
-            int x = placed.getValue() * (NODE_W + COLUMN_GAP);
-            int y = row.get(placed.getKey()) * (NODE_H + ROW_GAP);
-            this.boxes.put(FILE + placed.getKey(), new Box(FILE + placed.getKey(), null, x, y));
-            right = Math.max(right, x + NODE_W);
-            bottom = Math.max(bottom, y + NODE_H);
-        }
-        for (Map.Entry<String, List<String>> link : links.entrySet()) {
-            for (String target : link.getValue()) {
-                boolean missing = !links.containsKey(target);
-                this.edges.add(new Edge(FILE + link.getKey(), FILE + target, 2, missing ? Theme.DANGER : Theme.CYAN, missing));
-            }
-        }
-        this.fileSizes.clear();
-        for (DialogSequence file : files) {
-            this.fileSizes.put(file.getId(), NodeGraph.entries(file).size());
-        }
-        this.contentWidth = right;
-        this.contentHeight = bottom;
+        this.positions.put(node.id, new int[]{node.x, node.y});
+        LayoutStore.save(this.layoutKey, this.positions);
     }
 
-    /** Dialogue ids started by {@code dialog ... show ... <id>} commands on the node or its choices. */
-    private static List<String> externalTargets(DialogEntry entry) {
-        List<String> commands = new ArrayList<>();
-        if (entry.getCommands() != null) {
-            commands.addAll(entry.getCommands());
+    private void autoArrange() {
+        if (this.layoutKey == null) {
+            return;
         }
-        if (entry.getOptions() != null) {
-            for (DialogOption option : entry.getOptions()) {
-                if (option != null && option.getCommand() != null) {
-                    commands.addAll(option.getCommand());
-                }
-            }
-        }
-        List<String> files = new ArrayList<>();
-        for (String command : commands) {
-            if (command == null) {
-                continue;
-            }
-            String[] tokens = command.trim().replaceFirst("^/", "").split("\\s+");
-            if (tokens.length >= 3 && tokens[0].equalsIgnoreCase("dialog")) {
-                for (int i = 1; i < tokens.length - 1; i++) {
-                    if (tokens[i].equalsIgnoreCase("show")) {
-                        String id = tokens[tokens.length - 1];
-                        if (!files.contains(id)) {
-                            files.add(id);
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-        return files;
-    }
-
-    /**
-     * Columns by breadth-first distance from the start; nodes that cannot be reached form their own
-     * groups below, in file order. Inside a column, nodes sit near the average row of their parents.
-     */
-    private void layout(DialogSequence sequence, List<DialogEntry> entries, Map<String, List<String>> next) {
-        Map<String, Integer> column = new HashMap<>();
-        Map<String, Integer> group = new HashMap<>();
-        List<String> roots = new ArrayList<>();
-        DialogEntry start = sequence.getFirstEntry();
-        if (start != null) {
-            roots.add(start.getId());
-        }
-        for (DialogEntry entry : entries) {
-            roots.add(entry.getId());
-        }
-        int groups = 0;
-        for (String root : roots) {
-            if (column.containsKey(root)) {
-                continue;
-            }
-            ArrayDeque<String> queue = new ArrayDeque<>();
-            queue.add(root);
-            column.put(root, 0);
-            group.put(root, groups);
-            while (!queue.isEmpty()) {
-                String id = queue.poll();
-                for (String target : next.getOrDefault(id, List.of())) {
-                    if (!column.containsKey(target) && next.containsKey(target)) {
-                        column.put(target, column.get(id) + 1);
-                        group.put(target, groups);
-                        queue.add(target);
-                    }
-                }
-            }
-            groups++;
-        }
-
-        Map<String, Double> rowHint = new HashMap<>();
-        int top = 0;
-        int maxRight = 0;
-        for (int g = 0; g < groups; g++) {
-            Map<Integer, List<String>> columns = new java.util.TreeMap<>();
-            for (DialogEntry entry : entries) {
-                if (group.get(entry.getId()) == g) {
-                    columns.computeIfAbsent(column.get(entry.getId()), key -> new ArrayList<>()).add(entry.getId());
-                }
-            }
-            int groupHeight = 0;
-            for (Map.Entry<Integer, List<String>> col : columns.entrySet()) {
-                List<String> ids = col.getValue();
-                ids.sort((a, b) -> Double.compare(rowHint.getOrDefault(a, 1e9), rowHint.getOrDefault(b, 1e9)));
-                for (int i = 0; i < ids.size(); i++) {
-                    String id = ids.get(i);
-                    int x = col.getKey() * (NODE_W + COLUMN_GAP);
-                    int y = top + i * (NODE_H + ROW_GAP);
-                    this.boxes.put(id, new Box(id, NodeGraph.byId(sequence, id), x, y));
-                    maxRight = Math.max(maxRight, x + NODE_W);
-                    groupHeight = Math.max(groupHeight, (i + 1) * (NODE_H + ROW_GAP));
-                    for (String child : next.getOrDefault(id, List.of())) {
-                        rowHint.merge(child, (double) i, (a, b) -> (a + b) / 2.0);
-                    }
-                }
-            }
-            top += groupHeight + GROUP_GAP;
-        }
-
-        // Other files go into one column to the right of everything.
-        int stubX = maxRight + COLUMN_GAP;
-        int stubY = 0;
-        for (Edge edge : this.edges) {
-            if (edge.kind() == 2 && !this.boxes.containsKey(edge.to())) {
-                this.boxes.put(edge.to(), new Box(edge.to(), null, stubX, stubY));
-                stubY += NODE_H + ROW_GAP;
-            }
-        }
-        this.contentWidth = stubY > 0 ? stubX + NODE_W : maxRight;
-        this.contentHeight = Math.max(top - GROUP_GAP, stubY);
-    }
-
-    private static int branchColor(int index) {
-        float hue = (0.58f + index * 0.61803398875f) % 1.0f;
-        return 0xFF000000 | (java.awt.Color.HSBtoRGB(hue, 0.45f, 0.95f) & 0xFFFFFF);
+        this.positions.clear();
+        LayoutStore.save(this.layoutKey, this.positions);
+        this.refresh();
+        this.fit();
     }
 
     // ----- view -----
 
     private void fit() {
-        if (this.contentWidth <= 0 || this.canvas.width() <= 0) {
+        if (this.model.isEmpty() || this.canvas.width() <= 0) {
             return;
         }
-        float zx = (this.canvas.width() - 40f) / this.contentWidth;
-        float zy = (this.canvas.height() - 40f) / Math.max(1, this.contentHeight);
+        int[] b = this.model.bounds();
+        float zx = (this.canvas.width() - 60f) / Math.max(1, b[2] - b[0]);
+        float zy = (this.canvas.height() - 60f) / Math.max(1, b[3] - b[1]);
         this.zoom = Mth.clamp(Math.min(zx, zy), MIN_ZOOM, 1.0f);
-        this.panX = (this.canvas.width() - this.contentWidth * this.zoom) / 2.0;
-        this.panY = Math.max(20, (this.canvas.height() - this.contentHeight * this.zoom) / 2.0);
+        this.panX = (this.canvas.width() - (b[2] - b[0]) * this.zoom) / 2.0 - b[0] * this.zoom;
+        this.panY = (this.canvas.height() - (b[3] - b[1]) * this.zoom) / 2.0 - b[1] * this.zoom;
     }
 
     private void zoomAround(float target, double screenX, double screenY) {
-        float clamped = Mth.clamp(target, MIN_ZOOM, MAX_ZOOM);
-        double worldX = (screenX - this.canvas.x() - this.panX) / this.zoom;
-        double worldY = (screenY - this.canvas.y() - this.panY) / this.zoom;
-        this.zoom = clamped;
+        double worldX = this.worldX(screenX);
+        double worldY = this.worldY(screenY);
+        this.zoom = Mth.clamp(target, MIN_ZOOM, MAX_ZOOM);
         this.panX = screenX - this.canvas.x() - worldX * this.zoom;
         this.panY = screenY - this.canvas.y() - worldY * this.zoom;
     }
 
-    /** Pans so the selected node is in view; called when selection changes elsewhere. */
+    private double worldX(double screenX) {
+        return (screenX - this.canvas.x() - this.panX) / this.zoom;
+    }
+
+    private double worldY(double screenY) {
+        return (screenY - this.canvas.y() - this.panY) / this.zoom;
+    }
+
+    private void centerOn(double worldX, double worldY) {
+        this.panX = this.canvas.width() / 2.0 - worldX * this.zoom;
+        this.panY = this.canvas.height() / 2.0 - worldY * this.zoom;
+    }
+
+    /** Pans so the selected node is visible. */
     public void focusSelected() {
-        Box box = this.boxes.get(this.context.selectedId());
-        if (box == null || this.canvas.width() <= 0) {
+        GraphModel.Node node = this.model.nodes.get(this.context.selectedId());
+        if (node == null || this.canvas.width() <= 0) {
             return;
         }
-        double left = box.x() * this.zoom + this.panX;
-        double topY = box.y() * this.zoom + this.panY;
-        double right = left + NODE_W * this.zoom;
-        double bottom = topY + NODE_H * this.zoom;
-        if (left < 20 || right > this.canvas.width() - 20) {
-            this.panX = this.canvas.width() / 2.0 - (box.x() + NODE_W / 2.0) * this.zoom;
-        }
-        if (topY < 20 || bottom > this.canvas.height() - 20) {
-            this.panY = this.canvas.height() / 2.0 - (box.y() + NODE_H / 2.0) * this.zoom;
+        double left = node.x * this.zoom + this.panX;
+        double top = node.y * this.zoom + this.panY;
+        if (left < 20 || left + GraphModel.WIDTH * this.zoom > this.canvas.width() - 20
+                || top < 20 || top + node.height * this.zoom > this.canvas.height() - 20) {
+            this.centerOn(node.x + GraphModel.WIDTH / 2.0, node.y + node.height / 2.0);
         }
     }
 
-    /** The drawing surface; owns pan and zoom input. */
-    private final class Canvas extends UiNode {
-        private boolean panning;
-        private double lastX;
-        private double lastY;
+    // ----- editing through the graph -----
 
-        private Box boxAt(double mouseX, double mouseY) {
-            double worldX = (mouseX - this.x() - GraphPanel.this.panX) / GraphPanel.this.zoom;
-            double worldY = (mouseY - this.y() - GraphPanel.this.panY) / GraphPanel.this.zoom;
-            for (Box box : GraphPanel.this.boxes.values()) {
-                if (worldX >= box.x() && worldX < box.x() + NODE_W && worldY >= box.y() && worldY < box.y() + NODE_H) {
-                    return box;
+    /** Links an output port to a target node, replacing what the port pointed at. */
+    private void connect(GraphModel.Node from, int port, GraphModel.Node to) {
+        DialogEntry entry = from.entry;
+        if (entry == null || to.entry == null) {
+            return;
+        }
+        if (port == GraphModel.NEXT_PORT) {
+            entry.setNextId(to.id);
+            entry.setEndDialog(null);
+        } else if (entry.getOptions() != null && port < entry.getOptions().length && entry.getOptions()[port] != null) {
+            entry.getOptions()[port].setTargetId(to.id);
+        }
+        this.context.touchStructure();
+        this.context.status(Theme.tr("graph.linked", from.id, to.id), EditorContext.StatusKind.SUCCESS);
+    }
+
+    private void disconnect(GraphModel.Node from, int port) {
+        DialogEntry entry = from.entry;
+        if (entry == null) {
+            return;
+        }
+        if (port == GraphModel.NEXT_PORT) {
+            entry.setNextId(null);
+            // Without an explicit jump the node would fall through to the next one; ending is what
+            // "disconnect" means to a writer looking at the graph.
+            if (NodeGraph.implicitNext(this.context.sequence(), entry) != null) {
+                entry.setEndDialog(Boolean.TRUE);
+            }
+        } else if (entry.getOptions() != null && port < entry.getOptions().length && entry.getOptions()[port] != null) {
+            entry.getOptions()[port].setTargetId(null);
+        }
+        this.context.touchStructure();
+    }
+
+    /** Creates a node at a world position, optionally linked from a port. */
+    private void createAt(double worldX, double worldY, GraphModel.Node from, int port) {
+        DialogSequence sequence = this.context.sequence();
+        if (sequence == null) {
+            return;
+        }
+        String base = from == null ? "node_" + (NodeGraph.entries(sequence).size() + 1) : from.id + "_next";
+        DialogEntry entry = NodeGraph.create(NodeGraph.uniqueId(sequence, base));
+        NodeGraph.add(sequence, entry);
+        int x = (int) Math.round(worldX / 10.0) * 10;
+        int y = (int) Math.round(worldY / 10.0) * 10 - GraphModel.HEAD / 2;
+        this.positions.put(entry.getId(), new int[]{x, y});
+        LayoutStore.save(this.layoutKey, this.positions);
+        if (from != null && from.entry != null) {
+            if (port == GraphModel.NEXT_PORT) {
+                from.entry.setNextId(entry.getId());
+                from.entry.setEndDialog(null);
+            } else if (from.entry.getOptions() != null && port < from.entry.getOptions().length) {
+                from.entry.getOptions()[port].setTargetId(entry.getId());
+            }
+        }
+        this.context.select(entry.getId());
+        this.context.touchStructure();
+        this.context.status(Theme.tr("status.node_added", entry.getId()), EditorContext.StatusKind.SUCCESS);
+    }
+
+    private void openNodeMenu(GraphModel.Node node, int mouseX, int mouseY) {
+        this.context.select(node.id);
+        List<ContextMenu.Item> items = new ArrayList<>();
+        DialogSequence sequence = this.context.sequence();
+        items.add(ContextMenu.Item.of(Theme.tr("menu.rename"), this.commands::renameSelected));
+        items.add(ContextMenu.Item.of(Theme.tr("menu.duplicate"), this.commands::duplicateSelected));
+        items.add(ContextMenu.Item.of(Theme.tr("menu.set_start"), () -> {
+            sequence.setStartId(node.id);
+            this.context.touchStructure();
+        }, !node.start));
+        items.add(ContextMenu.Item.of(Theme.tr("menu.add_branch"), () -> {
+            List<DialogOption> options = new ArrayList<>();
+            if (node.entry.getOptions() != null) {
+                options.addAll(List.of(node.entry.getOptions()));
+            }
+            options.add(DialogOption.builder().text(new JsonPrimitive(Theme.tr("branch.new").getString())).build());
+            node.entry.setOptions(options.toArray(new DialogOption[0]));
+            node.entry.setNextId(null);
+            this.context.touchStructure();
+        }));
+        items.add(ContextMenu.Item.of(Theme.tr("menu.toggle_end"), () -> {
+            node.entry.setEndDialog(node.entry.isEndDialog() ? null : Boolean.TRUE);
+            this.context.touchStructure();
+        }));
+        items.add(ContextMenu.Item.separator());
+        items.add(ContextMenu.Item.of(Theme.tr("menu.delete"), this.commands::deleteSelected));
+        ContextMenu.open(this.host(), mouseX, mouseY, Component.literal(node.id), items);
+    }
+
+    private void openPortMenu(GraphModel.Node node, int port, int mouseX, int mouseY) {
+        List<ContextMenu.Item> items = new ArrayList<>();
+        items.add(ContextMenu.Item.of(Theme.tr("graph.disconnect"), () -> this.disconnect(node, port)));
+        items.add(ContextMenu.Item.of(Theme.tr("graph.new_linked"), () -> this.createAt(
+                node.portX() + GraphModel.COLUMN_GAP, node.portY(port), node, port)));
+        ContextMenu.open(this.host(), mouseX, mouseY, null, items);
+    }
+
+    // ----- canvas -----
+
+    private enum Drag {
+        NONE,
+        PAN,
+        NODE,
+        LINK,
+        MINIMAP
+    }
+
+    private final class Canvas extends UiNode {
+        private Drag drag = Drag.NONE;
+        private GraphModel.Node dragNode;
+        private int dragPort;
+        private double grabX;
+        private double grabY;
+        private double pressX;
+        private double pressY;
+        private double mouseX;
+        private double mouseY;
+        private long lastEmptyClick;
+
+        private GraphPanel panel() {
+            return GraphPanel.this;
+        }
+
+        /** Output port under the cursor as {node, port}, or null. */
+        private Object[] portAt(double worldX, double worldY) {
+            float slack = PORT_HIT / Math.max(0.5f, this.panel().zoom);
+            for (GraphModel.Node node : this.panel().model.nodes.values()) {
+                if (node.file || Math.abs(worldX - node.portX()) > slack) {
+                    continue;
+                }
+                if (node.hasChoices()) {
+                    for (int i = 0; i < node.choices.size(); i++) {
+                        if (Math.abs(worldY - node.portY(i)) <= Math.max(slack, GraphModel.CHOICE / 2.0)) {
+                            return new Object[]{node, i};
+                        }
+                    }
+                } else if (!node.entry.isEndDialog() && Math.abs(worldY - node.portY(GraphModel.NEXT_PORT)) <= slack) {
+                    return new Object[]{node, GraphModel.NEXT_PORT};
                 }
             }
             return null;
         }
 
+        private boolean onMinimap(double x, double y) {
+            return !this.panel().model.isEmpty() && x >= this.right() - MAP_W - 8 && x < this.right() - 8
+                    && y >= this.bottom() - MAP_H - 8 && y < this.bottom() - 8;
+        }
+
         @Override
-        public boolean mouseClicked(double mouseX, double mouseY, int button) {
-            this.host().focus(null);
-            Box box = this.boxAt(mouseX, mouseY);
-            if (box != null && button == 0) {
-                if (box.external()) {
-                    if (GraphPanel.this.openDocument != null) {
-                        GraphPanel.this.openDocument.accept(box.id().substring(FILE.length()));
-                    }
-                    if (GraphPanel.this.filesOverview) {
-                        GraphPanel.this.setFilesOverview(false);
-                    }
-                } else {
-                    GraphPanel.this.context.select(box.id());
+        public Component tooltip() {
+            if (this.drag != Drag.NONE) {
+                return null;
+            }
+            GraphModel.Node node = this.panel().model.nodeAt(this.panel().worldX(this.mouseX), this.panel().worldY(this.mouseY));
+            if (node == null || node.summary.isEmpty()) {
+                return null;
+            }
+            return Component.literal(node.summary);
+        }
+
+        @Override
+        public boolean mouseClicked(double x, double y, int button) {
+            GraphPanel panel = this.panel();
+            this.host().focus(this);
+            this.mouseX = x;
+            this.mouseY = y;
+            if (this.onMinimap(x, y) && button == 0) {
+                this.drag = Drag.MINIMAP;
+                this.host().claimPointer(this);
+                this.jumpMinimap(x, y);
+                return true;
+            }
+            double worldX = panel.worldX(x);
+            double worldY = panel.worldY(y);
+            Object[] port = panel.filesOverview ? null : this.portAt(worldX, worldY);
+            GraphModel.Node node = panel.model.nodeAt(worldX, worldY);
+            if (button == 1) {
+                if (port != null) {
+                    panel.openPortMenu((GraphModel.Node) port[0], (Integer) port[1], (int) x, (int) y);
+                } else if (node != null && !node.file) {
+                    panel.openNodeMenu(node, (int) x, (int) y);
                 }
                 return true;
             }
-            this.panning = true;
-            this.lastX = mouseX;
-            this.lastY = mouseY;
+            if (button != 0) {
+                return false;
+            }
+            this.pressX = x;
+            this.pressY = y;
             this.host().claimPointer(this);
-            return true;
-        }
-
-        @Override
-        public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-            if (this.panning) {
-                GraphPanel.this.panX += mouseX - this.lastX;
-                GraphPanel.this.panY += mouseY - this.lastY;
-                this.lastX = mouseX;
-                this.lastY = mouseY;
+            if (port != null) {
+                this.drag = Drag.LINK;
+                this.dragNode = (GraphModel.Node) port[0];
+                this.dragPort = (Integer) port[1];
+            } else if (node != null) {
+                this.drag = Drag.NODE;
+                this.dragNode = node;
+                this.grabX = worldX - node.x;
+                this.grabY = worldY - node.y;
+            } else {
+                long now = System.currentTimeMillis();
+                if (!panel.filesOverview && now - this.lastEmptyClick < DOUBLE_CLICK_MS) {
+                    this.drag = Drag.NONE;
+                    panel.createAt(worldX, worldY, null, 0);
+                    this.lastEmptyClick = 0L;
+                    return true;
+                }
+                this.lastEmptyClick = now;
+                this.drag = Drag.PAN;
+                this.grabX = x;
+                this.grabY = y;
             }
             return true;
         }
 
         @Override
-        public boolean mouseReleased(double mouseX, double mouseY, int button) {
-            this.panning = false;
+        public boolean mouseDragged(double x, double y, int button, double dragX, double dragY) {
+            GraphPanel panel = this.panel();
+            this.mouseX = x;
+            this.mouseY = y;
+            switch (this.drag) {
+                case PAN -> {
+                    panel.panX += x - this.grabX;
+                    panel.panY += y - this.grabY;
+                    this.grabX = x;
+                    this.grabY = y;
+                }
+                case NODE -> {
+                    this.dragNode.x = (int) Math.round((panel.worldX(x) - this.grabX) / 10.0) * 10;
+                    this.dragNode.y = (int) Math.round((panel.worldY(y) - this.grabY) / 10.0) * 10;
+                }
+                case MINIMAP -> this.jumpMinimap(x, y);
+                default -> {
+                }
+            }
             return true;
         }
 
         @Override
-        public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-            GraphPanel.this.zoomAround(GraphPanel.this.zoom * (scrollY > 0 ? 1.15f : 1 / 1.15f), mouseX, mouseY);
+        public boolean mouseReleased(double x, double y, int button) {
+            GraphPanel panel = this.panel();
+            Drag finished = this.drag;
+            this.drag = Drag.NONE;
+            boolean moved = Math.abs(x - this.pressX) + Math.abs(y - this.pressY) > 3;
+            if (finished == Drag.NODE && this.dragNode != null) {
+                if (moved) {
+                    panel.remember(this.dragNode);
+                } else if (this.dragNode.file) {
+                    String id = this.dragNode.id.startsWith("file:") ? this.dragNode.id.substring(5) : this.dragNode.id;
+                    if (panel.openDocument != null) {
+                        panel.openDocument.accept(id);
+                    }
+                    if (panel.filesOverview) {
+                        panel.setFilesOverview(false);
+                    }
+                } else {
+                    panel.context.select(this.dragNode.id);
+                }
+            } else if (finished == Drag.LINK && this.dragNode != null && moved) {
+                double worldX = panel.worldX(x);
+                double worldY = panel.worldY(y);
+                GraphModel.Node target = panel.model.nodeAt(worldX, worldY);
+                if (target != null && !target.file) {
+                    panel.connect(this.dragNode, this.dragPort, target);
+                } else if (target == null) {
+                    panel.createAt(worldX, worldY, this.dragNode, this.dragPort);
+                }
+            }
+            this.dragNode = null;
             return true;
         }
 
         @Override
-        protected void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-            GraphPanel panel = GraphPanel.this;
+        public void onMouseMoved(double x, double y) {
+            this.mouseX = x;
+            this.mouseY = y;
+        }
+
+        @Override
+        public boolean mouseScrolled(double x, double y, double scrollX, double scrollY) {
+            this.panel().zoomAround(this.panel().zoom * (scrollY > 0 ? 1.15f : 1 / 1.15f), x, y);
+            return true;
+        }
+
+        private void jumpMinimap(double x, double y) {
+            int[] b = this.panel().model.bounds();
+            float scale = this.minimapScale(b);
+            int mapX = this.right() - MAP_W - 8;
+            int mapY = this.bottom() - MAP_H - 8;
+            this.panel().centerOn(b[0] + (x - mapX - 4) / scale, b[1] + (y - mapY - 4) / scale);
+        }
+
+        private float minimapScale(int[] b) {
+            return Math.min((MAP_W - 8f) / Math.max(1, b[2] - b[0]), (MAP_H - 8f) / Math.max(1, b[3] - b[1]));
+        }
+
+        // ----- drawing -----
+
+        @Override
+        protected void render(GuiGraphics graphics, int mx, int my, float partialTick) {
+            GraphPanel panel = this.panel();
+            this.mouseX = mx;
+            this.mouseY = my;
             graphics.fill(this.x(), this.y(), this.right(), this.bottom(), Theme.BG);
-            if (panel.fitPending && this.width() > 0 && panel.contentWidth > 0) {
+            if (panel.fitPending && this.width() > 0 && !panel.model.isEmpty()) {
                 panel.fitPending = false;
                 panel.fit();
             }
-            if (panel.boxes.isEmpty()) {
-                Theme.centered(graphics, Theme.tr("graph.empty").getString(), this.x() + this.width() / 2,
-                        this.y() + this.height() / 2 - 4, Theme.TEXT_MUTED);
+            if (panel.model.isEmpty()) {
+                Theme.centered(graphics, Theme.tr(panel.filesOverview ? "graph.empty" : "graph.empty_nodes").getString(),
+                        this.x() + this.width() / 2, this.y() + this.height() / 2 - 4, Theme.TEXT_MUTED);
                 return;
             }
-            Box hovered = this.isHovered() && !this.panning ? this.boxAt(mouseX, mouseY) : null;
-            String selected = panel.context.selectedId();
+            double worldMouseX = panel.worldX(mx);
+            double worldMouseY = panel.worldY(my);
+            GraphModel.Node hovered = this.isHovered() && this.drag == Drag.NONE ? panel.model.nodeAt(worldMouseX, worldMouseY) : null;
+            Object[] hoveredPort = this.isHovered() && this.drag == Drag.NONE && !panel.filesOverview
+                    ? this.portAt(worldMouseX, worldMouseY) : null;
+            String selected = panel.filesOverview ? null : panel.context.selectedId();
+            String focus = hovered != null ? hovered.id : selected;
+
             graphics.enableScissor(this.x(), this.y(), this.right(), this.bottom());
+            this.drawGrid(graphics);
             graphics.pose().pushPose();
             graphics.pose().translate((float) (this.x() + panel.panX), (float) (this.y() + panel.panY), 0.0f);
             graphics.pose().scale(panel.zoom, panel.zoom, 1.0f);
-            int line = Math.max(1, Math.round(1.0f / panel.zoom));
-            for (Edge edge : panel.edges) {
-                boolean related = edge.from().equals(selected) || edge.to().equals(selected);
-                this.drawEdge(graphics, edge, related, selected != null && !related, line);
+            float line = 1.4f / panel.zoom;
+            for (GraphModel.Edge edge : panel.model.edges) {
+                boolean related = focus != null && (edge.from().id.equals(focus) || edge.to() != null && edge.to().id.equals(focus));
+                this.drawEdge(graphics, edge, related, focus != null && !related, line);
             }
-            for (Box box : panel.boxes.values()) {
-                this.drawBox(graphics, box, box.id().equals(selected), box == hovered);
+            if (this.drag == Drag.LINK && this.dragNode != null) {
+                float sx = this.dragNode.portX();
+                float sy = this.dragNode.portY(this.dragPort);
+                Lines.curve(graphics, sx, sy, (float) worldMouseX, (float) worldMouseY,
+                        Math.max(30, Math.abs((float) worldMouseX - sx) / 2), line * 1.5f, Theme.ACCENT, false);
+            }
+            Lines.flush(graphics);
+            boolean detailed = panel.zoom >= 0.45f;
+            for (GraphModel.Node node : panel.model.nodes.values()) {
+                this.drawNode(graphics, node, node.id.equals(selected), node == hovered || node == this.dragNode,
+                        hoveredPort != null && hoveredPort[0] == node ? (Integer) hoveredPort[1] : null, detailed);
             }
             graphics.pose().popPose();
             graphics.disableScissor();
-            String hint = Theme.tr("graph.hint").getString() + "   " + Math.round(panel.zoom * 100) + "%";
-            Theme.text(graphics, hint, this.x() + 8, this.bottom() - 12, Theme.TEXT_MUTED);
+            this.drawMinimap(graphics);
+            this.drawLegend(graphics);
         }
 
-        private void drawBox(GuiGraphics graphics, Box box, boolean selected, boolean hovered) {
-            int x = box.x();
-            int y = box.y();
-            if (box.external()) {
-                String file = box.id().substring(FILE.length());
-                boolean current = GraphPanel.this.context.document() != null
-                        && file.equals(GraphPanel.this.context.document().id());
-                Integer size = GraphPanel.this.fileSizes.get(file);
-                boolean exists = !GraphPanel.this.filesOverview || size != null;
-                graphics.fill(x, y, x + NODE_W, y + NODE_H, current ? Theme.SELECTED : hovered ? Theme.HOVER : Theme.SURFACE);
-                Theme.border(graphics, x, y, NODE_W, NODE_H, current ? Theme.ACCENT : exists ? Theme.CYAN : Theme.DANGER);
-                String caption = GraphPanel.this.filesOverview
-                        ? (size == null ? Theme.tr("graph.missing_file").getString() : Theme.tr("status.nodes", size).getString())
-                        : Theme.tr("graph.other_file").getString();
-                Theme.textIn(graphics, file, x + 8, y + 5, NODE_W - 16, 10, exists ? Theme.TEXT : Theme.DANGER);
-                Theme.textIn(graphics, caption, x + 8, y + 21, NODE_W - 16, 10, Theme.TEXT_MUTED);
+        private void drawGrid(GuiGraphics graphics) {
+            GraphPanel panel = this.panel();
+            float step = GRID * panel.zoom;
+            if (step < 10) {
                 return;
             }
-            DialogEntry entry = box.entry();
-            graphics.fill(x, y, x + NODE_W, y + NODE_H, selected ? Theme.SELECTED : hovered ? Theme.HOVER : Theme.RAISED);
-            graphics.fill(x, y, x + 3, y + NODE_H, OutlinePanel.kindColor(entry));
-            if (selected) {
-                Theme.border(graphics, x, y, NODE_W, NODE_H, Theme.ACCENT);
-            }
-            boolean start = NodeGraph.isStart(GraphPanel.this.context.sequence(), entry);
-            String speaker = TextCodec.preview(entry.getSpeaker());
-            String head = (start ? "▶ " : "") + box.id();
-            Theme.textIn(graphics, head, x + 8, y + 5, NODE_W - 16, 10, start ? Theme.SUCCESS : Theme.TEXT);
-            String text = TextCodec.preview(entry.getText());
-            String body = speaker.isEmpty() ? text : speaker + "：" + text;
-            Theme.textIn(graphics, body.isEmpty() ? Theme.tr("outline.no_text").getString() : body, x + 8, y + 20,
-                    NODE_W - 16, 12, Theme.TEXT_MUTED);
-            if (entry.isEndDialog()) {
-                Theme.text(graphics, "■", x + NODE_W - 12, y + 5, Theme.DANGER);
+            double startX = this.x() + ((panel.panX % step) + step) % step;
+            double startY = this.y() + ((panel.panY % step) + step) % step;
+            for (double gx = startX; gx < this.right(); gx += step) {
+                for (double gy = startY; gy < this.bottom(); gy += step) {
+                    graphics.fill((int) gx, (int) gy, (int) gx + 1, (int) gy + 1, 0xFF2C2E33);
+                }
             }
         }
 
-        /** Right side of the source to the left side of the target, routed with right angles. */
-        private void drawEdge(GuiGraphics graphics, Edge edge, boolean related, boolean faded, int line) {
-            Box from = GraphPanel.this.boxes.get(edge.from());
-            Box to = GraphPanel.this.boxes.get(edge.to());
-            if (from == null) {
-                return;
-            }
+        private void drawEdge(GuiGraphics graphics, GraphModel.Edge edge, boolean related, boolean faded, float line) {
+            GraphModel.Node from = edge.from();
+            float sx = from.portX();
+            float sy = from.file ? from.y + from.height / 2.0f : from.portY(edge.port());
             int color = edge.color();
             if (faded) {
-                color = (color & 0x00FFFFFF) | 0x50000000;
-            } else if (related && edge.kind() == 0) {
-                color = Theme.TEXT_DIM;
+                color = (color & 0x00FFFFFF) | 0x40000000;
             }
-            int startX = from.x() + NODE_W;
-            int startY = from.y() + NODE_H / 2 + (edge.kind() == 1 ? 6 : 0);
-            if (to == null) {
-                // Target missing: a short red stub that ends in a cross.
-                hLine(graphics, startX, startX + 24, startY, line, Theme.DANGER);
-                Theme.text(graphics, "✕", startX + 26, startY - 4, Theme.DANGER);
+            float width = related ? line * 2.0f : line;
+            if (edge.to() == null) {
+                Lines.segment(graphics, sx, sy, sx + 26, sy, width, Theme.DANGER);
+                Lines.segment(graphics, sx + 26, sy - 4, sx + 34, sy + 4, width, Theme.DANGER);
+                Lines.segment(graphics, sx + 26, sy + 4, sx + 34, sy - 4, width, Theme.DANGER);
+                if (edge.missing() != null) {
+                    Lines.flush(graphics);
+                    Theme.text(graphics, edge.missing(), (int) sx + 38, (int) sy - 4, Theme.DANGER);
+                }
                 return;
             }
-            int endX = to.x();
-            int endY = to.y() + NODE_H / 2;
-            if (endX > startX) {
-                int midX = startX + Math.max(12, Math.min(COLUMN_GAP / 2, (endX - startX) / 2));
-                hLine(graphics, startX, midX, startY, line, color);
-                vLine(graphics, midX, startY, endY, line, color);
-                hLine(graphics, midX, endX, endY, line, color);
+            GraphModel.Node to = edge.to();
+            float tx = to.inputX();
+            float ty = to.file ? to.y + to.height / 2.0f : to.inputY();
+            boolean backward = tx < sx + 10;
+            float bend = backward ? 90 + Math.abs(ty - sy) * 0.15f : Math.max(30, (tx - sx) / 2);
+            boolean dashed = backward || edge.kind() == GraphModel.Kind.FILE;
+            Lines.curve(graphics, sx, sy, tx - 5, ty, bend, width, color, dashed);
+            Lines.triangle(graphics, tx, ty, tx - 7, ty - 4, tx - 7, ty + 4, color);
+        }
+
+        private void drawNode(GuiGraphics graphics, GraphModel.Node node, boolean selected, boolean hovered,
+                              Integer hoveredPort, boolean detailed) {
+            int x = node.x;
+            int y = node.y;
+            int w = GraphModel.WIDTH;
+            int h = node.height;
+            int kind = node.file ? Theme.CYAN : OutlinePanel.kindColor(node.entry);
+            // Shadow, body, tinted header and the type stripe.
+            graphics.fill(x + 2, y + 2, x + w + 2, y + h + 2, 0x60000000);
+            graphics.fill(x, y, x + w, y + h, selected ? Theme.SELECTED : Theme.RAISED);
+            graphics.fill(x, y, x + w, y + GraphModel.HEAD, (kind & 0x00FFFFFF) | 0x38000000);
+            graphics.fill(x, y, x + 3, y + h, kind);
+            int border = selected ? Theme.ACCENT : hovered ? Theme.BORDER_STRONG : node.unreachable ? Theme.WARNING : Theme.BORDER;
+            Theme.border(graphics, x, y, w, h, border);
+
+            String title = node.file ? (node.id.startsWith("file:") ? node.id.substring(5) : node.id) : node.id;
+            String badge = "";
+            int badgeColor = Theme.TEXT_MUTED;
+            if (node.file && node.start) {
+                badge = Theme.tr("graph.current").getString();
+                badgeColor = Theme.ACCENT;
+            } else if (node.file && node.id.startsWith("file:")) {
+                badge = Theme.tr("graph.other_file").getString();
+                badgeColor = Theme.CYAN;
+            } else if (node.start) {
+                badge = Theme.tr("graph.badge_start").getString();
+                badgeColor = Theme.SUCCESS;
+            } else if (node.unreachable) {
+                badge = Theme.tr("graph.badge_unlinked").getString();
+                badgeColor = Theme.WARNING;
+            } else if (node.ends) {
+                badge = Theme.tr("graph.badge_end").getString();
+                badgeColor = Theme.DANGER;
+            }
+            int badgeWidth = badge.isEmpty() ? 0 : Theme.font().width(badge) + 8;
+            Theme.textIn(graphics, title, x + 8, y + 1, w - 18 - badgeWidth, GraphModel.HEAD, Theme.TEXT);
+            if (!badge.isEmpty()) {
+                int bx = x + w - badgeWidth - 8;
+                graphics.fill(bx, y + 4, bx + badgeWidth, y + GraphModel.HEAD - 3, (badgeColor & 0x00FFFFFF) | 0x30000000);
+                Theme.textIn(graphics, badge, bx + 4, y + 4, badgeWidth - 6, GraphModel.HEAD - 7, badgeColor);
+            }
+            if (detailed) {
+                String summary = node.summary.isEmpty() ? Theme.tr("outline.no_text").getString() : node.summary;
+                Theme.textIn(graphics, summary, x + 8, y + GraphModel.HEAD + 2, w - 14, GraphModel.LINE, Theme.TEXT_DIM);
+                for (int i = 0; i < node.choices.size(); i++) {
+                    int rowY = y + GraphModel.HEAD + GraphModel.LINE + GraphModel.PAD + i * GraphModel.CHOICE;
+                    graphics.fill(x + 6, rowY, x + w - 6, rowY + 1, Theme.BORDER);
+                    Theme.textIn(graphics, "› " + node.choices.get(i), x + 8, rowY + 1, w - 22, GraphModel.CHOICE, Theme.TEXT_DIM);
+                }
+            }
+            if (node.file) {
+                return;
+            }
+            // Input on the left, outputs on the right.
+            this.dot(graphics, node.inputX(), node.inputY(), 3, Theme.BORDER_STRONG);
+            if (node.hasChoices()) {
+                for (int i = 0; i < node.choices.size(); i++) {
+                    boolean hot = hoveredPort != null && hoveredPort == i;
+                    this.dot(graphics, node.portX(), node.portY(i), hot ? 5 : 3, node.choiceColors.get(i));
+                }
+            } else if (!node.entry.isEndDialog()) {
+                boolean hot = hoveredPort != null && hoveredPort == GraphModel.NEXT_PORT;
+                boolean explicit = node.entry.getNextId() != null && !node.entry.getNextId().isBlank();
+                this.dot(graphics, node.portX(), node.portY(GraphModel.NEXT_PORT), hot ? 5 : 3,
+                        explicit ? Theme.CYAN : 0xFF8A8E97);
+            }
+        }
+
+        private void dot(GuiGraphics graphics, int cx, int cy, int radius, int color) {
+            graphics.fill(cx - radius, cy - radius + 1, cx + radius, cy + radius - 1, color);
+            graphics.fill(cx - radius + 1, cy - radius, cx + radius - 1, cy + radius, color);
+        }
+
+        private void drawMinimap(GuiGraphics graphics) {
+            GraphPanel panel = this.panel();
+            int[] b = panel.model.bounds();
+            float scale = this.minimapScale(b);
+            int mapX = this.right() - MAP_W - 8;
+            int mapY = this.bottom() - MAP_H - 8;
+            graphics.fill(mapX, mapY, mapX + MAP_W, mapY + MAP_H, 0xE0222327);
+            Theme.border(graphics, mapX, mapY, MAP_W, MAP_H, Theme.BORDER);
+            String selected = panel.context.selectedId();
+            for (GraphModel.Node node : panel.model.nodes.values()) {
+                int nx = mapX + 4 + (int) ((node.x - b[0]) * scale);
+                int ny = mapY + 4 + (int) ((node.y - b[1]) * scale);
+                int nw = Math.max(2, (int) (GraphModel.WIDTH * scale));
+                int nh = Math.max(2, (int) (node.height * scale));
+                int color = node.id.equals(selected) ? Theme.ACCENT
+                        : node.file ? Theme.CYAN : OutlinePanel.kindColor(node.entry);
+                graphics.fill(nx, ny, nx + nw, ny + nh, (color & 0x00FFFFFF) | 0xB0000000);
+            }
+            double viewLeft = panel.worldX(this.x());
+            double viewTop = panel.worldY(this.y());
+            double viewRight = panel.worldX(this.right());
+            double viewBottom = panel.worldY(this.bottom());
+            int vx1 = Mth.clamp(mapX + 4 + (int) ((viewLeft - b[0]) * scale), mapX, mapX + MAP_W);
+            int vy1 = Mth.clamp(mapY + 4 + (int) ((viewTop - b[1]) * scale), mapY, mapY + MAP_H);
+            int vx2 = Mth.clamp(mapX + 4 + (int) ((viewRight - b[0]) * scale), mapX, mapX + MAP_W);
+            int vy2 = Mth.clamp(mapY + 4 + (int) ((viewBottom - b[1]) * scale), mapY, mapY + MAP_H);
+            if (vx2 > vx1 && vy2 > vy1) {
+                Theme.border(graphics, vx1, vy1, vx2 - vx1, vy2 - vy1, 0xC0E4E5E9);
+            }
+        }
+
+        private void drawLegend(GuiGraphics graphics) {
+            GraphPanel panel = this.panel();
+            int x = this.x() + 8;
+            int y = this.bottom() - 14;
+            String zoom = Math.round(panel.zoom * 100) + "%";
+            x = this.legendItem(graphics, x, y, Theme.ACCENT, Theme.tr("graph.legend_line").getString(), false);
+            x = this.legendItem(graphics, x, y, Theme.WARNING, Theme.tr("graph.legend_choice").getString(), false);
+            x = this.legendItem(graphics, x, y, Theme.DANGER, Theme.tr("graph.legend_end").getString(), false);
+            x = this.legendItem(graphics, x, y, 0xFF8A8E97, Theme.tr("graph.legend_continue").getString(), true);
+            x = this.legendItem(graphics, x, y, Theme.CYAN, Theme.tr("graph.legend_jump").getString(), true);
+            Theme.text(graphics, zoom + "   " + Theme.tr(panel.filesOverview ? "graph.hint_files" : "graph.hint").getString(),
+                    x + 6, y + 1, Theme.TEXT_MUTED);
+        }
+
+        private int legendItem(GuiGraphics graphics, int x, int y, int color, String label, boolean asLine) {
+            if (asLine) {
+                graphics.fill(x, y + 4, x + 10, y + 6, color);
             } else {
-                // Backward jump (a loop): leave right, run below both boxes, come back in from the left.
-                int laneY = Math.max(from.y(), to.y()) + NODE_H + ROW_GAP / 2;
-                int outX = startX + 10;
-                int inX = endX - 10;
-                hLine(graphics, startX, outX, startY, line, color);
-                vLine(graphics, outX, startY, laneY, line, color);
-                hLine(graphics, inX, outX, laneY, line, color);
-                vLine(graphics, inX, endY, laneY, line, color);
-                hLine(graphics, inX, endX, endY, line, color);
+                graphics.fill(x, y + 1, x + 8, y + 9, color);
             }
-            // Arrow head pointing into the target.
-            for (int i = 0; i < 4; i++) {
-                graphics.fill(endX - 1 - i, endY - i, endX - i, endY + i + 1, color);
-            }
-        }
-
-        private void hLine(GuiGraphics graphics, int x1, int x2, int y, int width, int color) {
-            graphics.fill(Math.min(x1, x2), y, Math.max(x1, x2) + 1, y + width, color);
-        }
-
-        private void vLine(GuiGraphics graphics, int x, int y1, int y2, int width, int color) {
-            graphics.fill(x, Math.min(y1, y2), x + width, Math.max(y1, y2) + 1, color);
+            Theme.text(graphics, label, x + 13, y + 1, Theme.TEXT_MUTED);
+            return x + 13 + Theme.font().width(label) + 10;
         }
     }
 }

@@ -146,7 +146,9 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
         this.workspace.add(this.inspector);
         this.workspace.add(this.statusBar);
         this.host = new UiHost(this.workspace);
-        this.flow.setCommands(new FlowCommands());
+        FlowCommands commands = new FlowCommands();
+        this.flow.setCommands(commands);
+        this.graph.setCommands(commands);
         StagingActions staging = new StagingActions();
         this.inspector.setActions(this::pickNode, staging, this::pickInventoryItem);
         this.stage.setActions(staging);
@@ -532,6 +534,7 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
                     this.status(Theme.tr("status.rename_failed"), StatusKind.ERROR);
                     return;
                 }
+                top.yourzi.dialog.editor.LayoutStore.rename(document.id(), result.id());
                 sequence.setId(result.id());
             }
             sequence.setTitle(result.title());
@@ -709,11 +712,13 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
                     if (newId.equals(entry.getId())) {
                         return;
                     }
+                    String oldId = entry.getId();
                     if (newId.isEmpty() || !newId.matches("[A-Za-z0-9_\\-.]+")
                             || !NodeGraph.rename(this.sequence(), entry, newId)) {
                         this.status(Theme.tr("status.rename_failed"), StatusKind.ERROR);
                         return;
                     }
+                    this.graph.renameNode(oldId, newId);
                     this.selectedId = newId;
                     this.touchStructure();
                     this.status(Theme.tr("status.renamed", newId), StatusKind.SUCCESS);

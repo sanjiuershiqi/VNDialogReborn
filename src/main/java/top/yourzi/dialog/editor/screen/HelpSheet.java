@@ -20,7 +20,9 @@ final class HelpSheet extends Modal {
             {"help.group_navigate", "↑ / ↓", "help.select", "Alt+↑ / Alt+↓", "help.move", "F1", "help.toggle",
                     "Esc", "help.escape"},
             {"help.group_stage", "help.stage_drag_key", "help.stage_drag", "help.stage_wheel_key", "help.stage_wheel",
-                    "← ↑ → ↓", "help.stage_nudge", "R", "help.stage_reset"}
+                    "← ↑ → ↓", "help.stage_nudge", "R", "help.stage_reset"},
+            {"help.group_graph", "help.graph_drag_key", "help.graph_drag", "help.graph_link_key", "help.graph_link",
+                    "help.graph_new_key", "help.graph_new"}
     };
 
     private HelpSheet() {
