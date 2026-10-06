@@ -87,7 +87,7 @@ public class DialogManager {
      * 编辑器保存的对话文件存放在 config/vndialog_editor/dialog_json/ 目录。
      */
     private void loadDialogsFromConfigDir() {
-        Path configDir = top.yourzi.dialog.editor.util.EditorConfig.DIALOG_JSON_DIR;
+        Path configDir = top.yourzi.dialog.editor.EditorConfig.DIALOG_JSON_DIR;
         if (!Files.isDirectory(configDir)) {
             return;
         }
@@ -438,9 +438,9 @@ public class DialogManager {
         try {
             stopCurrentAudio();
             // 优先检查编辑器配置目录中的音频文件（替代原 MixinDialogManagerAudio 功能）
-            Path fsAudio = top.yourzi.dialog.editor.util.EditorConfig.SOUNDS_DIR.resolve(audioPath);
+            Path fsAudio = top.yourzi.dialog.editor.EditorConfig.SOUNDS_DIR.resolve(audioPath);
             if (Files.exists(fsAudio)) {
-                top.yourzi.dialog.editor.util.AudioPreviewPlayer.play(fsAudio.toFile());
+                top.yourzi.dialog.editor.AudioPreviewPlayer.play(fsAudio.toFile());
                 audioPlaying = true;
                 return;
             }
@@ -456,7 +456,7 @@ public class DialogManager {
     }
 
     public static void stopCurrentAudio() {
-        top.yourzi.dialog.editor.util.AudioPreviewPlayer.stop();
+        top.yourzi.dialog.editor.AudioPreviewPlayer.stop();
         if (currentAudioInstance != null && audioPlaying) {
             Minecraft.getInstance().getSoundManager().stop(currentAudioInstance);
             currentAudioInstance = null;
@@ -480,7 +480,7 @@ public class DialogManager {
             return false;
         }
         // AudioPreviewPlayer 播放的音频
-        if (!top.yourzi.dialog.editor.util.AudioPreviewPlayer.isRunning()) {
+        if (!top.yourzi.dialog.editor.AudioPreviewPlayer.isRunning()) {
             audioPlaying = false;
             return true;
         }

@@ -215,7 +215,7 @@ public class DialogEntry {
             // 如果是翻译组件，先尝试从编辑器配置目录的语言缓存获取翻译
             if (jsonObjectCopy.has("translate")) {
                 String key = jsonObjectCopy.get("translate").getAsString();
-                String translated = top.yourzi.dialog.editor.util.ConfigLanguageCache.get(key);
+                String translated = top.yourzi.dialog.editor.TextCodec.ConfigLang.get(key);
                 if (translated != null) {
                     // 保留 JSON 中定义的样式 (color/bold/italic 等)，避免丢失
                     Component styled = ComponentJson.fromJson(jsonObjectCopy);

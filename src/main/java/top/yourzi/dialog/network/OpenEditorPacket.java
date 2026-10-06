@@ -9,8 +9,8 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import top.yourzi.dialog.Dialog;
-import top.yourzi.dialog.editor.gui.VNDialogEditorScreen;
-import top.yourzi.dialog.editor.util.EditorConfig;
+import top.yourzi.dialog.editor.screen.DialogEditorScreen;
+import top.yourzi.dialog.editor.EditorConfig;
 
 /**
  * 服务器发送至客户端的空载荷数据包，用于在客户端打开 VNDialog 可视化编辑器。
@@ -33,7 +33,7 @@ public record OpenEditorPacket() implements CustomPacketPayload {
     private static void openEditorScreen() {
         Minecraft.getInstance().execute(() -> {
             EditorConfig.createDirectories();
-            Minecraft.getInstance().setScreen(new VNDialogEditorScreen());
+            Minecraft.getInstance().setScreen(new DialogEditorScreen());
         });
     }
 
