@@ -72,7 +72,6 @@ public final class ItemPickerSheet extends Modal {
         this.all = all;
         this.backpackTab.selected(!all);
         this.allTab.selected(all);
-        this.grid.setSource(all ? this.everything : this.backpack);
         this.refresh();
     }
 
