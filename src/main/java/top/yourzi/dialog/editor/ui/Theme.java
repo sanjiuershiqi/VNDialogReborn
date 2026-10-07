@@ -4,6 +4,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 /**
  * Single source of colors, metrics and primitive drawing for the editor.
@@ -81,6 +83,26 @@ public final class Theme {
 
     public static void text(GuiGraphics g, Component text, int x, int y, int color) {
         g.drawString(font(), text, x, y, color, false);
+    }
+
+    /**
+     * Scissor in the current pose's coordinates. The editor draws through its own scale, which the
+     * vanilla scissor does not follow, so the rectangle is transformed here and handed over in plain
+     * screen coordinates.
+     */
+    public static void clip(GuiGraphics g, int x1, int y1, int x2, int y2) {
+        Matrix4f pose = g.pose().last().pose();
+        Vector3f a = pose.transformPosition(x1, y1, 0.0f, new Vector3f());
+        Vector3f b = pose.transformPosition(x2, y2, 0.0f, new Vector3f());
+        g.pose().pushPose();
+        g.pose().last().pose().identity();
+        g.enableScissor((int) Math.floor(Math.min(a.x, b.x)), (int) Math.floor(Math.min(a.y, b.y)),
+                (int) Math.ceil(Math.max(a.x, b.x)), (int) Math.ceil(Math.max(a.y, b.y)));
+        g.pose().popPose();
+    }
+
+    public static void unclip(GuiGraphics g) {
+        g.disableScissor();
     }
 
     /** Draws text clipped to {@code maxWidth}, vertically centered in a row of height {@code h}. */

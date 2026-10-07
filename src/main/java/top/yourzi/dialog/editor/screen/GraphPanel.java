@@ -58,6 +58,7 @@ public final class GraphPanel extends EditorPanel {
     private double panX;
     private double panY;
     private boolean fitPending = true;
+    private boolean routesDirty = true;
 
     public GraphPanel(EditorContext context) {
         super(null);
@@ -121,6 +122,7 @@ public final class GraphPanel extends EditorPanel {
         } else {
             this.model = GraphModel.ofSequence(this.context.sequence(), this.positions);
         }
+        this.routesDirty = true;
     }
 
     /** Keeps a hand arrangement when a node is renamed. */
@@ -434,6 +436,7 @@ public final class GraphPanel extends EditorPanel {
                 case NODE -> {
                     this.dragNode.x = (int) Math.round((panel.worldX(x) - this.grabX) / 10.0) * 10;
                     this.dragNode.y = (int) Math.round((panel.worldY(y) - this.grabY) / 10.0) * 10;
+                    panel.routesDirty = true;
                 }
                 case MINIMAP -> this.jumpMinimap(x, y);
                 default -> {
@@ -525,7 +528,11 @@ public final class GraphPanel extends EditorPanel {
             String selected = panel.filesOverview ? null : panel.context.selectedId();
             String focus = hovered != null ? hovered.id : selected;
 
-            graphics.enableScissor(this.x(), this.y(), this.right(), this.bottom());
+            if (panel.routesDirty) {
+                panel.routesDirty = false;
+                this.routeEdges();
+            }
+            Theme.clip(graphics, this.x(), this.y(), this.right(), this.bottom());
             this.drawGrid(graphics);
             graphics.pose().pushPose();
             graphics.pose().translate((float) (this.x() + panel.panX), (float) (this.y() + panel.panY), 0.0f);
@@ -548,7 +555,7 @@ public final class GraphPanel extends EditorPanel {
                         hoveredPort != null && hoveredPort[0] == node ? (Integer) hoveredPort[1] : null, detailed);
             }
             graphics.pose().popPose();
-            graphics.disableScissor();
+            Theme.unclip(graphics);
             this.drawMinimap(graphics);
             this.drawLegend(graphics);
         }
@@ -588,13 +595,94 @@ public final class GraphPanel extends EditorPanel {
                 return;
             }
             GraphModel.Node to = edge.to();
+            int count = this.panel().model.arrivals.getOrDefault(to.id, 1);
             float tx = to.inputX();
-            float ty = to.file ? to.y + to.height / 2.0f : to.inputY();
-            boolean backward = tx < sx + 10;
-            float bend = backward ? 90 + Math.abs(ty - sy) * 0.15f : Math.max(30, (tx - sx) / 2);
-            boolean dashed = backward || edge.kind() == GraphModel.Kind.FILE;
-            Lines.curve(graphics, sx, sy, tx - 5, ty, bend, width, color, dashed);
+            float ty = to.file ? to.y + to.height / 2.0f : edge.arrivalY(count);
+            boolean dashed = edge.kind() == GraphModel.Kind.FILE || tx < sx + 10;
+            if (edge.route != null) {
+                Lines.path(graphics, edge.route, 8.0f, width, color, dashed);
+            } else {
+                Lines.curve(graphics, sx, sy, tx - 5, ty, Math.max(30, (tx - sx) / 2), width, color, dashed);
+            }
             Lines.triangle(graphics, tx, ty, tx - 7, ty - 4, tx - 7, ty + 4, color);
+        }
+
+        /**
+         * Works out which links need a detour. A link that goes backwards (a loop) leaves to the
+         * right, runs underneath both nodes and comes back in from the left; a forward link whose
+         * curve would cross another node runs along a corridor above or below the nodes in the way.
+         * Each detour gets its own lane so parallel detours do not sit on top of each other.
+         */
+        private void routeEdges() {
+            GraphModel model = this.panel().model;
+            model.assignArrivals();
+            int loopLane = 0;
+            int corridorLane = 0;
+            for (GraphModel.Edge edge : model.edges) {
+                edge.route = null;
+                GraphModel.Node from = edge.from();
+                GraphModel.Node to = edge.to();
+                if (to == null) {
+                    continue;
+                }
+                float sx = from.portX();
+                float sy = from.file ? from.y + from.height / 2.0f : from.portY(edge.port());
+                float tx = to.inputX();
+                float ty = to.file ? to.y + to.height / 2.0f : edge.arrivalY(model.arrivals.getOrDefault(to.id, 1));
+                if (tx < sx + 10) {
+                    float lane = 14 + (loopLane++ % 6) * 6;
+                    float below = Math.max(from.y + from.height, to.y + to.height) + lane;
+                    edge.route = new float[]{sx, sy, sx + lane, sy, sx + lane, below, tx - lane - 6, below,
+                            tx - lane - 6, ty, tx - 5, ty};
+                    continue;
+                }
+                List<GraphModel.Node> blockers = this.blockers(edge, sx, sy, tx, ty);
+                if (blockers.isEmpty()) {
+                    continue;
+                }
+                float lane = 12 + (corridorLane++ % 5) * 5;
+                float top = Float.MAX_VALUE;
+                float bottom = -Float.MAX_VALUE;
+                for (GraphModel.Node node : blockers) {
+                    top = Math.min(top, node.y);
+                    bottom = Math.max(bottom, node.y + node.height);
+                }
+                float middle = (sy + ty) / 2.0f;
+                float corridor = Math.abs(middle - (top - lane)) <= Math.abs(middle - (bottom + lane))
+                        ? top - lane : bottom + lane;
+                float out = sx + 16;
+                float in = tx - 18;
+                edge.route = new float[]{sx, sy, out, sy, out, corridor, in, corridor, in, ty, tx - 5, ty};
+            }
+        }
+
+        /** Nodes other than the two ends that the plain curve would pass through. */
+        private List<GraphModel.Node> blockers(GraphModel.Edge edge, float sx, float sy, float tx, float ty) {
+            List<GraphModel.Node> result = new ArrayList<>();
+            float minX = Math.min(sx, tx);
+            float maxX = Math.max(sx, tx);
+            float minY = Math.min(sy, ty);
+            float maxY = Math.max(sy, ty);
+            float bend = Math.max(30, (tx - sx) / 2);
+            for (GraphModel.Node node : this.panel().model.nodes.values()) {
+                if (node == edge.from() || node == edge.to()
+                        || node.x > maxX || node.x + GraphModel.WIDTH < minX
+                        || node.y > maxY + 4 || node.y + node.height < minY - 4) {
+                    continue;
+                }
+                for (int i = 1; i < 16; i++) {
+                    float t = i / 16.0f;
+                    float u = 1.0f - t;
+                    float x = u * u * u * sx + 3 * u * u * t * (sx + bend) + 3 * u * t * t * (tx - 5 - bend) + t * t * t * (tx - 5);
+                    float y = u * u * u * sy + 3 * u * u * t * sy + 3 * u * t * t * ty + t * t * t * ty;
+                    if (x >= node.x - 3 && x <= node.x + GraphModel.WIDTH + 3
+                            && y >= node.y - 3 && y <= node.y + node.height + 3) {
+                        result.add(node);
+                        break;
+                    }
+                }
+            }
+            return result;
         }
 
         private void drawNode(GuiGraphics graphics, GraphModel.Node node, boolean selected, boolean hovered,

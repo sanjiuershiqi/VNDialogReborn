@@ -221,7 +221,7 @@
   "gui.vn_edit.logic.add_command": "+ 添加命令",
   "gui.vn_edit.logic.command_hint": "命令（不带 /）",
   "gui.vn_edit.logic.add_item": "+ 物品",
-  "gui.vn_edit.logic.pick_item": "从背包选择…",
+  "gui.vn_edit.logic.pick_item": "选择物品…",
   "gui.vn_edit.logic.item_id_hint": "物品 ID",
   "gui.vn_edit.logic.nbt_hint": "NBT（可选）",
   "gui.vn_edit.picker.filter": "输入以筛选",
@@ -389,5 +389,11 @@
   "gui.vn_edit.help.graph_link_key": "拖动右侧圆点",
   "gui.vn_edit.help.graph_link": "连到另一个节点，拖到空白处则新建",
   "gui.vn_edit.help.graph_new_key": "双击空白",
-  "gui.vn_edit.help.graph_new": "新建节点"
+  "gui.vn_edit.help.graph_new": "新建节点",
+  "gui.vn_edit.picker.tab_inventory": "背包",
+  "gui.vn_edit.picker.tab_all": "全部物品",
+  "gui.vn_edit.picker.empty_inventory": "背包是空的 · 切到「全部物品」挑选",
+  "gui.vn_edit.ui_scale.menu": "界面缩放：%s",
+  "gui.vn_edit.ui_scale.auto": "自动",
+  "gui.vn_edit.status.ui_scale": "界面缩放：%s"
 }

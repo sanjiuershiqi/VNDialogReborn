@@ -58,6 +58,88 @@ public final class Lines {
         }
     }
 
+    /**
+     * Polyline through {@code points} (x0, y0, x1, y1, ...) with corners rounded off by
+     * {@code radius}; {@code dashed} draws it in short dashes.
+     */
+    public static void path(GuiGraphics graphics, float[] points, float radius, float width, int color, boolean dashed) {
+        int count = points.length / 2;
+        if (count < 2) {
+            return;
+        }
+        float px = points[0];
+        float py = points[1];
+        for (int i = 1; i < count; i++) {
+            float cx = points[i * 2];
+            float cy = points[i * 2 + 1];
+            float ex = cx;
+            float ey = cy;
+            boolean corner = i < count - 1;
+            float nx = 0;
+            float ny = 0;
+            if (corner) {
+                float inLength = distance(px, py, cx, cy);
+                float outLength = distance(cx, cy, points[i * 2 + 2], points[i * 2 + 3]);
+                float r = Math.min(radius, Math.min(inLength, outLength) / 2.0f);
+                if (inLength > 0.001f) {
+                    ex = cx - (cx - px) / inLength * r;
+                    ey = cy - (cy - py) / inLength * r;
+                }
+                if (outLength > 0.001f) {
+                    nx = cx + (points[i * 2 + 2] - cx) / outLength * r;
+                    ny = cy + (points[i * 2 + 3] - cy) / outLength * r;
+                } else {
+                    nx = cx;
+                    ny = cy;
+                }
+            }
+            straight(graphics, px, py, ex, ey, width, color, dashed);
+            if (corner) {
+                // Quadratic corner through the original vertex.
+                float lx = ex;
+                float ly = ey;
+                for (int s = 1; s <= 4; s++) {
+                    float t = s / 4.0f;
+                    float u = 1.0f - t;
+                    float qx = u * u * ex + 2 * u * t * cx + t * t * nx;
+                    float qy = u * u * ey + 2 * u * t * cy + t * t * ny;
+                    segment(graphics, lx, ly, qx, qy, width, color);
+                    lx = qx;
+                    ly = qy;
+                }
+                px = nx;
+                py = ny;
+            } else {
+                px = ex;
+                py = ey;
+            }
+        }
+    }
+
+    private static void straight(GuiGraphics graphics, float x1, float y1, float x2, float y2, float width,
+                                 int color, boolean dashed) {
+        if (!dashed) {
+            segment(graphics, x1, y1, x2, y2, width, color);
+            return;
+        }
+        float length = distance(x1, y1, x2, y2);
+        if (length < 0.001f) {
+            return;
+        }
+        float dash = 6.0f;
+        for (float at = 0; at < length; at += dash * 2) {
+            float end = Math.min(length, at + dash);
+            segment(graphics, x1 + (x2 - x1) * at / length, y1 + (y2 - y1) * at / length,
+                    x1 + (x2 - x1) * end / length, y1 + (y2 - y1) * end / length, width, color);
+        }
+    }
+
+    private static float distance(float x1, float y1, float x2, float y2) {
+        float dx = x2 - x1;
+        float dy = y2 - y1;
+        return (float) Math.sqrt(dx * dx + dy * dy);
+    }
+
     /** Emits a quad in both windings so it shows regardless of face culling. */
     private static void quad(GuiGraphics graphics, float ax, float ay, float bx, float by, float cx, float cy,
                              float dx, float dy, int color) {

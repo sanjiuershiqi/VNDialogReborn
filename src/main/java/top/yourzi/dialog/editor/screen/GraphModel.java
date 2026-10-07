@@ -9,11 +9,11 @@ import top.yourzi.dialog.model.DialogSequence;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 
 /**
  * What the relationship graph shows, independent of how it is drawn.
@@ -96,12 +96,98 @@ final class GraphModel {
             return this.y + HEAD + LINE + PAD + port * CHOICE + CHOICE / 2;
         }
 
+        /** Picks the point on the left edge where this node's incoming link {@code index} arrives. */
+        int inputY(int index, int count) {
+            if (count <= 1) {
+                return this.inputY();
+            }
+            int span = Math.min(HEAD - 4, Math.max(6, this.height - 4));
+            int steps = count - 1;
+            int step = Math.max(4, span / Math.max(1, steps));
+            int first = this.y + Math.max(2, (HEAD - (steps * step)) / 2);
+            return Math.min(this.y + this.height - 3, first + index * step);
+        }
+
         boolean contains(double worldX, double worldY) {
             return worldX >= this.x && worldX < this.x + WIDTH && worldY >= this.y && worldY < this.y + this.height;
         }
     }
 
-    record Edge(Node from, int port, Node to, String missing, Kind kind, int color) {
+    /**
+     * A link. {@code port} is the output it leaves ({@link #NEXT_PORT} for the single continue
+     * output); {@code arrival} is the slot on the target's left edge it lands on, which the layout
+     * spreads out so several links into one node do not overlap.
+     */
+    static final class Edge {
+        private final Node from;
+        private final int port;
+        private final Node to;
+        private final String missing;
+        private final Kind kind;
+        private final int color;
+        private int arrival;
+
+        Edge(Node from, int port, Node to, String missing, Kind kind, int color) {
+            this.from = from;
+            this.port = port;
+            this.to = to;
+            this.missing = missing;
+            this.kind = kind;
+            this.color = color;
+        }
+
+        Node from() {
+            return this.from;
+        }
+
+        int port() {
+            return this.port;
+        }
+
+        Node to() {
+            return this.to;
+        }
+
+        /** Target id of a link that points nowhere, drawn beside the red marker. */
+        String missing() {
+            return this.missing;
+        }
+
+        Kind kind() {
+            return this.kind;
+        }
+
+        int color() {
+            return this.color;
+        }
+
+        /** World Y where this link meets its target's left edge. */
+        int arrivalY(int count) {
+            return this.to.inputY(this.arrival, count);
+        }
+
+        /** Detour around nodes as x0, y0, x1, y1, ...; null when the plain curve is clear. */
+        float[] route;
+    }
+
+    /** How many links arrive at each node, keyed by node id. */
+    final Map<String, Integer> arrivals = new HashMap<>();
+
+    /**
+     * Gives each link into a node its own slot on the node's left edge, ordered by where the source
+     * sits vertically, so links fan in without crossing one another at the target.
+     */
+    void assignArrivals() {
+        this.arrivals.clear();
+        Map<String, List<Edge>> incoming = this.incomingEdges();
+        for (Map.Entry<String, List<Edge>> entry : incoming.entrySet()) {
+            List<Edge> list = new ArrayList<>(entry.getValue());
+            list.sort((a, b) -> Integer.compare(a.from().portY(a.port()), b.from().portY(b.port())));
+            for (int i = 0; i < list.size(); i++) {
+                list.get(i).arrival = i;
+            }
+            this.arrivals.put(entry.getKey(), list.size());
+        }
     }
 
     final Map<String, Node> nodes = new LinkedHashMap<>();
@@ -264,73 +350,84 @@ final class GraphModel {
 
     // ----- layout -----
 
-    /**
-     * Saved positions first. Everything else goes into columns by distance from the start (or from
-     * each unvisited node, in file order) with rows sorted by the average row of their parents. A node
-     * placed next to hand-arranged ones is then nudged down until it overlaps nothing.
-     */
-    private void layout(String startId, Map<String, int[]> saved) {
-        Map<String, List<Node>> outgoing = new HashMap<>();
+    private Map<String, List<Edge>> outgoingEdges() {
+        Map<String, List<Edge>> map = new HashMap<>();
         for (Edge edge : this.edges) {
             if (edge.to() != null) {
-                outgoing.computeIfAbsent(edge.from().id, key -> new ArrayList<>()).add(edge.to());
+                map.computeIfAbsent(edge.from().id, key -> new ArrayList<>()).add(edge);
             }
         }
-        List<String> roots = new ArrayList<>();
-        if (startId != null) {
-            roots.add(startId);
+        return map;
+    }
+
+    private Map<String, List<Edge>> incomingEdges() {
+        Map<String, List<Edge>> map = new HashMap<>();
+        for (Edge edge : this.edges) {
+            if (edge.to() != null) {
+                map.computeIfAbsent(edge.to().id, key -> new ArrayList<>()).add(edge);
+            }
         }
-        roots.addAll(this.nodes.keySet());
-        Map<Node, Integer> column = new HashMap<>();
-        Map<Node, Integer> group = new HashMap<>();
-        int groups = 0;
-        for (String rootId : roots) {
-            Node root = this.nodes.get(rootId);
-            if (root == null || column.containsKey(root)) {
-                continue;
-            }
-            ArrayDeque<Node> queue = new ArrayDeque<>();
-            queue.add(root);
-            column.put(root, 0);
-            group.put(root, groups);
-            while (!queue.isEmpty()) {
-                Node node = queue.poll();
-                for (Node child : outgoing.getOrDefault(node.id, List.of())) {
-                    if (!column.containsKey(child)) {
-                        column.put(child, column.get(node) + 1);
-                        group.put(child, groups);
-                        queue.add(child);
-                    }
-                }
-            }
-            groups++;
+        return map;
+    }
+
+    /**
+     * Saved positions first. Everything else is laid out as a layered graph: depth by longest path
+     * from a root, then a few barycenter sweeps so the rows of one column line up with the nodes
+     * they connect to. That ordering is what keeps links from crossing each other, which matters far
+     * more than compactness on a big script.
+     *
+     * <p>A node the writer placed by hand keeps its coordinates and anchors its neighbours.
+     */
+    private void layout(String startId, Map<String, int[]> saved) {
+        Map<String, List<Edge>> outgoing = this.outgoingEdges();
+        Map<String, List<Edge>> incoming = this.incomingEdges();
+        Map<Node, Integer> column = this.assignColumns(startId, outgoing, incoming);
+        List<List<Node>> layers = new ArrayList<>();
+        int maxColumn = 0;
+        for (int value : column.values()) {
+            maxColumn = Math.max(maxColumn, value);
+        }
+        for (int i = 0; i <= maxColumn; i++) {
+            layers.add(new ArrayList<>());
+        }
+        for (Node node : this.nodes.values()) {
+            layers.get(column.getOrDefault(node, 0)).add(node);
         }
 
-        Map<Node, Double> hint = new HashMap<>();
+        // Components are laid out one under another so unrelated scripts do not interleave.
+        List<List<Node>> components = this.components();
         int top = 0;
-        for (int g = 0; g < groups; g++) {
-            TreeMap<Integer, List<Node>> columns = new TreeMap<>();
-            for (Node node : this.nodes.values()) {
-                if (group.get(node) == g) {
-                    columns.computeIfAbsent(column.get(node), key -> new ArrayList<>()).add(node);
-                }
-            }
-            int groupBottom = top;
-            for (Map.Entry<Integer, List<Node>> col : columns.entrySet()) {
-                List<Node> list = col.getValue();
-                list.sort((a, b) -> Double.compare(hint.getOrDefault(a, Double.MAX_VALUE), hint.getOrDefault(b, Double.MAX_VALUE)));
-                int y = top;
-                for (Node node : list) {
-                    node.x = col.getKey() * (WIDTH + COLUMN_GAP);
-                    node.y = y;
-                    for (Node child : outgoing.getOrDefault(node.id, List.of())) {
-                        hint.merge(child, (double) y, (a, b) -> (a + b) / 2.0);
+        for (List<Node> component : components) {
+            Set<Node> members = new HashSet<>(component);
+            List<List<Node>> local = new ArrayList<>();
+            for (List<Node> layer : layers) {
+                List<Node> kept = new ArrayList<>();
+                for (Node node : layer) {
+                    if (members.contains(node)) {
+                        kept.add(node);
                     }
+                }
+                local.add(kept);
+            }
+            this.orderRows(local, outgoing, incoming);
+            int bottom = top;
+            int deepestLayer = 0;
+            for (List<Node> layer : local) {
+                deepestLayer = Math.max(deepestLayer, this.layerHeight(layer));
+            }
+            for (List<Node> layer : local) {
+                int offset = top + (deepestLayer - this.layerHeight(layer)) / 2;
+                int y = offset;
+                for (Node node : layer) {
+                    node.y = y;
                     y += node.height + ROW_GAP;
                 }
-                groupBottom = Math.max(groupBottom, y);
+                bottom = Math.max(bottom, y);
             }
-            top = groupBottom + GROUP_GAP;
+            top = bottom + GROUP_GAP;
+        }
+        for (Node node : this.nodes.values()) {
+            node.x = column.getOrDefault(node, 0) * (WIDTH + COLUMN_GAP);
         }
 
         if (saved == null || saved.isEmpty()) {
@@ -362,6 +459,177 @@ final class GraphModel {
                 node.y += ROW_GAP;
             }
         }
+    }
+
+    /**
+     * Column of every node: the longest path from a root, counted left to right. Loop edges (links
+     * back to a node still being visited) are found first and ignored, so a loop is drawn as a link
+     * going back rather than pushing the whole script ever further right. Iterative, so a script of
+     * thousands of nodes cannot overflow the stack.
+     */
+    private Map<Node, Integer> assignColumns(String startId, Map<String, List<Edge>> outgoing,
+                                             Map<String, List<Edge>> incoming) {
+        List<Node> roots = new ArrayList<>();
+        if (startId != null && this.nodes.containsKey(startId)) {
+            roots.add(this.nodes.get(startId));
+        }
+        for (Node node : this.nodes.values()) {
+            if (!incoming.containsKey(node.id) && !roots.contains(node)) {
+                roots.add(node);
+            }
+        }
+        roots.addAll(this.nodes.values());
+
+        Set<Edge> loops = new HashSet<>();
+        Map<Node, Integer> state = new HashMap<>();
+        List<Node> postOrder = new ArrayList<>();
+        for (Node root : roots) {
+            if (state.containsKey(root)) {
+                continue;
+            }
+            ArrayDeque<Node> stack = new ArrayDeque<>();
+            ArrayDeque<Integer> cursor = new ArrayDeque<>();
+            stack.push(root);
+            cursor.push(0);
+            state.put(root, 1);
+            while (!stack.isEmpty()) {
+                Node node = stack.peek();
+                int index = cursor.pop();
+                List<Edge> links = outgoing.getOrDefault(node.id, List.of());
+                if (index >= links.size()) {
+                    stack.pop();
+                    state.put(node, 2);
+                    postOrder.add(node);
+                    continue;
+                }
+                cursor.push(index + 1);
+                Edge edge = links.get(index);
+                Node child = edge.to();
+                Integer childState = state.get(child);
+                if (childState == null) {
+                    state.put(child, 1);
+                    stack.push(child);
+                    cursor.push(0);
+                } else if (childState == 1) {
+                    loops.add(edge);
+                }
+            }
+        }
+
+        Map<Node, Integer> column = new HashMap<>();
+        for (Node node : this.nodes.values()) {
+            column.put(node, 0);
+        }
+        for (int i = postOrder.size() - 1; i >= 0; i--) {
+            Node node = postOrder.get(i);
+            int next = column.get(node) + 1;
+            for (Edge edge : outgoing.getOrDefault(node.id, List.of())) {
+                if (!loops.contains(edge) && edge.to() != node && column.get(edge.to()) < next) {
+                    column.put(edge.to(), next);
+                }
+            }
+        }
+        return column;
+    }
+
+    /** Weakly connected node groups, in the order the nodes were declared. */
+    private List<List<Node>> components() {
+        Map<String, List<String>> neighbours = new HashMap<>();
+        for (Edge edge : this.edges) {
+            String from = edge.from().id;
+            String to = edge.to() == null ? null : edge.to().id;
+            if (to == null) {
+                continue;
+            }
+            neighbours.computeIfAbsent(from, key -> new ArrayList<>()).add(to);
+            neighbours.computeIfAbsent(to, key -> new ArrayList<>()).add(from);
+        }
+        Set<Node> seen = new HashSet<>();
+        List<List<Node>> components = new ArrayList<>();
+        for (Node node : this.nodes.values()) {
+            if (!seen.add(node)) {
+                continue;
+            }
+            List<Node> group = new ArrayList<>();
+            ArrayDeque<Node> queue = new ArrayDeque<>();
+            queue.add(node);
+            while (!queue.isEmpty()) {
+                Node current = queue.poll();
+                group.add(current);
+                for (String id : neighbours.getOrDefault(current.id, List.of())) {
+                    Node next = this.nodes.get(id);
+                    if (next != null && seen.add(next)) {
+                        queue.add(next);
+                    }
+                }
+            }
+            components.add(group);
+        }
+        return components;
+    }
+
+    /**
+     * Barycenter ordering: repeatedly place every node near the average row of the nodes it links
+     * to, alternating direction, which is the standard way to remove edge crossings.
+     */
+    private void orderRows(List<List<Node>> layers, Map<String, List<Edge>> outgoing,
+                           Map<String, List<Edge>> incoming) {
+        for (int sweep = 0; sweep < 4; sweep++) {
+            boolean downward = sweep % 2 == 0;
+            for (int i = 0; i < layers.size(); i++) {
+                List<Node> layer = layers.get(downward ? i : layers.size() - 1 - i);
+                if (layer.size() < 2) {
+                    continue;
+                }
+                Map<Node, Double> position = this.rows(layers);
+                Map<String, List<Edge>> links = downward ? incoming : outgoing;
+                layer.sort((a, b) -> Double.compare(this.barycenter(a, links, position, downward),
+                        this.barycenter(b, links, position, downward)));
+            }
+        }
+    }
+
+    private Map<Node, Double> rows(List<List<Node>> layers) {
+        Map<Node, Double> position = new HashMap<>();
+        for (List<Node> layer : layers) {
+            for (int i = 0; i < layer.size(); i++) {
+                position.put(layer.get(i), (double) i);
+            }
+        }
+        return position;
+    }
+
+    private double barycenter(Node node, Map<String, List<Edge>> links, Map<Node, Double> position,
+                              boolean downward) {
+        List<Edge> edges = links.get(node.id);
+        if (edges == null || edges.isEmpty()) {
+            Double own = position.get(node);
+            return own == null ? 0.0 : own;
+        }
+        double total = 0.0;
+        int count = 0;
+        for (Edge edge : edges) {
+            Node other = downward ? edge.from() : edge.to();
+            Double value = position.get(other);
+            if (value != null) {
+                total += value;
+                count++;
+            }
+        }
+        if (count == 0) {
+            Double own = position.get(node);
+            return own == null ? 0.0 : own;
+        }
+        return total / count;
+    }
+
+    /** Total height of one column of nodes. */
+    private int layerHeight(List<Node> layer) {
+        int height = 0;
+        for (Node node : layer) {
+            height += node.height + ROW_GAP;
+        }
+        return Math.max(0, height - ROW_GAP);
     }
 
     private boolean overlaps(Node node) {

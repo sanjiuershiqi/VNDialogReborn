@@ -3,9 +3,7 @@ package top.yourzi.dialog.editor.screen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
 import org.lwjgl.glfw.GLFW;
@@ -27,7 +25,6 @@ import top.yourzi.dialog.editor.ui.UiHost;
 import top.yourzi.dialog.editor.ui.UiNode;
 import top.yourzi.dialog.model.DialogEntry;
 import top.yourzi.dialog.model.DialogSequence;
-import top.yourzi.dialog.model.DisplayItemInfo;
 import top.yourzi.dialog.model.PortraitInfo;
 import top.yourzi.dialog.network.NetworkHandler;
 
@@ -58,8 +55,13 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
     private static final int STATUS_H = 14;
     private static final int WIDE = 760;
     private static final int MEDIUM = 520;
+    /** Smallest working area the editor keeps for itself, in its own coordinates. */
+    private static final int TARGET_W = 1000;
+    private static final int TARGET_H = 560;
 
     private static DialogEntry nodeClipboard;
+    /** 0 means derive the scale from the window; otherwise the writer's choice. */
+    private static int uiScalePreference;
 
     private enum View {
         FLOW,
@@ -98,6 +100,7 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
     private String selectedId;
     private View view = View.FLOW;
     private boolean closing;
+    private float uiScale = 1.0f;
 
     public DialogEditorScreen() {
         super(Component.translatable("gui.vn_edit.title"));
@@ -192,6 +195,9 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
             items.add(ContextMenu.Item.of(Theme.tr("document.settings"), this::editSequence));
             items.add(ContextMenu.Item.of(Theme.tr("document.close"), () -> this.closeDocument(current)));
         }
+        items.add(ContextMenu.Item.separator());
+        items.add(ContextMenu.Item.of(Component.translatable("gui.vn_edit.ui_scale.menu", this.uiScaleLabel()),
+                this::cycleUiScale));
         ContextMenu.open(this.host, this.documentMenu.x(), this.documentMenu.bottom() + 2, null, items);
     }
 
@@ -321,6 +327,7 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
 
     private void restoreSession() {
         EditorStore.Session session = this.store.readSession();
+        uiScalePreference = Mth.clamp(session.uiScale(), 0, 4);
         List<String> ids = new ArrayList<>(session.openIds() == null ? List.of() : session.openIds());
         if (ids.isEmpty()) {
             // First launch: open one file rather than every file in the folder.
@@ -371,7 +378,7 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
         for (EditorDocument document : this.documents) {
             ids.add(document.id());
         }
-        this.store.writeSession(ids, this.active == null ? null : this.active.id());
+        this.store.writeSession(ids, this.active == null ? null : this.active.id(), uiScalePreference);
     }
 
     private boolean idTaken(String id) {
@@ -772,37 +779,9 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
         }, onSelected, Theme.tr("picker.none"));
     }
 
-    private void pickInventoryItem() {
-        List<String> ids = new ArrayList<>();
-        if (Minecraft.getInstance().player != null) {
-            for (int slot = 0; slot < Minecraft.getInstance().player.getInventory().getContainerSize(); slot++) {
-                ItemStack stack = Minecraft.getInstance().player.getInventory().getItem(slot);
-                if (stack.isEmpty()) {
-                    continue;
-                }
-                ResourceLocation key = BuiltInRegistries.ITEM.getKey(stack.getItem());
-                String value = key + " ×" + stack.getCount();
-                if (!ids.contains(value)) {
-                    ids.add(value);
-                }
-            }
-        }
-        PickerSheet.open(this.host, Theme.tr("picker.item"), ids, value -> {
-            if (value == null || value.isBlank()) {
-                return;
-            }
-            int separator = value.lastIndexOf(" ×");
-            String id = separator < 0 ? value : value.substring(0, separator);
-            int count = 1;
-            if (separator >= 0) {
-                try {
-                    count = Integer.parseInt(value.substring(separator + 2));
-                } catch (NumberFormatException ignored) {
-                    count = 1;
-                }
-            }
-            this.inspector.addItem(new DisplayItemInfo(id, count, null));
-        });
+    /** Opens the item grid; the chosen stack goes wherever {@code target} puts it. */
+    private void pickInventoryItem(Consumer<ItemStack> target) {
+        ItemPickerSheet.open(this.host, target);
     }
 
     private static List<String> listFiles(Path directory, String... extensions) {
@@ -984,15 +963,61 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
     }
     // ===== Screen plumbing =====
 
+    /**
+     * Replaces the GUI scale for this screen. The editor is a desk tool: on a large GUI scale the
+     * vanilla coordinates leave too little room for three columns, so it picks the largest whole
+     * scale that still leaves a working area of at least {@link #TARGET_W} x {@link #TARGET_H}.
+     * Whole numbers keep every font pixel on a screen pixel.
+     */
+    private void applyScale() {
+        com.mojang.blaze3d.platform.Window window = Minecraft.getInstance().getWindow();
+        double guiScale = Math.max(1.0, window.getGuiScale());
+        int pixelsWide = Math.max(1, window.getWidth());
+        int pixelsHigh = Math.max(1, window.getHeight());
+        int scale;
+        if (uiScalePreference > 0) {
+            scale = uiScalePreference;
+            while (scale > 1 && (pixelsWide / scale < 320 || pixelsHigh / scale < 240)) {
+                scale--;
+            }
+        } else {
+            scale = (int) Math.round(guiScale);
+            while (scale > 1 && (pixelsWide / scale < TARGET_W || pixelsHigh / scale < TARGET_H)) {
+                scale--;
+            }
+        }
+        this.uiScale = (float) (scale / guiScale);
+        this.host.resize((int) Math.floor(this.width / this.uiScale), (int) Math.floor(this.height / this.uiScale));
+    }
+
+    private void cycleUiScale() {
+        uiScalePreference = (uiScalePreference + 1) % 5;
+        this.applyScale();
+        this.persistSession();
+        this.status(Theme.tr("status.ui_scale", this.uiScaleLabel()), StatusKind.INFO);
+    }
+
+    private Component uiScaleLabel() {
+        return uiScalePreference == 0 ? Theme.tr("ui_scale.auto") : Component.literal(uiScalePreference + "x");
+    }
+
+    private double toUi(double screenCoordinate) {
+        return screenCoordinate / this.uiScale;
+    }
+
     @Override
     protected void init() {
         super.init();
-        this.host.resize(this.width, this.height);
+        this.applyScale();
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        this.host.render(graphics, mouseX, mouseY, partialTick);
+        graphics.fill(0, 0, this.width, this.height, Theme.BG);
+        graphics.pose().pushPose();
+        graphics.pose().scale(this.uiScale, this.uiScale, 1.0f);
+        this.host.render(graphics, (int) this.toUi(mouseX), (int) this.toUi(mouseY), partialTick);
+        graphics.pose().popPose();
     }
 
     @Override
@@ -1007,27 +1032,27 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        return this.host.mouseClicked(mouseX, mouseY, button);
+        return this.host.mouseClicked(this.toUi(mouseX), this.toUi(mouseY), button);
     }
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        return this.host.mouseReleased(mouseX, mouseY, button);
+        return this.host.mouseReleased(this.toUi(mouseX), this.toUi(mouseY), button);
     }
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        return this.host.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+        return this.host.mouseDragged(this.toUi(mouseX), this.toUi(mouseY), button, this.toUi(dragX), this.toUi(dragY));
     }
 
     @Override
     public void mouseMoved(double mouseX, double mouseY) {
-        this.host.mouseMoved(mouseX, mouseY);
+        this.host.mouseMoved(this.toUi(mouseX), this.toUi(mouseY));
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        return this.host.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        return this.host.mouseScrolled(this.toUi(mouseX), this.toUi(mouseY), scrollX, scrollY);
     }
 
     @Override

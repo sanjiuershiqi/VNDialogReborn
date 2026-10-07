@@ -1,18 +1,22 @@
 package top.yourzi.dialog.editor.screen;
 
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 import top.yourzi.dialog.editor.ui.Button;
 import top.yourzi.dialog.editor.ui.Column;
+import top.yourzi.dialog.editor.ui.Icons;
 import top.yourzi.dialog.editor.ui.Nodes;
 import top.yourzi.dialog.editor.ui.Paragraph;
 import top.yourzi.dialog.editor.ui.Row;
 import top.yourzi.dialog.editor.ui.TextBox;
 import top.yourzi.dialog.editor.ui.Theme;
+import top.yourzi.dialog.editor.ui.UiNode;
 import top.yourzi.dialog.model.DialogEntry;
 import top.yourzi.dialog.model.DisplayItemInfo;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Logic tab: what the node does besides showing text.
@@ -25,7 +29,7 @@ final class LogicTab extends Column {
     private final TextBox visibility = new TextBox("");
     private final Column commandRows = new Column().gap(2);
     private final Column itemRows = new Column().gap(2);
-    private Runnable inventoryPicker;
+    private Consumer<Consumer<ItemStack>> inventoryPicker;
     private DialogEntry entry;
     private boolean binding;
 
@@ -45,11 +49,7 @@ final class LogicTab extends Column {
         this.add(this.itemRows);
         Row itemButtons = new Row().gap(2);
         itemButtons.add(Button.of(Theme.tr("logic.add_item"), this::appendItem).fit());
-        itemButtons.add(Button.of(Theme.tr("logic.pick_item"), () -> {
-            if (this.inventoryPicker != null) {
-                this.inventoryPicker.run();
-            }
-        }).fit());
+        itemButtons.add(Button.of(Theme.tr("logic.pick_item"), () -> this.pickItem(this::addItem)).fit());
         itemButtons.add(Nodes.fill());
         this.add(itemButtons);
 
@@ -62,8 +62,16 @@ final class LogicTab extends Column {
         });
     }
 
-    void setInventoryPicker(Runnable inventoryPicker) {
+    /** @param inventoryPicker opens the item grid and hands back the chosen stack */
+    void setInventoryPicker(Consumer<Consumer<ItemStack>> inventoryPicker) {
         this.inventoryPicker = inventoryPicker;
+    }
+
+    /** Opens the item grid; {@code target} receives what the writer picks. */
+    private void pickItem(Consumer<ItemStack> target) {
+        if (this.inventoryPicker != null) {
+            this.inventoryPicker.accept(target);
+        }
     }
 
     void bind(DialogEntry entry) {
@@ -145,8 +153,7 @@ final class LogicTab extends Column {
         this.addItem(new DisplayItemInfo("minecraft:stone", 1, null));
     }
 
-    /** Also used by the screen after the inventory picker returns. */
-    void addItem(DisplayItemInfo info) {
+    private void addItem(DisplayItemInfo info) {
         if (this.entry == null || info == null) {
             return;
         }
@@ -154,6 +161,14 @@ final class LogicTab extends Column {
         list.add(info);
         this.entry.setDisplayItems(list);
         this.context.touchStructure();
+    }
+
+    private void addItem(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return;
+        }
+        this.addItem(new DisplayItemInfo(net.minecraft.core.registries.BuiltInRegistries.ITEM
+                .getKey(stack.getItem()).toString(), Math.max(1, stack.getCount()), null));
     }
 
     private void moveItem(int index, int delta) {
@@ -202,8 +217,12 @@ final class LogicTab extends Column {
     }
 
     private final class ItemRow extends Row {
+        private final DisplayItemInfo item;
+
         ItemRow(DisplayItemInfo item, int index, int count) {
+            this.item = item;
             this.gap(2);
+            this.add(new Icon(this));
             TextBox id = new TextBox(item.getItemId() == null ? "" : item.getItemId());
             id.placeholder(Theme.tr("logic.item_id_hint"));
             id.flex(3);
@@ -229,12 +248,55 @@ final class LogicTab extends Column {
             this.add(small("✕", () -> LogicTab.this.removeItem(index), true).tone(Button.Tone.GHOST));
         }
 
-        private void update(Runnable change) {
+        void update(Runnable change) {
             if (LogicTab.this.binding) {
                 return;
             }
             change.run();
             LogicTab.this.context.touch(true);
+        }
+    }
+
+    /** The row's item id as its in-game icon; clicking it replaces the item. */
+    private final class Icon extends UiNode {
+        private final ItemRow row;
+
+        Icon(ItemRow row) {
+            this.row = row;
+            this.prefWidth(20);
+        }
+
+        @Override
+        public int measureHeight(int width) {
+            return Theme.ROW;
+        }
+
+        @Override
+        public Component tooltip() {
+            return Theme.tr("logic.pick_item");
+        }
+
+        @Override
+        public boolean mouseClicked(double mouseX, double mouseY, int button) {
+            if (button != 0) {
+                return false;
+            }
+            LogicTab.this.pickItem(stack -> {
+                if (!stack.isEmpty()) {
+                    this.row.update(() -> this.row.item.setItemId(
+                            net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()));
+                }
+            });
+            return true;
+        }
+
+        @Override
+        protected void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+            int size = Theme.ROW - 2;
+            Icons.draw(graphics, this.row.item.getItemId(), this.x() + 2, this.y() + 1, size);
+            if (this.isHovered()) {
+                Theme.border(graphics, this.x() + 2, this.y() + 1, size, size, Theme.ACCENT);
+            }
         }
     }
 }

@@ -215,7 +215,7 @@ public class TextArea extends UiNode {
         this.syncScroll(visible);
         int scrollLine = this.text.scrollLine();
 
-        graphics.enableScissor(this.x() + 1, this.y() + 1, this.right() - 1, this.bottom() - 1);
+        Theme.clip(graphics, this.x() + 1, this.y() + 1, this.right() - 1, this.bottom() - 1);
         boolean emptyText = lines.size() == 1 && lines.get(0).isEmpty();
         if (emptyText && !focused && this.placeholder != null) {
             Theme.text(graphics, this.placeholder, this.x() + Theme.PAD, this.y() + 3, Theme.TEXT_MUTED);
@@ -233,7 +233,7 @@ public class TextArea extends UiNode {
         if (focused) {
             this.drawCaret(graphics);
         }
-        graphics.disableScissor();
+        Theme.unclip(graphics);
     }
 
     private void syncScroll(int visible) {

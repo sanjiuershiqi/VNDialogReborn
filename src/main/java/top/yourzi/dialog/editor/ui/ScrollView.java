@@ -53,12 +53,12 @@ public class ScrollView extends UiNode {
 
     @Override
     protected void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.enableScissor(this.x(), this.y(), this.right(), this.bottom());
+        Theme.clip(graphics, this.x(), this.y(), this.right(), this.bottom());
     }
 
     @Override
     protected void renderAfterChildren(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.disableScissor();
+        Theme.unclip(graphics);
         Theme.scrollbar(graphics, this.right() - Theme.SCROLLBAR, this.y(), this.height(), this.height(),
                 this.contentHeight, this.offset, this.draggingBar);
     }

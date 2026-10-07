@@ -315,17 +315,17 @@ final class StageView extends UiNode {
                     this.stageY + this.stageHeight / 2 - 4, Theme.TEXT_MUTED);
             return;
         }
-        graphics.enableScissor(this.stageX, this.stageY, this.stageX + this.stageWidth, this.stageY + this.stageHeight);
         graphics.pose().pushPose();
         graphics.pose().translate(this.stageX, this.stageY, 0.0f);
         graphics.pose().scale(this.scale, this.scale, 1.0f);
+        Theme.clip(graphics, 0, 0, this.screenWidth, this.screenHeight);
         this.renderBackground(graphics);
         this.renderPortraits(graphics);
         this.renderDialogBox(graphics);
         this.renderChoices(graphics);
         this.renderSelection(graphics);
+        Theme.unclip(graphics);
         graphics.pose().popPose();
-        graphics.disableScissor();
         Theme.border(graphics, this.stageX - 1, this.stageY - 1, this.stageWidth + 2, this.stageHeight + 2, Theme.BORDER_STRONG);
         String size = this.screenWidth + " × " + this.screenHeight;
         Theme.text(graphics, size, this.stageX + this.stageWidth - Theme.font().width(size), this.stageY + this.stageHeight + 2,

@@ -56,8 +56,8 @@ public final class EditableText {
         this.cursorLine = this.lines.size() - 1;
         this.cursorColumn = this.lines.get(this.cursorLine).length();
         this.clearSelection();
-        this.scrollLine = Integer.MAX_VALUE;
-        this.scrollX = Integer.MAX_VALUE;
+        this.scrollLine = 0;
+        this.scrollX = 0;
     }
 
     public int lineCount() {

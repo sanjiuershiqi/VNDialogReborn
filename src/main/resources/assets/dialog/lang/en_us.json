@@ -221,7 +221,7 @@
   "gui.vn_edit.logic.add_command": "+ Add command",
   "gui.vn_edit.logic.command_hint": "Command (without /)",
   "gui.vn_edit.logic.add_item": "+ Item",
-  "gui.vn_edit.logic.pick_item": "From inventory…",
+  "gui.vn_edit.logic.pick_item": "Pick item…",
   "gui.vn_edit.logic.item_id_hint": "Item id",
   "gui.vn_edit.logic.nbt_hint": "NBT (optional)",
   "gui.vn_edit.picker.filter": "Type to filter",
@@ -389,5 +389,11 @@
   "gui.vn_edit.help.graph_link_key": "Drag a dot",
   "gui.vn_edit.help.graph_link": "Link to a node, or drop on empty space to create one",
   "gui.vn_edit.help.graph_new_key": "Double-click",
-  "gui.vn_edit.help.graph_new": "New node"
+  "gui.vn_edit.help.graph_new": "New node",
+  "gui.vn_edit.picker.tab_inventory": "Backpack",
+  "gui.vn_edit.picker.tab_all": "All items",
+  "gui.vn_edit.picker.empty_inventory": "Your backpack is empty · try All items",
+  "gui.vn_edit.ui_scale.menu": "UI scale: %s",
+  "gui.vn_edit.ui_scale.auto": "auto",
+  "gui.vn_edit.status.ui_scale": "UI scale: %s"
 }

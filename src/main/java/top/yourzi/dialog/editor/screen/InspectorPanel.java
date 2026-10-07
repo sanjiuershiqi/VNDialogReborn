@@ -8,7 +8,6 @@ import top.yourzi.dialog.editor.ui.Theme;
 import top.yourzi.dialog.editor.ui.UiNode;
 import top.yourzi.dialog.model.DialogEntry;
 import top.yourzi.dialog.model.DialogSequence;
-import top.yourzi.dialog.model.DisplayItemInfo;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -69,7 +68,7 @@ public final class InspectorPanel extends EditorPanel {
 
     /** Wires everything that needs screen-level overlays. */
     public void setActions(Consumer<Consumer<String>> nodePicker, StagingTab.Actions stagingActions,
-                           Runnable inventoryPicker) {
+                           Consumer<Consumer<net.minecraft.world.item.ItemStack>> inventoryPicker) {
         this.branch.setTargetPicker(nodePicker);
         this.staging.setActions(stagingActions);
         this.logic.setInventoryPicker(inventoryPicker);
@@ -118,10 +117,6 @@ public final class InspectorPanel extends EditorPanel {
 
     public void setAudioPath(String path) {
         this.staging.setAudioPath(path);
-    }
-
-    public void addItem(DisplayItemInfo info) {
-        this.logic.addItem(info);
     }
 
     @Override

@@ -132,27 +132,27 @@ public final class EditorStore {
         return normalized;
     }
 
-    /** Session state: which files were open and which one was active. */
-    public record Session(List<String> openIds, String activeId) {
+    /** Session state: which files were open, which one was active and the editor's UI scale (0 = auto). */
+    public record Session(List<String> openIds, String activeId, int uiScale) {
     }
 
     public Session readSession() {
         if (!Files.isRegularFile(EditorConfig.SESSION_FILE)) {
-            return new Session(List.of(), null);
+            return new Session(List.of(), null, 0);
         }
         try {
             Session session = DialogManager.GSON.fromJson(Files.readString(EditorConfig.SESSION_FILE), Session.class);
-            return session == null || session.openIds() == null ? new Session(List.of(), null) : session;
+            return session == null || session.openIds() == null ? new Session(List.of(), null, 0) : session;
         } catch (Exception e) {
             Dialog.LOGGER.error("Failed to read editor session", e);
-            return new Session(List.of(), null);
+            return new Session(List.of(), null, 0);
         }
     }
 
-    public void writeSession(List<String> openIds, String activeId) {
+    public void writeSession(List<String> openIds, String activeId, int uiScale) {
         try {
             Files.createDirectories(EditorConfig.CONFIG_ROOT);
-            Files.writeString(EditorConfig.SESSION_FILE, PRETTY.toJson(new Session(openIds, activeId)));
+            Files.writeString(EditorConfig.SESSION_FILE, PRETTY.toJson(new Session(openIds, activeId, uiScale)));
         } catch (IOException e) {
             Dialog.LOGGER.error("Failed to persist editor session", e);
         }

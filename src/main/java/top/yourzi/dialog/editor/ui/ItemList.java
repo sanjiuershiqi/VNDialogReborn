@@ -241,7 +241,7 @@ public class ItemList<T> extends UiNode {
         this.hoveredIndex = -1;
         int row = this.rowHeight();
         this.scroll = Mth.clamp(this.scroll, 0, this.maxScroll());
-        graphics.enableScissor(this.x(), this.y(), this.right(), this.bottom());
+        Theme.clip(graphics, this.x(), this.y(), this.right(), this.bottom());
         for (int index = 0; index < this.items.size(); index++) {
             int rowY = this.y() + index * row - this.scroll;
             if (rowY + row < this.y() || rowY > this.bottom()) {
@@ -264,7 +264,7 @@ public class ItemList<T> extends UiNode {
                 this.decorator.decorate(graphics, this.items.get(index), rowY, this.x(), this.width(), row, selected);
             }
         }
-        graphics.disableScissor();
+        Theme.unclip(graphics);
         if (this.items.isEmpty() && this.emptyText != null) {
             Theme.centered(graphics, this.emptyText.getString(), this.x() + this.width() / 2,
                     this.y() + this.height() / 2 - 4, Theme.TEXT_MUTED);

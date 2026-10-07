@@ -221,7 +221,7 @@ public class TextBox extends UiNode {
         if (line.isEmpty() && !focused && this.placeholder != null) {
             Theme.textIn(graphics, this.placeholder.getString(), innerX, this.y(), innerWidth, this.height(), Theme.TEXT_MUTED);
         } else {
-            graphics.enableScissor(innerX, this.y() + 1, innerX + innerWidth, this.bottom() - 1);
+            Theme.clip(graphics, innerX, this.y() + 1, innerX + innerWidth, this.bottom() - 1);
             this.drawSelection(graphics, line, innerX, textY, scroll);
             if (!line.isEmpty()) {
                 Theme.text(graphics, EditableText.styled(line), innerX - scroll, textY, Theme.TEXT);
@@ -230,7 +230,7 @@ public class TextBox extends UiNode {
                 int caretX = innerX + EditableText.widthTo(line, this.text.cursorColumn()) - scroll;
                 graphics.fill(caretX, this.y() + 3, caretX + 1, this.bottom() - 3, Theme.TEXT);
             }
-            graphics.disableScissor();
+            Theme.unclip(graphics);
         }
     }
 
@@ -252,13 +252,26 @@ public class TextBox extends UiNode {
         return new int[]{Math.max(0, caret - Theme.font().width(selection)), caret};
     }
 
-    /** Keeps the caret inside the visible width. */
+    /**
+     * Keeps the caret inside the visible width without ever scrolling past the text: a line that
+     * fits always starts at the left edge, and an unfocused field shows its beginning.
+     */
     private void ensureCaretVisible() {
         String line = this.text.lines().get(0);
         int innerWidth = Math.max(1, this.width() - Theme.PAD * 2);
+        int total = EditableText.widthTo(line, line.length());
+        int max = Math.max(0, total - innerWidth + 2);
+        if (!this.focused()) {
+            this.text.setScroll(0, 0);
+            return;
+        }
         int caret = EditableText.widthTo(line, this.text.cursorColumn());
-        int lower = Math.max(0, caret - innerWidth + 2);
-        int upper = Math.max(lower, caret - 2);
-        this.text.setScroll(0, Mth.clamp(this.text.scrollX(), lower, upper));
+        int scroll = Mth.clamp(this.text.scrollX(), 0, max);
+        if (caret - scroll > innerWidth - 2) {
+            scroll = caret - innerWidth + 2;
+        } else if (caret < scroll) {
+            scroll = caret;
+        }
+        this.text.setScroll(0, Mth.clamp(scroll, 0, max));
     }
 }
