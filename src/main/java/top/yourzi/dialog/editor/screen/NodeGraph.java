@@ -67,6 +67,41 @@ public final class NodeGraph {
         return entry != null && entry.getOptions() != null && entry.getOptions().length > 0;
     }
 
+    /**
+     * Ids the dialogue can move to from {@code entry}, exactly as the runtime decides it: a node with
+     * choices follows only its choices; otherwise an ending node stops, an explicit {@code next}
+     * jumps, and everything else falls through to the following node in file order.
+     */
+    public static List<String> successors(DialogSequence sequence, DialogEntry entry) {
+        List<String> targets = new ArrayList<>();
+        if (hasOptions(entry)) {
+            for (DialogOption option : entry.getOptions()) {
+                if (option != null && option.getTargetId() != null && !option.getTargetId().isBlank()) {
+                    targets.add(option.getTargetId());
+                }
+            }
+        } else if (entry != null && !entry.isEndDialog()) {
+            DialogEntry next = implicitNext(sequence, entry);
+            if (next != null && next.getId() != null) {
+                targets.add(next.getId());
+            }
+        }
+        return targets;
+    }
+
+    /** True when the dialogue can end at this node: it stops here or a choice leads nowhere. */
+    public static boolean canEndAt(DialogSequence sequence, DialogEntry entry) {
+        if (hasOptions(entry)) {
+            for (DialogOption option : entry.getOptions()) {
+                if (option != null && (option.getTargetId() == null || option.getTargetId().isBlank())) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return entry.isEndDialog() || implicitNext(sequence, entry) == null;
+    }
+
     /** Entries that can never be reached from the start node. */
     public static Set<String> unreachable(DialogSequence sequence) {
         Set<String> reachable = new HashSet<>();
@@ -89,18 +124,7 @@ public final class NodeGraph {
             if (entry == null) {
                 continue;
             }
-            List<String> targets = new ArrayList<>();
-            if (entry.getNextId() != null && !entry.getNextId().isBlank()) {
-                targets.add(entry.getNextId());
-            }
-            if (entry.getOptions() != null) {
-                for (DialogOption option : entry.getOptions()) {
-                    if (option != null && option.getTargetId() != null && !option.getTargetId().isBlank()) {
-                        targets.add(option.getTargetId());
-                    }
-                }
-            }
-            for (String target : targets) {
+            for (String target : successors(sequence, entry)) {
                 if (all.contains(target) && reachable.add(target)) {
                     queue.add(target);
                 }

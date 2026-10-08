@@ -749,9 +749,7 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
         this.showView(View.FLOW);
         if (issue.nodeId() != null && NodeGraph.byId(this.sequence(), issue.nodeId()) != null) {
             this.select(issue.nodeId());
-            boolean routing = issue.code().contains("NEXT") || issue.code().contains("OPTION")
-                    || issue.code().contains("TARGET");
-            this.inspector.setActiveTab(routing ? 1 : 0);
+            this.inspector.setActiveTab(issue.tab());
         }
     }
 

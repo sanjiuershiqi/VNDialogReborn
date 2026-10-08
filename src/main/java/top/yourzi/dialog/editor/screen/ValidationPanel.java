@@ -96,11 +96,11 @@ public final class ValidationPanel extends EditorPanel {
         int textY = rowY + (height - 8) / 2;
         int dotY = rowY + height / 2 - 2;
         graphics.fill(x + 8, dotY, x + 12, dotY + 4, color);
-        String node = issue.nodeId() == null ? "—" : issue.nodeId();
-        String head = node + "  ";
+        String node = issue.nodeId() == null ? Theme.tr("validation.whole_file").getString() : issue.nodeId();
+        String head = Theme.ellipsize(node, Math.max(40, width / 4)) + "  ";
         Theme.text(graphics, head, x + 18, textY, Theme.TEXT);
         int messageX = x + 18 + Theme.font().width(head);
-        String message = Theme.tr("issue." + issue.code().toLowerCase(java.util.Locale.ROOT)).getString();
+        String message = Theme.tr("issue." + issue.code().toLowerCase(java.util.Locale.ROOT), issue.detail()).getString();
         Theme.textIn(graphics, message, messageX, rowY, width - (messageX - x) - 4, height, color);
     }
 }
