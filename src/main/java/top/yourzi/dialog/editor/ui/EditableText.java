@@ -429,6 +429,96 @@ public final class EditableText {
         return limit == 0 ? 0 : Theme.font().width(styled(line.substring(0, limit)));
     }
 
+    /**
+     * One visual row of a wrapped paragraph.
+     *
+     * @param line      logical line the row belongs to
+     * @param from      first character of the row inside that line
+     * @param to        character after the last one of the row
+     * @param width     drawn width of the row, so a caret can be placed anywhere in it
+     */
+    public record Row(int line, int from, int to, int width) {
+    }
+
+    /**
+     * Breaks every logical line into the rows that fit {@code width}, the way the text is drawn.
+     * Formatting codes carry no width, so a row's range covers them as ordinary characters.
+     */
+    public static List<Row> wrapRows(List<String> lines, int width) {
+        List<Row> rows = new ArrayList<>();
+        int safeWidth = Math.max(8, width);
+        for (int index = 0; index < lines.size(); index++) {
+            String line = lines.get(index);
+            if (line.isEmpty()) {
+                rows.add(new Row(index, 0, 0, 0));
+                continue;
+            }
+            int from = 0;
+            int runWidth = 0;
+            int at = 0;
+            while (at < line.length()) {
+                int codeLength = FormatCodes.codeLength(line, at);
+                int next = at + Math.max(1, codeLength);
+                int pieceWidth = markerWidth(line, at, next);
+                if (runWidth > 0 && runWidth + pieceWidth > safeWidth) {
+                    rows.add(new Row(index, from, at, runWidth));
+                    from = at;
+                    runWidth = 0;
+                }
+                runWidth += pieceWidth;
+                at = next;
+            }
+            rows.add(new Row(index, from, line.length(), runWidth));
+        }
+        return rows.isEmpty() ? List.of(new Row(0, 0, 0, 0)) : rows;
+    }
+
+    /** Row holding {@code (line, column)}, preferring the later row when a column is a break. */
+    public static int rowOf(List<Row> rows, int line, int column) {
+        int found = 0;
+        for (int index = 0; index < rows.size(); index++) {
+            Row row = rows.get(index);
+            if (row.line() > line) {
+                break;
+            }
+            if (row.line() < line) {
+                continue;
+            }
+            found = index;
+            if (column >= row.from() && column <= row.to()) {
+                return index;
+            }
+            if (column < row.from()) {
+                return index;
+            }
+        }
+        return found;
+    }
+
+    /** Character index inside {@code row} closest to {@code pixelX} from the row's left edge. */
+    public static int columnInRow(List<String> lines, Row row, int pixelX) {
+        String line = lines.get(row.line());
+        int best = row.from();
+        int bestDistance = Math.abs(pixelX);
+        int runWidth = 0;
+        for (int at = row.from(); at < row.to(); ) {
+            int codeLength = FormatCodes.codeLength(line, at);
+            int next = Math.min(row.to(), at + Math.max(1, codeLength));
+            int glyph = markerWidth(line, at, next);
+            int middle = runWidth + glyph / 2;
+            if (Math.abs(pixelX - middle) <= bestDistance) {
+                bestDistance = Math.abs(pixelX - middle);
+                best = at;
+            }
+            runWidth += glyph;
+            at = next;
+        }
+        if (Math.abs(pixelX - runWidth) < bestDistance) {
+            best = row.to();
+        }
+        return best;
+    }
+
     /** Character index in {@code line} closest to {@code pixelX}. */
     public static int columnAt(String line, int pixelX) {
         if (pixelX <= 0) {
@@ -443,5 +533,12 @@ public final class EditableText {
             previous = width;
         }
         return line.length();
+    }
+
+    /** Width of the drawn marker text for {@code line[from, to)}; formatting codes become one glyph each. */
+    public static int markerWidth(String line, int from, int to) {
+        int start = Mth.clamp(from, 0, line.length());
+        int end = Mth.clamp(to, start, line.length());
+        return start == end ? 0 : Theme.font().width(styled(line.substring(start, end)));
     }
 }

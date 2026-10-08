@@ -19,6 +19,11 @@ public final class FormatCodes {
     private FormatCodes() {
     }
 
+    /** True when the character at {@code index} is the prefix of a formatting code. */
+    public static boolean isCodeAt(String text, int index) {
+        return index >= 0 && index + 1 < text.length() && text.charAt(index) == MARK;
+    }
+
     /** Length of the formatting code starting at {@code index}, or 0 when there is none. */
     public static int codeLength(String text, int index) {
         if (index + 1 >= text.length() || text.charAt(index) != MARK) {
