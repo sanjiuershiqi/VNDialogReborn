@@ -5,6 +5,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -12,17 +13,29 @@ import java.util.function.Consumer;
  * Multi-line editor field for dialogue text and command bodies.
  *
  * <p>{@code §} formatting codes stay in the raw value but are painted as real styles, so the writer
- * sees the result rather than the codes. The caret, selection and vertical scroll follow the same
- * codec, which makes clicking inside a coloured line land on the glyph under the cursor.
+ * sees the result rather than the codes. Long lines wrap at the field's width; caret, selection,
+ * clicking and scrolling all work on those rows, while the model keeps counting columns inside the
+ * logical line.
+ *
+ * <p>The wrapping is recomputed only when the text or the width changed, and the check is on the
+ * text itself rather than on the line list's identity: the model mutates that list in place, so
+ * identity says nothing about whether the content is still the same.
  */
 public class TextArea extends UiNode {
     private static final int LINE_H = 10;
+
+    /** One drawn row, with the logical line it came from and its place inside that line's rows. */
+    private record Visual(int line, int localRow, EditableText.Row row) {
+    }
 
     private final EditableText text;
     private Component placeholder;
     private Consumer<String> onChange;
     private boolean dragSelecting;
     private String lastValue;
+    private String wrappedValue;
+    private int wrappedWidth = -1;
+    private List<Visual> visuals = List.of();
 
     public TextArea(String value) {
         this.text = new EditableText(true, value);
@@ -38,7 +51,6 @@ public class TextArea extends UiNode {
         this.onChange = onChange;
         return this;
     }
-
 
     public EditableText model() {
         return this.text;
@@ -63,15 +75,13 @@ public class TextArea extends UiNode {
 
     private void changed() {
         String value = this.text.value();
-        if (value.equals(this.lastValue)) {
-            return;
-        }
-        this.lastValue = value;
-        if (this.onChange != null) {
-            this.onChange.accept(value);
+        if (!value.equals(this.lastValue)) {
+            this.lastValue = value;
+            if (this.onChange != null) {
+                this.onChange.accept(value);
+            }
         }
     }
-
 
     @Override
     public void setFocused(boolean focused) {
@@ -82,7 +92,71 @@ public class TextArea extends UiNode {
         }
     }
 
-    private int visibleLines() {
+    private int wrapWidth() {
+        return Math.max(20, this.width() - Theme.PAD * 2);
+    }
+
+    /** Rebuilds the drawn rows when the text or the width changed. */
+    private void rewrap() {
+        int width = this.wrapWidth();
+        String value = this.text.value();
+        if (width == this.wrappedWidth && value.equals(this.wrappedValue)) {
+            return;
+        }
+        this.wrappedWidth = width;
+        this.wrappedValue = value;
+        List<Visual> built = new ArrayList<>();
+        List<String> lines = this.text.lines();
+        for (int index = 0; index < lines.size(); index++) {
+            List<EditableText.Row> rows = EditableText.wrap(lines.get(index), width);
+            for (int local = 0; local < rows.size(); local++) {
+                built.add(new Visual(index, local, rows.get(local)));
+            }
+        }
+        if (built.isEmpty()) {
+            built.add(new Visual(0, 0, new EditableText.Row(0, 0, net.minecraft.network.chat.Style.EMPTY)));
+        }
+        this.visuals = built;
+    }
+
+    private Visual visual(int global) {
+        return this.visuals.get(Mth.clamp(global, 0, this.visuals.size() - 1));
+    }
+
+    /** Rows of one logical line, in order. */
+    private List<EditableText.Row> rowsOf(int line) {
+        List<EditableText.Row> rows = new ArrayList<>();
+        for (Visual visual : this.visuals) {
+            if (visual.line() == line) {
+                rows.add(visual.row());
+            }
+        }
+        return rows;
+    }
+
+    /** Global row the caret sits in. */
+    private int caretRow() {
+        int line = this.text.cursorLine();
+        List<EditableText.Row> rows = this.rowsOf(line);
+        int base = 0;
+        for (Visual visual : this.visuals) {
+            if (visual.line() >= line) {
+                break;
+            }
+            base++;
+        }
+        return base + EditableText.rowOf(rows, this.text.cursorColumn());
+    }
+
+    private int textLeft() {
+        return this.x() + Theme.PAD;
+    }
+
+    private int rowTop(int global) {
+        return this.y() + 2 + (global - this.text.scrollLine()) * LINE_H;
+    }
+
+    private int visibleRows() {
         return Math.max(1, (this.height() - 4) / LINE_H);
     }
 
@@ -109,17 +183,23 @@ public class TextArea extends UiNode {
         return true;
     }
 
+    /** Turns a click into a logical line and column using the wrapped row under the cursor. */
     private void placeCaretAt(double mouseX, double mouseY, boolean extend) {
-        int line = Mth.clamp((int) ((mouseY - this.y() - 2) / LINE_H) + this.text.scrollLine(), 0,
-                this.text.lineCount() - 1);
-        int column = EditableText.columnAt(this.text.lines().get(line), (int) mouseX - this.x() - Theme.PAD);
-        this.text.placeCaret(line, column, extend);
+        this.rewrap();
+        int global = Mth.clamp((int) ((mouseY - this.y() - 2) / LINE_H) + this.text.scrollLine(), 0,
+                this.visuals.size() - 1);
+        Visual visual = this.visual(global);
+        String line = this.text.lines().get(visual.line());
+        int column = EditableText.columnInRow(line, this.rowsOf(visual.line()), visual.localRow(),
+                (int) mouseX - this.textLeft());
+        this.text.placeCaret(visual.line(), column, extend);
         this.changed();
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        int max = Math.max(0, this.text.lineCount() - this.visibleLines());
+        this.rewrap();
+        int max = Math.max(0, this.visuals.size() - this.visibleRows());
         if (max == 0) {
             return false;
         }
@@ -162,7 +242,6 @@ public class TextArea extends UiNode {
                     this.changed();
                     return true;
                 }
-
                 default -> {
                 }
             }
@@ -187,11 +266,40 @@ public class TextArea extends UiNode {
             this.changed();
             return true;
         }
+        // Up and down walk the wrapped rows, so a long paragraph behaves like a paragraph.
+        if (keyCode == GLFW.GLFW_KEY_UP || keyCode == GLFW.GLFW_KEY_DOWN) {
+            this.moveRow(keyCode == GLFW.GLFW_KEY_UP ? -1 : 1, shift);
+            return true;
+        }
+        if (keyCode == GLFW.GLFW_KEY_HOME || keyCode == GLFW.GLFW_KEY_END) {
+            this.rewrap();
+            Visual visual = this.visual(this.caretRow());
+            this.text.placeCaret(visual.line(),
+                    keyCode == GLFW.GLFW_KEY_HOME ? visual.row().from() : visual.row().to(), shift);
+            return true;
+        }
         if (this.text.handleNavigation(keyCode, shift, ctrl)) {
             this.changed();
             return true;
         }
         return false;
+    }
+
+    /** Moves the caret one wrapped row up or down, keeping the horizontal position where possible. */
+    private void moveRow(int delta, boolean extend) {
+        this.rewrap();
+        int current = this.caretRow();
+        int target = Mth.clamp(current + delta, 0, this.visuals.size() - 1);
+        if (target == current) {
+            return;
+        }
+        Visual from = this.visual(current);
+        String fromLine = this.text.lines().get(from.line());
+        int caretX = EditableText.drawnWidth(fromLine, from.row().from(), this.text.cursorColumn());
+        Visual to = this.visual(target);
+        String toLine = this.text.lines().get(to.line());
+        int column = EditableText.columnInRow(toLine, this.rowsOf(to.line()), to.localRow(), caretX);
+        this.text.placeCaret(to.line(), column, extend);
     }
 
     @Override
@@ -210,24 +318,27 @@ public class TextArea extends UiNode {
         graphics.fill(this.x(), this.y(), this.right(), this.bottom(), Theme.FIELD);
         Theme.border(graphics, this.x(), this.y(), this.width(), this.height(), focused ? Theme.ACCENT : Theme.BORDER);
 
-        List<String> lines = this.text.lines();
-        int visible = this.visibleLines();
-        this.syncScroll(visible);
-        int scrollLine = this.text.scrollLine();
+        this.rewrap();
+        this.syncScroll();
+        int first = this.text.scrollLine();
+        int last = Math.min(this.visuals.size(), first + this.visibleRows());
+        boolean emptyText = this.text.value().isEmpty();
 
         Theme.clip(graphics, this.x() + 1, this.y() + 1, this.right() - 1, this.bottom() - 1);
-        boolean emptyText = lines.size() == 1 && lines.get(0).isEmpty();
         if (emptyText && !focused && this.placeholder != null) {
-            Theme.text(graphics, this.placeholder, this.x() + Theme.PAD, this.y() + 3, Theme.TEXT_MUTED);
+            Theme.text(graphics, this.placeholder, this.textLeft(), this.y() + 3, Theme.TEXT_MUTED);
         }
-        for (int index = scrollLine; index < Math.min(lines.size(), scrollLine + visible); index++) {
-            int rowY = this.y() + 2 + (index - scrollLine) * LINE_H;
-            String line = lines.get(index);
+        for (int global = first; global < last; global++) {
+            Visual visual = this.visual(global);
+            EditableText.Row row = visual.row();
+            String line = this.text.lines().get(visual.line());
+            int rowY = this.rowTop(global);
             if (focused) {
-                this.drawLineSelection(graphics, line, index, rowY);
+                this.drawRowSelection(graphics, line, visual.line(), row, rowY);
             }
-            if (!line.isEmpty()) {
-                Theme.text(graphics, EditableText.styled(line), this.x() + Theme.PAD, rowY, Theme.TEXT);
+            if (row.to() > row.from()) {
+                Theme.text(graphics, EditableText.styled(line.substring(row.from(), row.to()), row.style()),
+                        this.textLeft(), rowY, Theme.TEXT);
             }
         }
         if (focused) {
@@ -236,54 +347,53 @@ public class TextArea extends UiNode {
         Theme.unclip(graphics);
     }
 
-    private void syncScroll(int visible) {
-        int max = Math.max(0, this.text.lineCount() - visible);
-        int scroll = this.text.scrollLine();
-        if (scroll > max) {
-            scroll = max;
-        }
-        if (this.text.cursorLine() < scroll) {
-            scroll = this.text.cursorLine();
-        } else if (this.text.cursorLine() >= scroll + visible) {
-            scroll = this.text.cursorLine() - visible + 1;
+    /** Keeps the caret's row inside the visible rows. */
+    private void syncScroll() {
+        int visible = this.visibleRows();
+        int max = Math.max(0, this.visuals.size() - visible);
+        int scroll = Mth.clamp(this.text.scrollLine(), 0, max);
+        int caret = this.caretRow();
+        if (caret < scroll) {
+            scroll = caret;
+        } else if (caret >= scroll + visible) {
+            scroll = caret - visible + 1;
         }
         this.text.setScroll(Mth.clamp(scroll, 0, max), this.text.scrollX());
     }
 
-    private void drawLineSelection(GuiGraphics graphics, String line, int index, int rowY) {
+    /** Paints the part of the selection that falls inside one wrapped row. */
+    private void drawRowSelection(GuiGraphics graphics, String line, int lineIndex, EditableText.Row row, int rowY) {
         if (!this.text.hasSelection()) {
             return;
         }
-        int[] span = this.selectionSpan(index, line.length());
-        if (span == null) {
+        int startLine = Math.min(this.text.anchorLine(), this.text.cursorLine());
+        int endLine = Math.max(this.text.anchorLine(), this.text.cursorLine());
+        if (lineIndex < startLine || lineIndex > endLine) {
             return;
         }
-        int left = this.x() + Theme.PAD + EditableText.widthTo(line, span[0]);
-        int right = this.x() + Theme.PAD + EditableText.widthTo(line, span[1]);
+        int startColumn = lineIndex == startLine
+                ? (this.text.anchorLine() <= this.text.cursorLine() ? this.text.anchorColumn() : this.text.cursorColumn())
+                : 0;
+        int endColumn = lineIndex == endLine
+                ? (this.text.anchorLine() <= this.text.cursorLine() ? this.text.cursorColumn() : this.text.anchorColumn())
+                : line.length();
+        int from = Math.max(row.from(), Math.min(startColumn, endColumn));
+        int to = Math.min(row.to(), Math.max(startColumn, endColumn));
+        if (to <= from) {
+            return;
+        }
+        int left = this.textLeft() + EditableText.drawnWidth(line, row.from(), from);
+        int right = this.textLeft() + EditableText.drawnWidth(line, row.from(), to);
         graphics.fill(left, rowY - 1, Math.max(right, left + 3), rowY + LINE_H - 1, Theme.withAlpha(Theme.CYAN, 0x66));
     }
 
-    /** Visible column range of the selection on one line, or null when the line is untouched. */
-    private int[] selectionSpan(int index, int length) {
-        int startLine = Math.min(this.text.anchorLine(), this.text.cursorLine());
-        int endLine = Math.max(this.text.anchorLine(), this.text.cursorLine());
-        if (index < startLine || index > endLine) {
-            return null;
-        }
-        int startColumn = index == startLine
-                ? (this.text.anchorLine() <= this.text.cursorLine() ? this.text.anchorColumn() : this.text.cursorColumn())
-                : 0;
-        int endColumn = index == endLine
-                ? (this.text.anchorLine() <= this.text.cursorLine() ? this.text.cursorColumn() : this.text.anchorColumn())
-                : length;
-        return new int[]{Math.min(startColumn, endColumn), Math.max(startColumn, endColumn)};
-    }
-
     private void drawCaret(GuiGraphics graphics) {
-        String line = this.text.lines().get(this.text.cursorLine());
-        int rowY = this.y() + 2 + (this.text.cursorLine() - this.text.scrollLine()) * LINE_H;
-        int caretX = this.x() + Theme.PAD + EditableText.widthTo(line, this.text.cursorColumn());
+        int global = this.caretRow();
+        Visual visual = this.visual(global);
+        String line = this.text.lines().get(visual.line());
+        int caretX = this.textLeft()
+                + EditableText.drawnWidth(line, visual.row().from(), this.text.cursorColumn());
+        int rowY = this.rowTop(global);
         graphics.fill(caretX, rowY - 1, caretX + 1, rowY + LINE_H - 1, Theme.TEXT);
     }
-
 }
