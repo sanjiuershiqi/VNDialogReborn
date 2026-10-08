@@ -52,7 +52,11 @@ public final class TextCodec {
         if (element.isJsonObject() && element.getAsJsonObject().has("translate")) {
             String key = element.getAsJsonObject().get("translate").getAsString();
             String resolved = ConfigLang.get(key);
-            return resolved != null ? resolved : key;
+            if (resolved != null) {
+                return resolved;
+            }
+            String fallback = fallback(element);
+            return fallback != null ? fallback : key;
         }
         return toFormattedCodes(ComponentJson.fromJson(element));
     }
@@ -161,6 +165,34 @@ public final class TextCodec {
 
     public static String translationKey(JsonElement element) {
         return isTranslation(element) ? element.getAsJsonObject().get("translate").getAsString() : null;
+    }
+
+    /** The text a translation element shows while its key has no translation, or null. */
+    public static String fallback(JsonElement element) {
+        if (!isTranslation(element)) {
+            return null;
+        }
+        JsonElement fallback = element.getAsJsonObject().get("fallback");
+        return fallback != null && fallback.isJsonPrimitive() && !fallback.getAsString().isEmpty()
+                ? fallback.getAsString() : null;
+    }
+
+    /**
+     * Sets or clears the fallback of a translation element. The fallback is a standard component
+     * field, so the game shows it too whenever the key is missing from the language files; it is
+     * what keeps the writer's text when a line is switched to a translation key.
+     */
+    public static JsonElement withFallback(JsonElement element, String fallback) {
+        if (!isTranslation(element)) {
+            return element;
+        }
+        JsonObject object = element.getAsJsonObject().deepCopy();
+        if (fallback == null || fallback.isEmpty()) {
+            object.remove("fallback");
+        } else {
+            object.addProperty("fallback", fallback);
+        }
+        return object;
     }
 
     /** Builds a translation element, preserving any sibling style fields already present. */

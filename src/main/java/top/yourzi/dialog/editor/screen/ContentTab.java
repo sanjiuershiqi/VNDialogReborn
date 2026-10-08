@@ -91,6 +91,8 @@ final class ContentTab extends Column {
         this.translationKey.onChange(this::applyTranslationKey);
         this.translationZh.placeholder(Theme.tr("content.zh_hint"));
         this.translationEn.placeholder(Theme.tr("content.en_hint"));
+        this.translationZh.onChange(value -> this.applyTranslationText(this.translationZh, value));
+        this.translationEn.onChange(value -> this.applyTranslationText(this.translationEn, value));
         this.modeSwitch.setAction(this::toggleTranslationMode);
         this.writeLang.setAction(this::writeLangFiles);
         this.applyMode();
@@ -170,12 +172,31 @@ final class ContentTab extends Column {
     }
 
     private void applyTranslationKey(String key) {
-        if (this.entry == null || this.binding || !this.translationMode) {
+        // A half-typed (empty) key must not wipe the line; the previous key stays until a new one exists.
+        if (this.entry == null || this.binding || !this.translationMode || key.isBlank()) {
             return;
         }
         this.entry.setText(TextCodec.translation(key.trim(), this.entry.getText()));
         this.context.touch(true);
         this.loadTranslations(key.trim());
+    }
+
+    /** The translation field for the language the game is running in. */
+    private TextBox nativeField() {
+        String language = net.minecraft.client.Minecraft.getInstance().getLanguageManager().getSelected();
+        return language != null && language.startsWith("zh") ? this.translationZh : this.translationEn;
+    }
+
+    /**
+     * Text typed for the current language is also kept in the line itself, so it survives until -
+     * and regardless of whether - it is written to the language files.
+     */
+    private void applyTranslationText(TextBox field, String value) {
+        if (this.entry == null || this.binding || !this.translationMode || field != this.nativeField()) {
+            return;
+        }
+        this.entry.setText(TextCodec.withFallback(this.entry.getText(), value));
+        this.context.touch(true);
     }
 
     private void toggleTranslationMode() {
@@ -184,17 +205,24 @@ final class ContentTab extends Column {
         }
         this.translationMode = !this.translationMode;
         if (this.translationMode) {
-            String key = this.translationKey.value().isBlank() ? this.suggestKey() : this.translationKey.value();
+            // The written text travels with the key as its fallback, so switching modes never loses it.
             String literal = this.body.value();
-            this.entry.setText(TextCodec.translation(key, null));
-            this.translationKey.setValue(key);
-            this.loadTranslations(key);
-            if (this.translationZh.value().isBlank() && !literal.isBlank()) {
-                this.translationZh.setValue(literal);
+            String key = this.suggestKey();
+            this.entry.setText(TextCodec.withFallback(TextCodec.translation(key, null), literal));
+            this.binding = true;
+            try {
+                this.translationKey.setValue(key);
+                this.loadTranslations(key);
+            } finally {
+                this.binding = false;
             }
         } else {
-            // Leaving translation mode keeps whatever text the key currently resolves to.
-            String resolved = TextCodec.toEditable(this.entry.getText());
+            // Back to plain text: what the writer sees for this language, else what the key resolves to.
+            String typed = this.nativeField().value();
+            String resolved = typed.isBlank() ? TextCodec.toEditable(this.entry.getText()) : typed;
+            if (resolved.equals(TextCodec.translationKey(this.entry.getText()))) {
+                resolved = "";
+            }
             this.entry.setText(TextCodec.fromEditable(resolved));
             this.body.setValue(resolved);
         }
@@ -215,6 +243,11 @@ final class ContentTab extends Column {
         }
         this.translationZh.setValue(TextCodec.ConfigLang.entries("zh_cn").getOrDefault(key, ""));
         this.translationEn.setValue(TextCodec.ConfigLang.entries("en_us").getOrDefault(key, ""));
+        // Not written to a language file yet: show the text the line itself carries.
+        String fallback = this.entry == null ? null : TextCodec.fallback(this.entry.getText());
+        if (fallback != null && this.nativeField().value().isBlank()) {
+            this.nativeField().setValue(fallback);
+        }
     }
 
     private void writeLangFiles() {
