@@ -352,7 +352,9 @@ public class DialogScreen extends Screen {
 
         for (int i = 0; i < options.length; i++) {
             DialogOption option = options[i];
-            Button button = Button.builder(option.getText(playerName), b -> {
+            Component label = i < 9
+                    ? Component.literal((i + 1) + ". ").append(option.getText(playerName)) : option.getText(playerName);
+            Button button = Button.builder(label, b -> {
                 if (option.getCommand() != null && !option.getCommand().isEmpty()) {
                     DialogManager.getInstance().executeCommands(minecraft.player, option.getCommand(), speakerEntity);
                 }
@@ -747,6 +749,20 @@ public class DialogScreen extends Screen {
                 textFullyDisplayed = true;
             }
             return true;
+        }
+
+        if (!showingHistory) {
+            // Number keys pick a choice; Space / Enter advance like a click on the dialogue box.
+            int choice = keyCode >= GLFW.GLFW_KEY_1 && keyCode <= GLFW.GLFW_KEY_9 ? keyCode - GLFW.GLFW_KEY_1
+                    : keyCode >= GLFW.GLFW_KEY_KP_1 && keyCode <= GLFW.GLFW_KEY_KP_9 ? keyCode - GLFW.GLFW_KEY_KP_1 : -1;
+            if (choice >= 0 && optionButtonsCreated && choice < optionButtons.size()) {
+                optionButtons.get(choice).onPress();
+                return true;
+            }
+            if (getFocused() == null && (keyCode == GLFW.GLFW_KEY_SPACE || keyCode == GLFW.GLFW_KEY_ENTER
+                    || keyCode == GLFW.GLFW_KEY_KP_ENTER)) {
+                return handleDialogAdvanceClick();
+            }
         }
 
         return super.keyPressed(keyCode, scanCode, modifiers);

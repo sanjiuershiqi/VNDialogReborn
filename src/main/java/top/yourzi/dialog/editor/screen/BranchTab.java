@@ -273,11 +273,21 @@ final class BranchTab extends Column {
                     .active(index < count - 1);
             Button remove = Button.of(Component.literal("✕"), () -> BranchTab.this.removeBranch(index))
                     .tone(Button.Tone.GHOST);
+            boolean extras = option.getCommand() != null && !option.getCommand().isEmpty()
+                    || option.getVisibilityCommand() != null && !option.getVisibilityCommand().isBlank();
+            Button more = Button.of(Component.literal(extras ? "⚙" : "…"), () -> OptionSheet.open(BranchTab.this.host(),
+                    option, BranchTab.this.context::touchStructure));
+            more.prefWidth(15);
+            more.withTooltip(Theme.tr(extras ? "branch.more_set_tip" : "branch.more_tip"));
+            if (extras) {
+                more.tone(Button.Tone.PRIMARY);
+            }
             up.prefWidth(15);
             down.prefWidth(15);
             remove.prefWidth(15);
             this.add(label);
             this.add(target);
+            this.add(more);
             this.add(up);
             this.add(down);
             this.add(remove);
