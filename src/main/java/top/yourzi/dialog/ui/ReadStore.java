@@ -78,4 +78,11 @@ public final class ReadStore {
             Dialog.LOGGER.warn("Failed to save read history", e);
         }
     }
+
+    /** Forgets everything that has been read. */
+    public static synchronized void clear() {
+        data().clear();
+        dirty = true;
+        save();
+    }
 }

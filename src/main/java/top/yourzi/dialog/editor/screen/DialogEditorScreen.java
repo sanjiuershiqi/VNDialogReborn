@@ -138,6 +138,7 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
         this.topBar.add(this.redoButton);
         this.topBar.add(this.saveButton);
         this.topBar.add(this.action("playtest", Button.Tone.PRIMARY, this::playtest));
+        this.topBar.add(this.action("settings", Button.Tone.GHOST, this::openSettings));
         this.topBar.add(this.action("help", Button.Tone.GHOST, this::openHelp));
 
         this.workspace.add(this.topBar);
@@ -169,6 +170,10 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
 
     private void openHelp() {
         HelpSheet.open(this.host);
+    }
+
+    private void openSettings() {
+        SettingsSheet.open(this.host);
     }
 
     private Button viewButton(String key, View target) {
@@ -1117,6 +1122,7 @@ public final class DialogEditorScreen extends Screen implements EditorContext {
         }
         switch (keyCode) {
             case GLFW.GLFW_KEY_F1 -> this.openHelp();
+            case GLFW.GLFW_KEY_F9 -> this.openSettings();
             case GLFW.GLFW_KEY_INSERT -> this.addNodeAfterSelection();
             case GLFW.GLFW_KEY_DELETE -> this.deleteSelected();
             case GLFW.GLFW_KEY_F2 -> this.renameSelected();

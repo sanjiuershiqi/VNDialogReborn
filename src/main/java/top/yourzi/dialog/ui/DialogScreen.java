@@ -100,7 +100,7 @@ public class DialogScreen extends Screen {
         this.dialogEntry = dialogEntry;
         this.playerName = playerName;
         this.speakerEntity = speakerEntity;
-        this.alreadyRead = ReadStore.isRead(dialogSequence.getId(), dialogEntry.getId());
+        this.alreadyRead = PlaySettings.get().trackRead && ReadStore.isRead(dialogSequence.getId(), dialogEntry.getId());
         collectPortraits();
         collectDisplayItems();
         collectBackground();
@@ -359,7 +359,8 @@ public class DialogScreen extends Screen {
             DialogOption option = options[i];
             Component optionText = option.getText(playerName);
             // A choice whose destination was already read is greyed, so unexplored routes stand out.
-            if (option.getTargetId() != null && ReadStore.isRead(dialogSequence.getId(), option.getTargetId())) {
+            if (PlaySettings.get().trackRead && PlaySettings.get().dimReadChoices
+                    && option.getTargetId() != null && ReadStore.isRead(dialogSequence.getId(), option.getTargetId())) {
                 optionText = optionText.copy().withStyle(net.minecraft.ChatFormatting.GRAY);
             }
             Component label = i < 9 ? Component.literal((i + 1) + ". ").append(optionText) : optionText;
@@ -614,7 +615,8 @@ public class DialogScreen extends Screen {
         // 按字符索引截断 Component，保留样式（颜色/加粗等），避免 getString() 丢样式
         Component displayComponent = fullyShown ? text : substringComponent(text, displayedChars);
 
-        int textColor = alreadyRead ? ClientConfig.READ_TEXT_COLOR.get() : ClientConfig.DIALOG_TEXT_COLOR.get();
+        PlaySettings settings = PlaySettings.get();
+        int textColor = alreadyRead && settings.dimReadText ? settings.readTextColor : ClientConfig.DIALOG_TEXT_COLOR.get();
         for (FormattedCharSequence line : font.split(displayComponent, dialogBoxWidth - padding * 2)) {
             guiGraphics.drawString(font, line, textX, textY, textColor);
             textY += font.lineHeight + 2;
@@ -754,11 +756,12 @@ public class DialogScreen extends Screen {
             return true;
         }
 
+        PlaySettings settings = PlaySettings.get();
         if (uiHidden) {
             uiHidden = false;
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_H && !showingHistory) {
+        if (settings.hideKey && keyCode == GLFW.GLFW_KEY_H && !showingHistory) {
             uiHidden = true;
             return true;
         }
@@ -767,7 +770,7 @@ public class DialogScreen extends Screen {
             if (!textFullyDisplayed) {
                 currentCharIndex = dialogEntry.getText(playerName).getString().length();
                 textFullyDisplayed = true;
-            } else if (!dialogEntry.hasOptions() && (alreadyRead || ClientConfig.SKIP_UNREAD_TEXT.get())) {
+            } else if (!dialogEntry.hasOptions() && (alreadyRead || settings.skipUnreadText)) {
                 DialogManager.setFastForwardingNext(true);
                 DialogManager.getInstance().showNextDialog();
             }
@@ -778,12 +781,12 @@ public class DialogScreen extends Screen {
             // Number keys pick a choice; Space / Enter advance like a click on the dialogue box.
             int choice = keyCode >= GLFW.GLFW_KEY_1 && keyCode <= GLFW.GLFW_KEY_9 ? keyCode - GLFW.GLFW_KEY_1
                     : keyCode >= GLFW.GLFW_KEY_KP_1 && keyCode <= GLFW.GLFW_KEY_KP_9 ? keyCode - GLFW.GLFW_KEY_KP_1 : -1;
-            if (choice >= 0 && optionButtonsCreated && choice < optionButtons.size()) {
+            if (settings.numberKeys && choice >= 0 && optionButtonsCreated && choice < optionButtons.size()) {
                 optionButtons.get(choice).onPress();
                 return true;
             }
-            if (getFocused() == null && (keyCode == GLFW.GLFW_KEY_SPACE || keyCode == GLFW.GLFW_KEY_ENTER
-                    || keyCode == GLFW.GLFW_KEY_KP_ENTER)) {
+            if (settings.spaceAdvance && getFocused() == null && (keyCode == GLFW.GLFW_KEY_SPACE
+                    || keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER)) {
                 return handleDialogAdvanceClick();
             }
         }
@@ -804,7 +807,7 @@ public class DialogScreen extends Screen {
             uiHidden = false;
             return true;
         }
-        if (button == 1) {
+        if (PlaySettings.get().rightClickHide && button == 1) {
             // Right click hides the dialogue box to show the picture behind it; any input brings it back.
             uiHidden = true;
             return true;
@@ -862,11 +865,12 @@ public class DialogScreen extends Screen {
             uiHidden = false;
             return true;
         }
-        if (scrollY > 0) {
+        PlaySettings settings = PlaySettings.get();
+        if (settings.wheelHistory && scrollY > 0) {
             toggleHistoryScreen();
             return true;
         }
-        if (scrollY < 0) {
+        if (settings.wheelAdvance && scrollY < 0) {
             return handleDialogAdvanceClick();
         }
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
@@ -914,7 +918,7 @@ public class DialogScreen extends Screen {
             }
             dynamicTextures.clear();
         }
-        if (textFullyDisplayed) {
+        if (textFullyDisplayed && PlaySettings.get().trackRead) {
             ReadStore.markRead(dialogSequence.getId(), dialogEntry.getId());
             ReadStore.save();
         }
