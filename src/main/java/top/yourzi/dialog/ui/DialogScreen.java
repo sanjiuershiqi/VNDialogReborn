@@ -254,6 +254,17 @@ public class DialogScreen extends Screen {
             ItemStack stack = new ItemStack(item, Math.max(1, itemInfo.getCount()));
             if (itemInfo.getNbt() != null && !itemInfo.getNbt().isEmpty()) {
                 CompoundTag tag = TagParser.parseTag(itemInfo.getNbt());
+                // {components:{...}} describes a full custom item (name, lore, enchantments, ...).
+                if (tag.contains("components", 10) && Minecraft.getInstance().level != null) {
+                    CompoundTag full = new CompoundTag();
+                    full.putString("id", itemId.toString());
+                    full.putInt("count", stack.getCount());
+                    full.put("components", tag.getCompound("components"));
+                    ItemStack parsed = ItemStack.parseOptional(Minecraft.getInstance().level.registryAccess(), full);
+                    if (!parsed.isEmpty()) {
+                        return parsed;
+                    }
+                }
                 stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
             }
             return stack;
@@ -377,7 +388,35 @@ public class DialogScreen extends Screen {
         }
 
         super.render(guiGraphics, mouseX, mouseY, partialTicks);
+        renderItemTooltip(guiGraphics, mouseX, mouseY);
         renderFlashOverlay(guiGraphics);
+    }
+
+    private static final int ITEM_SIZE = 16;
+    private static final int ITEM_PADDING = 4;
+
+    private int itemsStartX() {
+        int totalWidth = displayItemStacks.size() * ITEM_SIZE + Math.max(0, displayItemStacks.size() - 1) * ITEM_PADDING;
+        return dialogBoxX + (dialogBoxWidth - totalWidth) / 2;
+    }
+
+    /** The normal item tooltip (name, lore, enchantments, ...) for the displayed item under the cursor. */
+    private void renderItemTooltip(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        if (displayItemStacks.isEmpty() || !textFullyDisplayed) {
+            return;
+        }
+        int y = dialogBoxY - ITEM_SIZE - 5;
+        if (mouseY < y - 2 || mouseY >= y + ITEM_SIZE + 2) {
+            return;
+        }
+        int startX = itemsStartX();
+        for (int i = 0; i < displayItemStacks.size(); i++) {
+            int x = startX + i * (ITEM_SIZE + ITEM_PADDING);
+            if (mouseX >= x - 2 && mouseX < x + ITEM_SIZE + 2) {
+                guiGraphics.renderTooltip(font, displayItemStacks.get(i), mouseX, mouseY);
+                return;
+            }
+        }
     }
 
     private void renderWorldOverlay(GuiGraphics guiGraphics) {
@@ -629,13 +668,10 @@ public class DialogScreen extends Screen {
     }
 
     private void renderItems(GuiGraphics guiGraphics) {
-        int itemSize = 16;
-        int itemPadding = 4;
-        int totalWidth = displayItemStacks.size() * itemSize + Math.max(0, displayItemStacks.size() - 1) * itemPadding;
-        int startX = dialogBoxX + (dialogBoxWidth - totalWidth) / 2;
-        int y = dialogBoxY - itemSize - 5;
+        int startX = itemsStartX();
+        int y = dialogBoxY - ITEM_SIZE - 5;
         for (int i = 0; i < displayItemStacks.size(); i++) {
-            int x = startX + i * (itemSize + itemPadding);
+            int x = startX + i * (ITEM_SIZE + ITEM_PADDING);
             ItemStack stack = displayItemStacks.get(i);
             guiGraphics.renderItem(stack, x, y);
             guiGraphics.renderItemDecorations(font, stack, x, y);

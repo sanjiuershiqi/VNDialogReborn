@@ -168,7 +168,26 @@ final class LogicTab extends Column {
             return;
         }
         this.addItem(new DisplayItemInfo(net.minecraft.core.registries.BuiltInRegistries.ITEM
-                .getKey(stack.getItem()).toString(), Math.max(1, stack.getCount()), null));
+                .getKey(stack.getItem()).toString(), Math.max(1, stack.getCount()), componentsNbt(stack)));
+    }
+
+    /** {@code {components:{...}}} for an item that differs from its default (name, lore, ...), else null. */
+    private static String componentsNbt(ItemStack stack) {
+        net.minecraft.client.multiplayer.ClientLevel level = net.minecraft.client.Minecraft.getInstance().level;
+        if (level == null || stack.getComponentsPatch().isEmpty()) {
+            return null;
+        }
+        try {
+            if (stack.save(level.registryAccess()) instanceof net.minecraft.nbt.CompoundTag saved
+                    && saved.contains("components", 10)) {
+                net.minecraft.nbt.CompoundTag result = new net.minecraft.nbt.CompoundTag();
+                result.put("components", saved.getCompound("components"));
+                return result.toString();
+            }
+        } catch (Exception ignored) {
+            // An item that cannot be serialized is still usable by id alone.
+        }
+        return null;
     }
 
     private void moveItem(int index, int delta) {
@@ -283,8 +302,11 @@ final class LogicTab extends Column {
             }
             LogicTab.this.pickItem(stack -> {
                 if (!stack.isEmpty()) {
-                    this.row.update(() -> this.row.item.setItemId(
-                            net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()));
+                    this.row.item.setItemId(
+                            net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+                    this.row.item.setNbt(componentsNbt(stack));
+                    // Rebuild the rows so the id and NBT fields show the new item.
+                    LogicTab.this.context.touchStructure();
                 }
             });
             return true;

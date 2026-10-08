@@ -19,10 +19,8 @@ import top.yourzi.dialog.editor.ui.Theme;
 import top.yourzi.dialog.editor.ui.UiNode;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.function.Consumer;
 
 /**
@@ -77,7 +75,8 @@ public final class ItemPickerSheet extends Modal {
 
     /** Reads the backpack, and the registry plus its names, once per opening. */
     private void collect() {
-        Map<String, Integer> carried = new LinkedHashMap<>();
+        // Backpack stacks are kept as they are, so a renamed or enchanted item stays that item.
+        List<ItemStack> carried = new ArrayList<>();
         if (Minecraft.getInstance().player != null) {
             Inventory inventory = Minecraft.getInstance().player.getInventory();
             for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
@@ -85,15 +84,24 @@ public final class ItemPickerSheet extends Modal {
                 if (stack.isEmpty()) {
                     continue;
                 }
-                String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
-                carried.merge(id, stack.getCount(), Integer::sum);
+                ItemStack same = null;
+                for (ItemStack known : carried) {
+                    if (ItemStack.isSameItemSameComponents(known, stack)) {
+                        same = known;
+                        break;
+                    }
+                }
+                if (same != null) {
+                    same.setCount(Math.min(64, same.getCount() + stack.getCount()));
+                } else {
+                    carried.add(stack.copy());
+                }
             }
         }
-        for (Map.Entry<String, Integer> entry : carried.entrySet()) {
-            Entry built = this.entry(entry.getKey(), entry.getValue());
-            if (built != null) {
-                this.backpack.add(built);
-            }
+        for (ItemStack stack : carried) {
+            String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+            String name = stack.getHoverName().getString();
+            this.backpack.add(new Entry(stack, id, name, stack.getCount(), (name + " " + id).toLowerCase(Locale.ROOT)));
         }
         for (ResourceLocation key : BuiltInRegistries.ITEM.keySet()) {
             if (this.everything.size() >= 4096) {
