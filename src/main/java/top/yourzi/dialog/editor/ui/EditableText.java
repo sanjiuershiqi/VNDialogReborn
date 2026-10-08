@@ -156,8 +156,8 @@ public final class EditableText {
         int[] start = this.selectionStart();
         int[] end = this.selectionEnd();
         // A delete must not cut a formatting code in half, leaving a stray section sign behind.
-        start[1] = codeStartAt(this.lines.get(start[0]), start[1]);
-        end[1] = codeStartAt(this.lines.get(end[0]), end[1]);
+        start[1] = columnStart(this.lines.get(start[0]), start[1]);
+        end[1] = columnStart(this.lines.get(end[0]), end[1]);
         String head = this.lines.get(start[0]).substring(0, start[1]);
         String tail = this.lines.get(end[0]).substring(end[1]);
         this.lines.set(start[0], head + tail);
@@ -212,28 +212,7 @@ public final class EditableText {
      */
     private void snapOutOfCode() {
         String line = this.lines.get(this.cursorLine);
-        if (insideCode(line, this.cursorColumn)) {
-            this.cursorColumn = codeStartAt(line, this.cursorColumn);
-        }
-    }
-
-    /** Start of the formatting code the caret sits inside. */
-    private static int codeStartAt(String line, int column) {
-        int start = 0;
-        int i = 0;
-        while (i < column && i < line.length()) {
-            int length = FormatCodes.codeLength(line, i);
-            if (length == 0) {
-                i++;
-                continue;
-            }
-            if (column <= i + length) {
-                return i;
-            }
-            start = i + length;
-            i += length;
-        }
-        return start;
+        this.cursorColumn = columnStart(line, this.cursorColumn);
     }
 
     public void backspace() {
@@ -244,10 +223,11 @@ public final class EditableText {
         this.snapOutOfCode();
         String current = this.lines.get(this.cursorLine);
         if (this.cursorColumn > 0) {
-            // A code is removed whole, so the section sign is never left behind on its own.
-            int from = codeStartAt(current, this.cursorColumn);
-            if (from >= this.cursorColumn) {
-                from = this.cursorColumn - 1;
+            // A code is removed whole, so a section sign is never left behind on its own.
+            int from = this.cursorColumn - 1;
+            if (from > 0 && current.charAt(from - 1) == FormatCodes.MARK
+                    && FormatCodes.codeLength(current, from - 1) > 1) {
+                from--;
             }
             this.lines.set(this.cursorLine, current.substring(0, from) + current.substring(this.cursorColumn));
             this.cursorColumn = from;
@@ -283,7 +263,7 @@ public final class EditableText {
             target--;
         }
         // Never cut a formatting code in half on the way.
-        target = codeStartAt(current, target);
+        target = columnStart(current, target);
         this.lines.set(this.cursorLine, current.substring(0, target) + current.substring(this.cursorColumn));
         this.cursorColumn = target;
         this.clearSelection();
@@ -328,6 +308,14 @@ public final class EditableText {
                 }
             }
             this.cursorColumn = Mth.clamp(this.cursorColumn, 0, this.lines.get(this.cursorLine).length());
+            // One press moves over a whole code rather than stopping inside it.
+            String line = this.lines.get(this.cursorLine);
+            int guard = 0;
+            while (guard++ < 32 && this.cursorColumn >= 0 && this.cursorColumn <= line.length()
+                    && insideCode(line, this.cursorColumn)) {
+                this.cursorColumn += deltaColumns > 0 ? 1 : -1;
+            }
+            this.cursorColumn = Mth.clamp(this.cursorColumn, 0, line.length());
         }
         if (extend) {
             this.selecting = true;
@@ -510,11 +498,10 @@ public final class EditableText {
     /**
      * One visual row of a wrapped line.
      *
-     * @param from  first character of the row, always at a character boundary
-     * @param to    character after the last one of the row
-     * @param width drawn width of the row
+     * @param from first character of the row, always at a character boundary
+     * @param to   character after the last one of the row
      */
-    public record Row(int from, int to, int width) {
+    public record Row(int from, int to) {
     }
 
     /**
@@ -529,7 +516,7 @@ public final class EditableText {
         List<Style> styles = new ArrayList<>();
         int safeWidth = Math.max(8, width);
         if (line.isEmpty()) {
-            rows.add(new Row(0, 0, 0));
+            rows.add(new Row(0, 0));
             styles.add(Style.EMPTY);
             return new RowCtx(lineIndex, line, rows, styles);
         }
@@ -548,7 +535,7 @@ public final class EditableText {
             }
             int pieceWidth = markerWidth(line, at, at + 1);
             if (runWidth > 0 && runWidth + pieceWidth > safeWidth) {
-                rows.add(new Row(from, at, runWidth));
+                rows.add(new Row(from, at));
                 styles.add(rowStyle);
                 from = at;
                 rowStyle = style;
@@ -557,36 +544,9 @@ public final class EditableText {
             runWidth += pieceWidth;
             at++;
         }
-        rows.add(new Row(from, line.length(), runWidth));
+        rows.add(new Row(from, line.length()));
         styles.add(rowStyle);
         return new RowCtx(lineIndex, line, rows, styles);
-    }
-
-    /**
-     * Where {@code (line, column)} sits after wrapping, as a global row index - what the caret, the
-     * scrolling and Home/End need.
-     */
-    public static int locate(List<RowCtx> wrapped, int line, int column) {
-        int base = 0;
-        for (RowCtx ctx : wrapped) {
-            if (ctx.line() < line) {
-                base += ctx.rows().size();
-                continue;
-            }
-            if (ctx.line() > line) {
-                break;
-            }
-            List<Row> rows = ctx.rows();
-            for (int index = 0; index < rows.size(); index++) {
-                Row row = rows.get(index);
-                boolean last = index == rows.size() - 1;
-                if (column >= row.from() && (column <= row.to() || last)) {
-                    return base + index;
-                }
-            }
-            return base + Math.max(0, rows.size() - 1);
-        }
-        return Math.max(0, base - 1);
     }
 
     /** Column inside {@code row} closest to {@code pixelX}, measured from the row's left edge. */
@@ -596,7 +556,7 @@ public final class EditableText {
         int bestDistance = Math.abs(pixelX);
         int runWidth = 0;
         for (int at = row.from(); at < row.to(); at++) {
-            if (FormatCodes.codeLength(line, at) > 0) {
+                if (FormatCodes.codeLength(line, at) > 0) {
                 // A code draws nothing and takes no room; a click never lands beside one.
                 continue;
             }
@@ -611,7 +571,25 @@ public final class EditableText {
         if (Math.abs(pixelX - runWidth) < bestDistance) {
             best = row.to();
         }
-        return best;
+        // Land on a character, not between the two characters of a code.
+        return columnStart(line, best);
+    }
+
+    /** The given column, or the first character of the code it falls inside. */
+    public static int columnStart(String line, int column) {
+        int i = 0;
+        while (i < line.length()) {
+            int length = FormatCodes.codeLength(line, i);
+            if (length == 0) {
+                i++;
+                continue;
+            }
+            if (column > i && column <= i + length) {
+                return i;
+            }
+            i += length;
+        }
+        return Mth.clamp(column, 0, line.length());
     }
 
     /** Character index in {@code line} closest to {@code pixelX}. */
