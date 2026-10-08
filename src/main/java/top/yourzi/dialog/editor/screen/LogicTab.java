@@ -262,6 +262,8 @@ final class LogicTab extends Column {
             this.add(id);
             this.add(amount);
             this.add(nbt);
+            this.add(small("✎", () -> ItemEditSheet.open(LogicTab.this.host(), item,
+                    LogicTab.this.context::touchStructure), true).withTooltip(Theme.tr("logic.customize_item")));
             this.add(small("▲", () -> LogicTab.this.moveItem(index, -1), index > 0));
             this.add(small("▼", () -> LogicTab.this.moveItem(index, 1), index < count - 1));
             this.add(small("✕", () -> LogicTab.this.removeItem(index), true).tone(Button.Tone.GHOST));
