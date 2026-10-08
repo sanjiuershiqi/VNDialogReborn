@@ -3,14 +3,13 @@
   "entries": [
     {
       "background_image": {
-        "path": "example_background.png",
+        "path": "background.png",
         "renderOption": "FILL"
       },
       "display_items": [
         {
           "count": 1,
-          "item": "block.minecraft.acacia_fence",
-          "nbt": ""
+          "item": "minecraft:acacia_fence"
         }
       ],
       "id": "1",
@@ -28,13 +27,12 @@
       },
       "text": {
         "bold": true,
-        "color": "#FFFFC800",
+        "color": "#FFC800",
         "text": "Hello, how are you?"
       }
     },
     {
       "id": "2",
-      "next": "3",
       "options": [
         {
           "command": [
@@ -46,6 +44,9 @@
           }
         },
         {
+          "command": [
+            "weather rain"
+          ],
           "target": "end",
           "text": {
             "text": "Rain"
@@ -56,13 +57,16 @@
         "text": "Player"
       },
       "text": {
-        "text": "I'm fine, thank you!"
+        "text": "I'm fine, thank you! What should the weather be?"
       }
     },
     {
       "id": "end",
       "speaker": {
         "text": "NPC"
+      },
+      "text": {
+        "text": "Done. See you!"
       }
     }
   ],

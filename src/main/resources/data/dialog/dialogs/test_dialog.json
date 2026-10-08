@@ -207,8 +207,20 @@
         {
         "item": "minecraft:diamond_sword",
         "count": 1,
-        "nbt": "{Damage: 50, Enchantments:[{lvl: 255s, id: \"minecraft:sharpness\"}]}"
+        "nbt": "{components:{\"minecraft:custom_name\":'{\"translate\":\"dialog.test_dialog.item.sword.name\",\"color\":\"gold\",\"italic\":false}',\"minecraft:lore\":['{\"translate\":\"dialog.test_dialog.item.sword.lore.0\",\"color\":\"gray\",\"italic\":false}','{\"translate\":\"dialog.test_dialog.item.sword.lore.1\",\"color\":\"gray\",\"italic\":false}'],\"minecraft:enchantment_glint_override\":true}}"
         }
+      ]
+    },
+    {
+      "id": "fallback",
+      "speaker": {"translate": "dialog.test_dialog.speaker.leaf", "color": "aqua"},
+      "text": {
+        "translate": "dialog.test_dialog.entry.untranslated.text",
+        "fallback": "This line's translation key has no translation, so you are reading the fallback text stored in the dialogue file. 这句话的翻译键没有翻译，所以显示的是对话文件里的备用文本。"
+      },
+      "portraits": [
+        {"path": "leaf.png", "position": "LEFT", "brightness": 1.0},
+        {"path": "tlipoca.png", "position": "RIGHT", "brightness": 0.5}
       ]
     },
     {
@@ -230,6 +242,15 @@
       "text": {"translate": "dialog.test_dialog.entry.hidden_entry.text"},
       "portraits": [
         {"path": "tlipoca_1.png"}
+      ]
+    },
+    {
+      "id": "editor",
+      "speaker": {"translate": "dialog.test_dialog.speaker.leaf", "color": "aqua"},
+      "text": {"translate": "dialog.test_dialog.entry.editor.text"},
+      "portraits": [
+        {"path": "leaf.png", "position": "LEFT", "brightness": 1.0, "animationType": "BOUNCE"},
+        {"path": "tlipoca.png", "position": "RIGHT", "brightness": 0.5}
       ]
     },
   {
