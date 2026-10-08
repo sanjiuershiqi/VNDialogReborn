@@ -204,6 +204,8 @@
   "gui.vn_edit.branch.end_dialog": "End the dialogue here",
   "gui.vn_edit.branch.allow_skip": "Allow skipping",
   "gui.vn_edit.staging.choose": "Choose…",
+  "gui.vn_edit.staging.remove_background": "Remove background",
+  "gui.vn_edit.staging.remove_background_tip": "Take the background off this node",
   "gui.vn_edit.staging.builtin": "Built-in…",
   "gui.vn_edit.staging.background_hint": "Background file",
   "gui.vn_edit.staging.audio_hint": "Audio file (ogg / wav)",

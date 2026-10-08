@@ -75,6 +75,9 @@ final class StagingTab extends Column {
         backgroundRow.add(this.backgroundPath.flex(1));
         backgroundRow.add(Button.of(Theme.tr("staging.choose"), () -> this.actions.pickBackgroundFile()).fit());
         backgroundRow.add(Button.of(Theme.tr("staging.builtin"), () -> this.actions.pickBuiltinBackground()).fit());
+        backgroundRow.add(Button.of(Theme.tr("staging.remove_background"), this::removeBackground)
+                .tone(Button.Tone.GHOST).fit()
+                .withTooltip(Theme.tr("staging.remove_background_tip")));
         this.add(backgroundRow);
         Row optionRow = new Row().gap(2);
         optionRow.add(this.renderOption);
@@ -142,13 +145,30 @@ final class StagingTab extends Column {
         }
     }
 
-    /** Applied by the text field and by the asset pickers. */
+    /** Takes the background off this node, leaving the rest of its staging alone. */
+    void removeBackground() {
+        if (this.entry == null || this.entry.getBackgroundImage() == null) {
+            return;
+        }
+        this.backgroundPath.setValue("");
+        this.entry.setBackgroundImage(null);
+        this.preview.setPath("");
+        this.context.touchStructure();
+    }
+
+    /**
+     * Applies a background path, from the text field or from a picker.
+     *
+     * <p>Normalising the field only when the writer is not typing in it is what makes the field
+     * editable at all: rewriting the value on each keystroke puts back the characters being deleted,
+     * so the path could never be cleared by hand. Picking a file still shows its name in the field.
+     */
     void setBackgroundPath(String value) {
         if (this.entry == null || this.binding) {
             return;
         }
         String path = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
-        if (!path.equals(this.backgroundPath.value())) {
+        if (this.host() == null || this.host().focusedNode() != this.backgroundPath) {
             this.backgroundPath.setValue(path);
         }
         if (path.isEmpty()) {
@@ -167,8 +187,8 @@ final class StagingTab extends Column {
         if (this.entry == null) {
             return;
         }
-        this.audioPath.setValue(value == null ? "" : value);
-        this.entry.setAudioPath(value == null || value.isBlank() ? null : value);
+        this.audioPath.setValue(value == null ? "" : value.trim());
+        this.entry.setAudioPath(value == null || value.isBlank() ? null : value.trim());
         this.context.touch(false);
     }
 

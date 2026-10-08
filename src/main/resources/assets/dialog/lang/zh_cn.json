@@ -204,6 +204,8 @@
   "gui.vn_edit.branch.end_dialog": "在此结束对话",
   "gui.vn_edit.branch.allow_skip": "允许快进跳过",
   "gui.vn_edit.staging.choose": "选择…",
+  "gui.vn_edit.staging.remove_background": "移除背景",
+  "gui.vn_edit.staging.remove_background_tip": "把这个节点的背景去掉",
   "gui.vn_edit.staging.builtin": "内置…",
   "gui.vn_edit.staging.background_hint": "背景文件名",
   "gui.vn_edit.staging.audio_hint": "音频文件名（ogg / wav）",

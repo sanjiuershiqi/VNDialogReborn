@@ -129,6 +129,15 @@ final class StageView extends UiNode {
 
     // ----- controls -----
 
+    /** Takes the background off the node being previewed. */
+    private void removeBackground() {
+        if (this.entry == null || this.entry.getBackgroundImage() == null) {
+            return;
+        }
+        this.entry.setBackgroundImage(null);
+        this.context.touchStructure();
+    }
+
     private void rebuildControls() {
         this.portraits.clear();
         this.sliders.clear();
@@ -153,6 +162,9 @@ final class StageView extends UiNode {
         Row background = new Row().gap(3);
         background.add(Button.of(Theme.tr("stage.background"), () -> this.actions.pickBackgroundFile()).fit());
         background.add(Button.of(Theme.tr("staging.builtin"), () -> this.actions.pickBuiltinBackground()).tone(Button.Tone.GHOST).fit());
+        background.add(Button.of(Theme.tr("staging.remove_background"), this::removeBackground)
+                .tone(Button.Tone.GHOST).fit()
+                .withTooltip(Theme.tr("staging.remove_background_tip")));
         background.add(Nodes.fill());
         this.portraits.add(background);
 
