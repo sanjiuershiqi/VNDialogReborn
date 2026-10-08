@@ -476,11 +476,20 @@ public final class EditableText {
      * selection maths are plain prefix widths.
      */
     public static MutableComponent styled(String line) {
+        return styled(line, Style.EMPTY);
+    }
+
+    /**
+     * As {@link #styled(String)}, but continuing from the style carried into this part of the line by
+     * codes written before it. A wrapped row starts in the middle of a line, so it needs the style in
+     * force at its first character, which is what keeps a colour running across a wrap.
+     */
+    public static MutableComponent styled(String line, Style base) {
         MutableComponent result = Component.empty();
         Style code = Style.EMPTY.withColor(Theme.TEXT_MUTED & 0xFFFFFF);
         StringBuilder run = new StringBuilder();
         int i = 0;
-        Style style = Style.EMPTY;
+        Style style = base;
         while (i < line.length()) {
             int length = FormatCodes.codeLength(line, i);
             if (length == 0) {
