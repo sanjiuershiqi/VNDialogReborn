@@ -60,10 +60,6 @@ public final class EditableText {
         this.scrollX = 0;
     }
 
-    public int lineCount() {
-        return this.lines.size();
-    }
-
     public List<String> lines() {
         return this.lines;
     }
@@ -159,6 +155,9 @@ public final class EditableText {
         }
         int[] start = this.selectionStart();
         int[] end = this.selectionEnd();
+        // A delete must not cut a formatting code in half, leaving a stray section sign behind.
+        start[1] = codeStartAt(this.lines.get(start[0]), start[1]);
+        end[1] = codeStartAt(this.lines.get(end[0]), end[1]);
         String head = this.lines.get(start[0]).substring(0, start[1]);
         String tail = this.lines.get(end[0]).substring(end[1]);
         this.lines.set(start[0], head + tail);
@@ -175,6 +174,7 @@ public final class EditableText {
             return;
         }
         this.deleteSelection();
+        this.snapOutOfCode();
         String current = this.lines.get(this.cursorLine);
         if (!this.multiline || !text.contains("\n")) {
             String merged = this.trim(current.substring(0, this.cursorColumn) + text + current.substring(this.cursorColumn));
@@ -202,15 +202,55 @@ public final class EditableText {
         return line.length() <= MAX_LENGTH ? line : line.substring(0, MAX_LENGTH);
     }
 
+    /**
+     * Moves the caret out of the middle of a {@code §4} pair.
+     *
+     * <p>The caret draws wherever it is placed, including between the two characters of a code, but
+     * editing there would split the code into a stray {@code §} and a plain character. Every edit
+     * therefore steps back to the code's first character first, so a code is only ever inserted or
+     * removed as a whole.
+     */
+    private void snapOutOfCode() {
+        String line = this.lines.get(this.cursorLine);
+        if (insideCode(line, this.cursorColumn)) {
+            this.cursorColumn = codeStartAt(line, this.cursorColumn);
+        }
+    }
+
+    /** Start of the formatting code the caret sits inside. */
+    private static int codeStartAt(String line, int column) {
+        int start = 0;
+        int i = 0;
+        while (i < column && i < line.length()) {
+            int length = FormatCodes.codeLength(line, i);
+            if (length == 0) {
+                i++;
+                continue;
+            }
+            if (column <= i + length) {
+                return i;
+            }
+            start = i + length;
+            i += length;
+        }
+        return start;
+    }
+
     public void backspace() {
         if (this.hasSelection()) {
             this.deleteSelection();
             return;
         }
+        this.snapOutOfCode();
         String current = this.lines.get(this.cursorLine);
         if (this.cursorColumn > 0) {
-            this.lines.set(this.cursorLine, current.substring(0, this.cursorColumn - 1) + current.substring(this.cursorColumn));
-            this.cursorColumn--;
+            // A code is removed whole, so the section sign is never left behind on its own.
+            int from = codeStartAt(current, this.cursorColumn);
+            if (from >= this.cursorColumn) {
+                from = this.cursorColumn - 1;
+            }
+            this.lines.set(this.cursorLine, current.substring(0, from) + current.substring(this.cursorColumn));
+            this.cursorColumn = from;
         } else if (this.cursorLine > 0) {
             String previous = this.lines.get(this.cursorLine - 1);
             this.lines.set(this.cursorLine - 1, previous + current);
@@ -229,6 +269,7 @@ public final class EditableText {
             this.backspace();
             return;
         }
+        this.snapOutOfCode();
         String current = this.lines.get(this.cursorLine);
         if (this.cursorColumn == 0) {
             this.backspace();
@@ -241,6 +282,8 @@ public final class EditableText {
         while (target > 0 && !Character.isWhitespace(current.charAt(target - 1))) {
             target--;
         }
+        // Never cut a formatting code in half on the way.
+        target = codeStartAt(current, target);
         this.lines.set(this.cursorLine, current.substring(0, target) + current.substring(this.cursorColumn));
         this.cursorColumn = target;
         this.clearSelection();
@@ -251,9 +294,11 @@ public final class EditableText {
             this.deleteSelection();
             return;
         }
+        this.snapOutOfCode();
         String current = this.lines.get(this.cursorLine);
         if (this.cursorColumn < current.length()) {
-            this.lines.set(this.cursorLine, current.substring(0, this.cursorColumn) + current.substring(this.cursorColumn + 1));
+            int to = this.cursorColumn + Math.max(1, FormatCodes.codeLength(current, this.cursorColumn));
+            this.lines.set(this.cursorLine, current.substring(0, this.cursorColumn) + current.substring(to));
         } else if (this.cursorLine < this.lines.size() - 1) {
             this.lines.set(this.cursorLine, current + this.lines.get(this.cursorLine + 1));
             this.lines.remove(this.cursorLine + 1);
@@ -395,11 +440,16 @@ public final class EditableText {
      * selection maths are plain prefix widths.
      */
     public static MutableComponent styled(String line) {
+        return styled(line, Style.EMPTY);
+    }
+
+    /** As {@link #styled(String)}, continuing from a style carried in from an earlier part of the line. */
+    public static MutableComponent styled(String line, Style base) {
         MutableComponent result = Component.empty();
         Style code = Style.EMPTY.withColor(Theme.TEXT_MUTED & 0xFFFFFF);
         StringBuilder run = new StringBuilder();
         int i = 0;
-        Style style = Style.EMPTY;
+        Style style = base;
         while (i < line.length()) {
             int length = FormatCodes.codeLength(line, i);
             if (length == 0) {
@@ -422,6 +472,23 @@ public final class EditableText {
         return result;
     }
 
+    /** True when {@code index} falls inside a formatting code rather than at a character. */
+    public static boolean insideCode(String line, int index) {
+        int i = 0;
+        while (i < line.length()) {
+            int length = FormatCodes.codeLength(line, i);
+            if (length == 0) {
+                i++;
+                continue;
+            }
+            if (index > i && index < i + length) {
+                return true;
+            }
+            i += length;
+        }
+        return false;
+    }
+
 
     /** Drawn width of {@code line} up to (excluding) {@code column}. */
     public static int widthTo(String line, int column) {
@@ -430,88 +497,116 @@ public final class EditableText {
     }
 
     /**
-     * One visual row of a wrapped paragraph.
-     *
-     * @param line      logical line the row belongs to
-     * @param from      first character of the row inside that line
-     * @param to        character after the last one of the row
-     * @param width     drawn width of the row, so a caret can be placed anywhere in it
+     * A wrapped paragraph: one logical line, its rows, and where the style is carried to for each
+     * row. Bundling them keeps a row from re-scanning the line for its starting style while drawing.
      */
-    public record Row(int line, int from, int to, int width) {
+    public record RowCtx(int line, String lineText, List<Row> rows, List<Style> styles) {
+        /** Style carried into the row at {@code index}. */
+        public Style styleAt(int index) {
+            return index >= 0 && index < this.styles.size() ? this.styles.get(index) : Style.EMPTY;
+        }
     }
 
     /**
-     * Breaks every logical line into the rows that fit {@code width}, the way the text is drawn.
-     * Formatting codes carry no width, so a row's range covers them as ordinary characters.
+     * One visual row of a wrapped line.
+     *
+     * @param from  first character of the row, always at a character boundary
+     * @param to    character after the last one of the row
+     * @param width drawn width of the row
      */
-    public static List<Row> wrapRows(List<String> lines, int width) {
-        List<Row> rows = new ArrayList<>();
-        int safeWidth = Math.max(8, width);
-        for (int index = 0; index < lines.size(); index++) {
-            String line = lines.get(index);
-            if (line.isEmpty()) {
-                rows.add(new Row(index, 0, 0, 0));
-                continue;
-            }
-            int from = 0;
-            int runWidth = 0;
-            int at = 0;
-            while (at < line.length()) {
-                int codeLength = FormatCodes.codeLength(line, at);
-                int next = at + Math.max(1, codeLength);
-                int pieceWidth = markerWidth(line, at, next);
-                if (runWidth > 0 && runWidth + pieceWidth > safeWidth) {
-                    rows.add(new Row(index, from, at, runWidth));
-                    from = at;
-                    runWidth = 0;
-                }
-                runWidth += pieceWidth;
-                at = next;
-            }
-            rows.add(new Row(index, from, line.length(), runWidth));
-        }
-        return rows.isEmpty() ? List.of(new Row(0, 0, 0, 0)) : rows;
+    public record Row(int from, int to, int width) {
     }
 
-    /** Row holding {@code (line, column)}, preferring the later row when a column is a break. */
-    public static int rowOf(List<Row> rows, int line, int column) {
-        int found = 0;
-        for (int index = 0; index < rows.size(); index++) {
-            Row row = rows.get(index);
-            if (row.line() > line) {
+    /**
+     * Breaks {@code line} into the rows that fit {@code width}, the way the text is drawn.
+     *
+     * <p>A row never starts in the middle of a {@code §} code: the code belongs to the row it begins
+     * in, and its effect is carried into the following rows. Otherwise a colour would end at the
+     * wrap, or worse, half a code would be drawn as literal text.
+     */
+    public static RowCtx wrapLine(int lineIndex, String line, int width) {
+        List<Row> rows = new ArrayList<>();
+        List<Style> styles = new ArrayList<>();
+        int safeWidth = Math.max(8, width);
+        if (line.isEmpty()) {
+            rows.add(new Row(0, 0, 0));
+            styles.add(Style.EMPTY);
+            return new RowCtx(lineIndex, line, rows, styles);
+        }
+        int from = 0;
+        int runWidth = 0;
+        int at = 0;
+        Style style = Style.EMPTY;
+        Style rowStyle = Style.EMPTY;
+        while (at < line.length()) {
+            int codeLength = FormatCodes.codeLength(line, at);
+            if (codeLength > 0) {
+                // A code takes no room, but it stays in the row it was written in.
+                style = FormatCodes.apply(style, line, at, codeLength);
+                at += codeLength;
+                continue;
+            }
+            int pieceWidth = markerWidth(line, at, at + 1);
+            if (runWidth > 0 && runWidth + pieceWidth > safeWidth) {
+                rows.add(new Row(from, at, runWidth));
+                styles.add(rowStyle);
+                from = at;
+                rowStyle = style;
+                runWidth = 0;
+            }
+            runWidth += pieceWidth;
+            at++;
+        }
+        rows.add(new Row(from, line.length(), runWidth));
+        styles.add(rowStyle);
+        return new RowCtx(lineIndex, line, rows, styles);
+    }
+
+    /**
+     * Where {@code (line, column)} sits after wrapping, as a global row index - what the caret, the
+     * scrolling and Home/End need.
+     */
+    public static int locate(List<RowCtx> wrapped, int line, int column) {
+        int base = 0;
+        for (RowCtx ctx : wrapped) {
+            if (ctx.line() < line) {
+                base += ctx.rows().size();
+                continue;
+            }
+            if (ctx.line() > line) {
                 break;
             }
-            if (row.line() < line) {
-                continue;
+            List<Row> rows = ctx.rows();
+            for (int index = 0; index < rows.size(); index++) {
+                Row row = rows.get(index);
+                boolean last = index == rows.size() - 1;
+                if (column >= row.from() && (column <= row.to() || last)) {
+                    return base + index;
+                }
             }
-            found = index;
-            if (column >= row.from() && column <= row.to()) {
-                return index;
-            }
-            if (column < row.from()) {
-                return index;
-            }
+            return base + Math.max(0, rows.size() - 1);
         }
-        return found;
+        return Math.max(0, base - 1);
     }
 
-    /** Character index inside {@code row} closest to {@code pixelX} from the row's left edge. */
-    public static int columnInRow(List<String> lines, Row row, int pixelX) {
-        String line = lines.get(row.line());
+    /** Column inside {@code row} closest to {@code pixelX}, measured from the row's left edge. */
+    public static int columnIn(RowCtx ctx, Row row, int pixelX) {
+        String line = ctx.lineText();
         int best = row.from();
         int bestDistance = Math.abs(pixelX);
         int runWidth = 0;
-        for (int at = row.from(); at < row.to(); ) {
-            int codeLength = FormatCodes.codeLength(line, at);
-            int next = Math.min(row.to(), at + Math.max(1, codeLength));
-            int glyph = markerWidth(line, at, next);
+        for (int at = row.from(); at < row.to(); at++) {
+            if (FormatCodes.codeLength(line, at) > 0) {
+                // A code draws nothing and takes no room; a click never lands beside one.
+                continue;
+            }
+            int glyph = markerWidth(line, at, at + 1);
             int middle = runWidth + glyph / 2;
             if (Math.abs(pixelX - middle) <= bestDistance) {
                 bestDistance = Math.abs(pixelX - middle);
                 best = at;
             }
             runWidth += glyph;
-            at = next;
         }
         if (Math.abs(pixelX - runWidth) < bestDistance) {
             best = row.to();
@@ -535,10 +630,14 @@ public final class EditableText {
         return line.length();
     }
 
-    /** Width of the drawn marker text for {@code line[from, to)}; formatting codes become one glyph each. */
+    /** Drawn width of {@code line[from, to)} as the editor paints it, which is one glyph per character. */
     public static int markerWidth(String line, int from, int to) {
         int start = Mth.clamp(from, 0, line.length());
         int end = Mth.clamp(to, start, line.length());
-        return start == end ? 0 : Theme.font().width(styled(line.substring(start, end)));
+        if (start == end) {
+            return 0;
+        }
+        String plain = line.substring(start, end).replace(FormatCodes.MARK, MARK_GLYPH);
+        return Theme.font().width(plain);
     }
 }
