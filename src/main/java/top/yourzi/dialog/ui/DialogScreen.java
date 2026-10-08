@@ -363,7 +363,9 @@ public class DialogScreen extends Screen {
                     && option.getTargetId() != null && ReadStore.isRead(dialogSequence.getId(), option.getTargetId())) {
                 optionText = optionText.copy().withStyle(net.minecraft.ChatFormatting.GRAY);
             }
-            Component label = i < 9 ? Component.literal((i + 1) + ". ").append(optionText) : optionText;
+            PlaySettings settings = PlaySettings.get();
+            Component label = i < 9 && settings.choiceNumbers
+                    ? Component.literal((i + 1) + ". ").append(optionText) : optionText;
             Button button = Button.builder(label, b -> {
                 if (option.getCommand() != null && !option.getCommand().isEmpty()) {
                     DialogManager.getInstance().executeCommands(minecraft.player, option.getCommand(), speakerEntity);

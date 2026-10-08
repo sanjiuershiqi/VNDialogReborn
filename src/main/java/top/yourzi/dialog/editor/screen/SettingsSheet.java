@@ -51,6 +51,7 @@ final class SettingsSheet extends Modal {
     protected void buildBody(Column body) {
         body.add(Nodes.section(Theme.tr("settings.section_input")));
         body.add(this.toggle("settings.number_keys", this.settings.numberKeys, value -> this.settings.numberKeys = value));
+        body.add(this.toggle("settings.choice_numbers", this.settings.choiceNumbers, value -> this.settings.choiceNumbers = value));
         body.add(this.toggle("settings.space_advance", this.settings.spaceAdvance, value -> this.settings.spaceAdvance = value));
         body.add(this.toggle("settings.wheel_advance", this.settings.wheelAdvance, value -> this.settings.wheelAdvance = value));
         body.add(this.toggle("settings.wheel_history", this.settings.wheelHistory, value -> this.settings.wheelHistory = value));

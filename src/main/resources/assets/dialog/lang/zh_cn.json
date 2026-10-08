@@ -104,6 +104,7 @@
   "gui.vn_edit.settings.title": "对话设置",
   "gui.vn_edit.settings.section_input": "按键与鼠标",
   "gui.vn_edit.settings.number_keys": "数字键选择选项",
+  "gui.vn_edit.settings.choice_numbers": "在选项前显示数字",
   "gui.vn_edit.settings.space_advance": "空格 / 回车推进对话",
   "gui.vn_edit.settings.wheel_advance": "滚轮向下推进对话",
   "gui.vn_edit.settings.wheel_history": "滚轮向上打开历史记录",

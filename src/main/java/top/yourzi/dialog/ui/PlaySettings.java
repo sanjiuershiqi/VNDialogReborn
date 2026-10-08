@@ -21,6 +21,8 @@ public final class PlaySettings {
 
     // Input
     public boolean numberKeys = true;
+    /** Shows the key number in front of each choice. */
+    public boolean choiceNumbers = true;
     public boolean spaceAdvance = true;
     public boolean wheelAdvance = true;
     public boolean wheelHistory = true;

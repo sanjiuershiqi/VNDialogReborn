@@ -104,6 +104,7 @@
   "gui.vn_edit.settings.title": "Dialogue settings",
   "gui.vn_edit.settings.section_input": "Keys and mouse",
   "gui.vn_edit.settings.number_keys": "Number keys pick a choice",
+  "gui.vn_edit.settings.choice_numbers": "Show the number in front of each choice",
   "gui.vn_edit.settings.space_advance": "Space / Enter advance the dialogue",
   "gui.vn_edit.settings.wheel_advance": "Scroll down advances the dialogue",
   "gui.vn_edit.settings.wheel_history": "Scroll up opens the history",
