@@ -60,7 +60,7 @@
   "dialog.test_dialog.entry.reverse.text": "REVERSE: the portrait appears upside down at the top of the screen.",
   "dialog.test_dialog.entry.flash.text": "FLASH: the screen flashes white twice.",
   "dialog.test_dialog.entry.8.text": "Of course, you can also customize branch options. Pick one with the mouse, or just press its number key:",
-  "dialog.test_dialog.entry.more_info.text": "The two buttons in the bottom right are for auto-play and history. Space or Enter advances the dialog just like a click, and holding Ctrl fast-forwards to the next choice.",
+  "dialog.test_dialog.entry.more_info.text": "The two buttons in the bottom right are auto-play and history. Space, Enter or scrolling down advance the dialog; scrolling up opens the history. Right-click or H hides the dialog box so you can see the picture, and holding Ctrl fast-forwards to the next choice. Lines you have read turn paler, and choices you have explored turn grey.",
   "dialog.test_dialog.entry.command.text": "You can also execute specific commands after selecting an option or after a line of dialog, to trigger events or change affection levels, etc. Here’s an example using weather changes:",
   "dialog.test_dialog.entry.item.text": "Items can be shown above the dialog. Hover the sword to read its custom name and description - both can be set in the editor without writing NBT.",
   "dialog.test_dialog.item.sword.name": "Tlipoca's Blade",

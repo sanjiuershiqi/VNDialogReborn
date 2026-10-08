@@ -80,6 +80,10 @@ public class DialogScreen extends Screen {
     private int historyScrollOffset;
     private int totalHistoryContentHeight;
     private ResourceLocation backgroundLocation;
+    /** True when the player had already read this line before it was opened now. */
+    private final boolean alreadyRead;
+    /** Dialogue box and buttons hidden so the picture behind them can be seen. */
+    private boolean uiHidden;
 
     public DialogScreen(DialogSequence dialogSequence, DialogEntry dialogEntry, String playerName) {
         this(dialogSequence, dialogEntry, playerName, null);
@@ -96,6 +100,7 @@ public class DialogScreen extends Screen {
         this.dialogEntry = dialogEntry;
         this.playerName = playerName;
         this.speakerEntity = speakerEntity;
+        this.alreadyRead = ReadStore.isRead(dialogSequence.getId(), dialogEntry.getId());
         collectPortraits();
         collectDisplayItems();
         collectBackground();
@@ -352,8 +357,12 @@ public class DialogScreen extends Screen {
 
         for (int i = 0; i < options.length; i++) {
             DialogOption option = options[i];
-            Component label = i < 9
-                    ? Component.literal((i + 1) + ". ").append(option.getText(playerName)) : option.getText(playerName);
+            Component optionText = option.getText(playerName);
+            // A choice whose destination was already read is greyed, so unexplored routes stand out.
+            if (option.getTargetId() != null && ReadStore.isRead(dialogSequence.getId(), option.getTargetId())) {
+                optionText = optionText.copy().withStyle(net.minecraft.ChatFormatting.GRAY);
+            }
+            Component label = i < 9 ? Component.literal((i + 1) + ". ").append(optionText) : optionText;
             Button button = Button.builder(label, b -> {
                 if (option.getCommand() != null && !option.getCommand().isEmpty()) {
                     DialogManager.getInstance().executeCommands(minecraft.player, option.getCommand(), speakerEntity);
@@ -382,6 +391,10 @@ public class DialogScreen extends Screen {
         }
 
         renderPortraits(guiGraphics);
+        if (uiHidden) {
+            renderFlashOverlay(guiGraphics);
+            return;
+        }
         renderDialogBox(guiGraphics);
 
         if (textFullyDisplayed && dialogEntry.hasOptions() && !optionButtonsCreated) {
@@ -601,8 +614,9 @@ public class DialogScreen extends Screen {
         // 按字符索引截断 Component，保留样式（颜色/加粗等），避免 getString() 丢样式
         Component displayComponent = fullyShown ? text : substringComponent(text, displayedChars);
 
+        int textColor = alreadyRead ? ClientConfig.READ_TEXT_COLOR.get() : ClientConfig.DIALOG_TEXT_COLOR.get();
         for (FormattedCharSequence line : font.split(displayComponent, dialogBoxWidth - padding * 2)) {
-            guiGraphics.drawString(font, line, textX, textY, ClientConfig.DIALOG_TEXT_COLOR.get());
+            guiGraphics.drawString(font, line, textX, textY, textColor);
             textY += font.lineHeight + 2;
         }
 
@@ -740,13 +754,22 @@ public class DialogScreen extends Screen {
             return true;
         }
 
+        if (uiHidden) {
+            uiHidden = false;
+            return true;
+        }
+        if (keyCode == GLFW.GLFW_KEY_H && !showingHistory) {
+            uiHidden = true;
+            return true;
+        }
+
         if (keyCode == GLFW.GLFW_KEY_LEFT_CONTROL || keyCode == GLFW.GLFW_KEY_RIGHT_CONTROL) {
-            if (textFullyDisplayed) {
-                DialogManager.setFastForwardingNext(true);
-                DialogManager.getInstance().showNextDialog();
-            } else {
+            if (!textFullyDisplayed) {
                 currentCharIndex = dialogEntry.getText(playerName).getString().length();
                 textFullyDisplayed = true;
+            } else if (!dialogEntry.hasOptions() && (alreadyRead || ClientConfig.SKIP_UNREAD_TEXT.get())) {
+                DialogManager.setFastForwardingNext(true);
+                DialogManager.getInstance().showNextDialog();
             }
             return true;
         }
@@ -774,6 +797,16 @@ public class DialogScreen extends Screen {
             if (closeHistoryButton.isMouseOver(mouseX, mouseY)) {
                 return closeHistoryButton.mouseClicked(mouseX, mouseY, button);
             }
+            return true;
+        }
+
+        if (uiHidden) {
+            uiHidden = false;
+            return true;
+        }
+        if (button == 1) {
+            // Right click hides the dialogue box to show the picture behind it; any input brings it back.
+            uiHidden = true;
             return true;
         }
 
@@ -825,9 +858,16 @@ public class DialogScreen extends Screen {
             historyScrollOffset = Mth.clamp(historyScrollOffset + (int) (-scrollY * font.lineHeight * 2), 0, maxScroll);
             return true;
         }
+        if (uiHidden) {
+            uiHidden = false;
+            return true;
+        }
         if (scrollY > 0) {
             toggleHistoryScreen();
             return true;
+        }
+        if (scrollY < 0) {
+            return handleDialogAdvanceClick();
         }
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
@@ -841,7 +881,7 @@ public class DialogScreen extends Screen {
             protectionHeartbeatTicks = 0;
             sendDialogProtectionHeartbeat();
         }
-        if (DialogManager.isAutoPlaying() && !dialogEntry.hasOptions() && textFullyDisplayed) {
+        if (DialogManager.isAutoPlaying() && !dialogEntry.hasOptions() && textFullyDisplayed && !uiHidden) {
             if (DialogManager.isAudioFinished()) {
                 DialogManager.getInstance().showNextDialog();
             }
@@ -873,6 +913,10 @@ public class DialogScreen extends Screen {
                 Minecraft.getInstance().getTextureManager().release(tex);
             }
             dynamicTextures.clear();
+        }
+        if (textFullyDisplayed) {
+            ReadStore.markRead(dialogSequence.getId(), dialogEntry.getId());
+            ReadStore.save();
         }
         super.removed();
     }

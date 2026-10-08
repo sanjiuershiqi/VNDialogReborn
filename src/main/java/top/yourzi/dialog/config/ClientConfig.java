@@ -16,6 +16,8 @@ public class ClientConfig {
     public static final ModConfigSpec.IntValue AUTO_ADVANCE_DELAY;
     public static final ModConfigSpec.BooleanValue SHOW_SPEAKER_NAME;
     public static final ModConfigSpec.IntValue TEXT_ANIMATION_SPEED;
+    public static final ModConfigSpec.IntValue READ_TEXT_COLOR;
+    public static final ModConfigSpec.BooleanValue SKIP_UNREAD_TEXT;
 
     static {
         BUILDER.comment("Client settings for the visual novel dialog UI.").push("dialog_client");
@@ -38,6 +40,8 @@ public class ClientConfig {
         AUTO_ADVANCE_DELAY = BUILDER.comment("Auto-play delay in milliseconds.").defineInRange("autoAdvanceDelay", 700, 0, 60000);
         SHOW_SPEAKER_NAME = BUILDER.comment("Show speaker names in the dialog box.").define("showSpeakerName", true);
         TEXT_ANIMATION_SPEED = BUILDER.comment("Text animation speed in milliseconds per character. 0 shows text instantly.").defineInRange("textAnimationSpeed", 20, 0, 1000);
+        READ_TEXT_COLOR = BUILDER.comment("Color of text the player has already read, ARGB. Set it equal to dialogTextColor to turn the distinction off.").defineInRange("readTextColor", 0xFFB9C6DC, Integer.MIN_VALUE, Integer.MAX_VALUE);
+        SKIP_UNREAD_TEXT = BUILDER.comment("Whether holding Ctrl also skips text that has not been read yet. When false, skipping stops at new text.").define("skipUnreadText", true);
         BUILDER.pop();
 
         BUILDER.pop();
